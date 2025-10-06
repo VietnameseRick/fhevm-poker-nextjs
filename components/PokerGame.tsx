@@ -370,7 +370,7 @@ export function PokerGame() {
             dealerIndex={0}
             yourAddress={yourAddress}
             showYourCards={poker.cards[0]?.clear !== undefined}
-            communityCards={poker.communityCards}
+            communityCards={poker.communityCards || undefined}
             currentStreet={poker.communityCards?.currentStreet}
           />
 
