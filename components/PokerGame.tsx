@@ -501,7 +501,7 @@ export function PokerGame() {
                 ? [poker.cards[0].clear, poker.cards[1].clear]
                 : undefined
             }
-            pot={poker.bettingInfo.pot}
+            pot={poker.bettingInfo?.pot || BigInt(0)}
             allPlayers={playerData}
             onContinue={handleAdvanceGame}
           />
