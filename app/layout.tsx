@@ -3,6 +3,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 import Image from "next/image";
 
+export const runtime = 'edge';
+
 export const metadata: Metadata = {
   title: "Zama FHEVM SDK Quickstart",
   description: "Zama FHEVM SDK Quickstart app",
