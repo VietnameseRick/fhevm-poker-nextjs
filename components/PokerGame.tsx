@@ -575,6 +575,8 @@ export function PokerGame() {
                       poker.cards[1]?.clear as number | undefined,
                     ]}
                     hidden={!(poker.cards[0]?.clear !== undefined)}
+                    flip={poker.cards[0]?.clear !== undefined}
+                    staggerMs={120}
                   />
                 </div>
               </div>

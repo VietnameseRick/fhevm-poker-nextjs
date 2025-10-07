@@ -22,12 +22,16 @@ interface CardProps {
   cardValue?: number;
   hidden?: boolean;
   className?: string;
+  flip?: boolean;
+  dealDelayMs?: number;
 }
 
-export function Card({ cardValue, hidden = false, className = "" }: CardProps) {
+export function Card({ cardValue, hidden = false, className = "", flip = false, dealDelayMs = 0 }: CardProps) {
   if (hidden || cardValue === undefined) {
     return (
-      <div className={`relative w-20 h-28 bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 rounded-xl border-2 border-blue-950 shadow-2xl transform hover:scale-105 transition-transform duration-200 ${className}`}>
+      <div className={`relative w-20 h-28 bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 rounded-xl border-2 border-blue-950 shadow-2xl transform hover:scale-105 transition-transform duration-200 ${className}`}
+        style={{ animation: `dealIn 300ms ease-out ${dealDelayMs}ms both` }}
+      >
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-16 h-20 border-4 border-blue-400 rounded-lg opacity-30"></div>
         </div>
@@ -41,27 +45,41 @@ export function Card({ cardValue, hidden = false, className = "" }: CardProps) {
   const { rank, suit, color } = decodeCard(cardValue);
 
   return (
-    <div className={`relative w-20 h-28 bg-white rounded-xl border-2 border-gray-300 shadow-2xl transform hover:scale-105 transition-all duration-200 hover:shadow-3xl ${className}`}>
-      {/* Corner rank/suit (top-left) */}
-      <div className={`absolute top-1 left-2 flex flex-col items-center leading-none ${color}`}>
-        <span className="text-lg font-bold">{rank}</span>
-        <span className="text-xl">{suit}</span>
+    <div
+      className={`relative w-20 h-28 rounded-xl border-2 shadow-2xl transform hover:scale-105 transition-all duration-200 hover:shadow-3xl ${className}`}
+      style={{ animation: `dealIn 300ms ease-out ${dealDelayMs}ms both`, transformStyle: 'preserve-3d' }}
+    >
+      {/* Front face */}
+      <div className={`absolute inset-0 bg-white border-gray-300 rounded-xl backface-hidden`} style={{ transform: flip ? 'rotateY(180deg)' : 'rotateY(0deg)', transition: 'transform 400ms ease' }}>
+        {/* Corner rank/suit (top-left) */}
+        <div className={`absolute top-1 left-2 flex flex-col items-center leading-none ${color}`}>
+          <span className="text-lg font-bold">{rank}</span>
+          <span className="text-xl">{suit}</span>
+        </div>
+        {/* Center large suit */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className={`${color} text-6xl font-bold opacity-20`}>{suit}</div>
+        </div>
+        {/* Center rank */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className={`${color} text-4xl font-bold`}>{rank}</div>
+        </div>
+        {/* Corner rank/suit (bottom-right, rotated) */}
+        <div className={`absolute bottom-1 right-2 flex flex-col-reverse items-center leading-none transform rotate-180 ${color}`}>
+          <span className="text-lg font-bold">{rank}</span>
+          <span className="text-xl">{suit}</span>
+        </div>
       </div>
-      
-      {/* Center large suit */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className={`${color} text-6xl font-bold opacity-20`}>{suit}</div>
-      </div>
-      
-      {/* Center rank */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className={`${color} text-4xl font-bold`}>{rank}</div>
-      </div>
-      
-      {/* Corner rank/suit (bottom-right, rotated) */}
-      <div className={`absolute bottom-1 right-2 flex flex-col-reverse items-center leading-none transform rotate-180 ${color}`}>
-        <span className="text-lg font-bold">{rank}</span>
-        <span className="text-xl">{suit}</span>
+      {/* Back face */}
+      <div className="absolute inset-0" style={{ transform: flip ? 'rotateY(0deg)' : 'rotateY(180deg)', transition: 'transform 400ms ease', backfaceVisibility: 'hidden' }}>
+        <div className="relative w-full h-full bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 rounded-xl border-2 border-blue-950">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-16 h-20 border-4 border-blue-400 rounded-lg opacity-30"></div>
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-blue-300 text-4xl font-bold opacity-50">🂠</div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -71,20 +89,36 @@ interface CardHandProps {
   cards: Array<number | undefined>;
   hidden?: boolean;
   className?: string;
+  flip?: boolean;
+  staggerMs?: number;
 }
 
-export function CardHand({ cards, hidden = false, className = "" }: CardHandProps) {
+export function CardHand({ cards, hidden = false, className = "", flip = false, staggerMs = 80 }: CardHandProps) {
   return (
     <div className={`flex gap-2 ${className}`}>
       {cards.map((card, index) => (
-        <Card 
-          key={index} 
-          cardValue={card} 
+        <Card
+          key={index}
+          cardValue={card}
           hidden={hidden}
-          className="animate-in fade-in slide-in-from-top-4 duration-300"
+          flip={flip && !hidden}
+          dealDelayMs={index * staggerMs}
+          className="will-change-transform"
         />
       ))}
     </div>
+  );
+}
+
+// Animation keyframes
+export function CardAnimations() {
+  return (
+    <style jsx>{`
+      @keyframes dealIn {
+        from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+    `}</style>
   );
 }
 

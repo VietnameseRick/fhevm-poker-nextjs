@@ -137,18 +137,18 @@ export function PokerTable({
                   {/* Flop (3 cards) - shown from street 1 (Flop) onwards */}
                   {currentStreet >= 1 && (
                     <>
-                      <Card cardValue={communityCards.flopCard1} className="animate-in fade-in slide-in-from-top-4 duration-300" />
-                      <Card cardValue={communityCards.flopCard2} className="animate-in fade-in slide-in-from-top-4 duration-300 delay-100" />
-                      <Card cardValue={communityCards.flopCard3} className="animate-in fade-in slide-in-from-top-4 duration-300 delay-200" />
+                      <Card cardValue={communityCards.flopCard1} dealDelayMs={0} />
+                      <Card cardValue={communityCards.flopCard2} dealDelayMs={120} />
+                      <Card cardValue={communityCards.flopCard3} dealDelayMs={240} />
                     </>
                   )}
                   {/* Turn (4th card) - shown from street 2 (Turn) onwards */}
                   {currentStreet >= 2 && (
-                    <Card cardValue={communityCards.turnCard} className="animate-in fade-in slide-in-from-top-4 duration-300 delay-300" />
+                    <Card cardValue={communityCards.turnCard} dealDelayMs={360} />
                   )}
                   {/* River (5th card) - shown from street 3 (River) onwards */}
                   {currentStreet >= 3 && (
-                    <Card cardValue={communityCards.riverCard} className="animate-in fade-in slide-in-from-top-4 duration-300 delay-400" />
+                    <Card cardValue={communityCards.riverCard} dealDelayMs={480} />
                   )}
                 </div>
               </div>
