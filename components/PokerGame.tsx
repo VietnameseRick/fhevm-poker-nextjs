@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { ethers } from "ethers";
 import { useFhevm } from "@fhevm/react";
 import { useFHEPoker } from "@/hooks/useFHEPoker";
 import { PokerTable } from "./PokerTable";
 import { BettingControls } from "./BettingControls";
 import { Showdown } from "./Showdown";
+import { TransactionFlow } from "./TransactionFlow";
 import { useInMemoryStorage } from "../hooks/useInMemoryStorage";
-import { useMetaMaskEthersSigner } from "../hooks/metamask/useMetaMaskEthersSigner";
+import { usePrivyEthers } from "../hooks/usePrivyEthers";
 
 const GAME_STATES = ["Waiting for Players", "Countdown", "Playing", "Finished"];
 const BETTING_STREETS = ["Pre-Flop", "Flop", "Turn", "River", "Showdown"];
@@ -15,24 +17,45 @@ const BETTING_STREETS = ["Pre-Flop", "Flop", "Turn", "River", "Showdown"];
 export function PokerGame() {
   const { storage: fhevmDecryptionSignatureStorage } = useInMemoryStorage();
   const {
-    provider,
-    chainId,
-    isConnected,
-    connect,
+    ready,
+    authenticated,
+    login,
+    logout, // eslint-disable-line @typescript-eslint/no-unused-vars
     ethersSigner,
-    ethersReadonlyProvider,
-    sameChain,
-    sameSigner,
-    initialMockChains,
-  } = useMetaMaskEthersSigner();
+    ethersProvider,
+    eip1193Provider,
+    address,
+    chainId,
+    isCorrectChain,
+    switchToSepolia,
+  } = usePrivyEthers();
+
+  // Auto-switch to Sepolia on first connection
+  useEffect(() => {
+    console.log('Chain status:', { authenticated, chainId, isCorrectChain });
+    
+    if (authenticated && chainId && !isCorrectChain) {
+      console.log(`⚠️ Wrong chain detected: ${chainId}, switching to Sepolia (11155111)...`);
+      switchToSepolia();
+    } else if (authenticated && chainId && isCorrectChain) {
+      console.log(`✅ Already on correct chain: ${chainId}`);
+    } else if (authenticated && !chainId) {
+      console.log('⏳ Waiting for chain ID...');
+    }
+  }, [authenticated, chainId, isCorrectChain, switchToSepolia]);
+
+  // Refs for sameChain and sameSigner checks (required by useFHEPoker)
+  const sameChain = useRef((chain: number | undefined) => chain === chainId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sameSigner = useRef((signer: any) => signer === ethersSigner);
 
   const {
     instance: fhevmInstance,
   } = useFhevm({
-    provider,
+    provider: eip1193Provider,
     chainId,
-    initialMockChains,
-    enabled: true,
+    initialMockChains: {}, // No mock chains for production
+    enabled: authenticated,
   });
 
   const poker = useFHEPoker({
@@ -40,7 +63,7 @@ export function PokerGame() {
     fhevmDecryptionSignatureStorage,
     chainId,
     ethersSigner,
-    ethersReadonlyProvider,
+    ethersReadonlyProvider: ethersProvider,
     sameChain,
     sameSigner,
   });
@@ -49,6 +72,8 @@ export function PokerGame() {
   const [showCreateTable, setShowCreateTable] = useState(true);
   const [showJoinTable, setShowJoinTable] = useState(false);
   const [currentView, setCurrentView] = useState<"lobby" | "game">("lobby");
+  const [isMobile, setIsMobile] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
 
   // Form states
   const [tableIdInput, setTableIdInput] = useState<string>("");
@@ -58,13 +83,25 @@ export function PokerGame() {
   const [bigBlindInput, setBigBlindInput] = useState<string>("0.01");
   const [buyInAmountInput, setBuyInAmountInput] = useState<string>("0.2");
 
-  const [yourAddress, setYourAddress] = useState<string>("");
+  // Use Privy address directly
+  const yourAddress = address || "";
 
+  // Responsive detection (mobile + orientation)
   useEffect(() => {
-    if (ethersSigner) {
-      ethersSigner.getAddress().then(setYourAddress);
-    }
-  }, [ethersSigner]);
+    const updateViewport = () => {
+      if (typeof window === "undefined") return;
+      setIsMobile(window.innerWidth < 1024);
+      const portrait = window.matchMedia && window.matchMedia("(orientation: portrait)").matches;
+      setIsPortrait(portrait);
+    };
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
+    return () => {
+      window.removeEventListener("resize", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
+    };
+  }, []);
 
   // Auto-navigate to game view when game state changes
   useEffect(() => {
@@ -129,13 +166,33 @@ export function PokerGame() {
     }
   };
 
+  const handleDecryptCommunityCards = async () => {
+    if (poker.currentTableId !== undefined) {
+      await poker.decryptCommunityCards(poker.currentTableId);
+    }
+  };
+
   const buttonClass =
     "inline-flex items-center justify-center rounded-xl bg-black px-4 py-4 font-semibold text-white shadow-sm " +
     "transition-colors duration-200 hover:bg-blue-700 active:bg-blue-800 " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 " +
     "disabled:opacity-50 disabled:pointer-events-none";
 
-  if (!isConnected) {
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        <div className="text-center">
+          <div className="mb-8">
+            <h1 className="text-6xl font-bold text-white mb-4">🎰</h1>
+            <h1 className="text-5xl font-bold text-white mb-2">FHE Poker</h1>
+            <p className="text-xl text-gray-300">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
         <div className="text-center">
@@ -143,13 +200,15 @@ export function PokerGame() {
             <h1 className="text-6xl font-bold text-white mb-4">🎰</h1>
             <h1 className="text-5xl font-bold text-white mb-2">FHE Poker</h1>
             <p className="text-xl text-gray-300">Fully Homomorphic Encrypted Poker</p>
+            {!isCorrectChain && address && (
+              <p className="text-sm text-yellow-400 mt-2">⚠️ Please switch to Sepolia network</p>
+            )}
           </div>
           <button
             className={buttonClass}
-            disabled={isConnected}
-            onClick={connect}
+            onClick={login}
           >
-            <span className="text-2xl px-8 py-4">Connect to MetaMask</span>
+            <span className="text-2xl px-8 py-4">Connect Wallet</span>
           </button>
         </div>
       </div>
@@ -157,6 +216,18 @@ export function PokerGame() {
   }
 
   if (poker.isDeployed === false) {
+    // Show loading if chainId is not yet available
+    if (!chainId) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+          <div className="text-center text-white">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+            <p className="text-xl">Detecting network...</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
         <div className="max-w-4xl bg-white rounded-2xl p-8 shadow-2xl">
@@ -172,9 +243,21 @@ export function PokerGame() {
             </p>
           </div>
           
+          {!isCorrectChain && (
+            <div className="mb-6">
+              <button
+                onClick={switchToSepolia}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg"
+              >
+                🔄 Switch to Sepolia Network
+              </button>
+              <p className="text-sm text-gray-500 mt-2 text-center">Contract is deployed on Sepolia (Chain ID: 11155111)</p>
+            </div>
+          )}
+          
           <div className="bg-gray-50 rounded-xl p-6 mb-6">
             <p className="text-gray-700 mb-4">
-              To deploy the contract, run the following command:
+              To deploy the contract on a new network, run:
             </p>
             <div className="bg-black rounded-lg p-4 font-mono text-sm">
               <p className="text-gray-400 italic mb-2"># from packages/fhevm-poker</p>
@@ -185,7 +268,7 @@ export function PokerGame() {
           </div>
 
           <p className="text-center text-gray-600">
-            Or switch to a network where the contract is already deployed using MetaMask.
+            Currently deployed on: <strong>Sepolia (11155111)</strong> and <strong>Local Hardhat (31337)</strong>
           </p>
         </div>
       </div>
@@ -327,169 +410,275 @@ export function PokerGame() {
           </div>
         )}
 
-        {/* Main Game Area */}
-        <div className="max-w-7xl mx-auto">
-          {/* Game Status Indicators */}
-          <div className="mb-6 flex justify-center gap-4">
-            {/* Betting Street Indicator */}
-            {poker.communityCards && (
-              <div className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 rounded-full shadow-lg border-2 border-white/20">
-                <span className="text-2xl">🎴</span>
-                <span className="text-white font-bold text-xl">{BETTING_STREETS[poker.communityCards.currentStreet]}</span>
-              </div>
-            )}
-            
-            {/* Turn Indicator */}
-            {poker.bettingInfo && (
-              <div className={`inline-flex items-center gap-2 px-6 py-3 rounded-full shadow-lg border-2 ${
-                poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
-                  ? 'bg-gradient-to-r from-green-600 to-green-700 border-green-400 animate-pulse'
-                  : 'bg-gradient-to-r from-gray-600 to-gray-700 border-gray-400'
-              }`}>
-                <span className="text-2xl">
-                  {poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase() ? '👉' : '⏳'}
-                </span>
-                <div className="text-white">
-                  <div className="font-bold text-sm">
-                    {poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase() 
-                      ? "YOUR TURN!" 
-                      : "Waiting..."}
-                  </div>
-                  <div className="text-xs opacity-90">
-                    {poker.bettingInfo.currentPlayer.substring(0, 10)}...
+        {/* Main Game Area with right sidebar */}
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column: Indicators + Table + Controls + Debug */}
+          <div className="lg:col-span-8 space-y-6">
+            {/* Game Status Indicators */}
+            <div className="flex justify-center gap-4">
+              {/* Betting Street Indicator */}
+              {poker.communityCards && (
+                <div className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 rounded-full shadow-lg border-2 border-white/20">
+                  <span className="text-2xl">🎴</span>
+                  <span className="text-white font-bold text-xl">{BETTING_STREETS[poker.communityCards.currentStreet]}</span>
+                </div>
+              )}
+              {/* Turn Indicator */}
+              {poker.bettingInfo && (
+                <div className={`inline-flex items-center gap-2 px-6 py-3 rounded-full shadow-lg border-2 ${
+                  poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
+                    ? 'bg-gradient-to-r from-green-600 to-green-700 border-green-400 animate-pulse'
+                    : 'bg-gradient-to-r from-gray-600 to-gray-700 border-gray-400'
+                }`}>
+                  <span className="text-2xl">
+                    {poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase() ? '👉' : '⏳'}
+                  </span>
+                  <div className="text-white">
+                    <div className="font-bold text-sm">
+                      {poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase() 
+                        ? "YOUR TURN!" 
+                        : "Waiting..."}
+                    </div>
+                    <div className="text-xs opacity-90">
+                      {poker.bettingInfo.currentPlayer.substring(0, 10)}...
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-
-          <PokerTable
-            players={playerData}
-            pot={poker.bettingInfo?.pot || BigInt(0)}
-            currentBet={poker.bettingInfo?.currentBet || BigInt(0)}
-            dealerIndex={0}
-            yourAddress={yourAddress}
-            showYourCards={poker.cards[0]?.clear !== undefined}
-            communityCards={poker.communityCards || undefined}
-            currentStreet={poker.communityCards?.currentStreet}
-          />
-
-          {/* Debug Info */}
-          <div className="mt-4 max-w-2xl mx-auto bg-gray-800/50 rounded-lg p-4 text-xs text-gray-300 space-y-1">
-            <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-700">
-              <p className="font-bold text-white">Debug Info</p>
-              <button
-                onClick={() => poker.refreshTableState(poker.currentTableId!)}
-                className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white text-xs"
-              >
-                🔄 Force Refresh
-              </button>
+              )}
             </div>
-            <p>
-              <span className="text-gray-500">Game State:</span>{" "}
-              <span className={poker.tableState.state === 2 ? "text-green-400 font-bold" : "text-yellow-400"}>
-                {poker.tableState.state} ({GAME_STATES[poker.tableState.state]})
-              </span>
-            </p>
-            <p>
-              <span className="text-gray-500">WebSocket:</span>{" "}
-              <span className={poker.isConnected ? "text-green-400" : "text-yellow-400"}>
-                {poker.isConnected ? "✅ Connected" : "⚠️ Polling Only"}
-              </span>
-            </p>
-            <p className={poker.tableState.isSeated ? "text-green-400" : "text-red-400"}>
-              <span className="text-gray-500">Is Seated (contract):</span> {poker.tableState.isSeated ? "Yes" : "No"}
-            </p>
-            <p className={poker.players.some(p => p.toLowerCase() === yourAddress.toLowerCase()) ? "text-green-400" : "text-red-400"}>
-              <span className="text-gray-500">In Players List:</span>{" "}
-              {poker.players.some(p => p.toLowerCase() === yourAddress.toLowerCase()) ? "Yes" : "No"}
-            </p>
-            <p><span className="text-gray-500">Total Players:</span> {poker.players.length}</p>
-            <p><span className="text-gray-500">Is Playing:</span> {isPlaying ? "Yes" : "No"}</p>
-            <p><span className="text-gray-500">Player State Loaded:</span> {poker.playerState ? "Yes" : "No"}</p>
-            <p><span className="text-gray-500">Cards Decrypted:</span> {poker.cards[0]?.clear !== undefined ? "Yes" : "No"}</p>
-            {poker.communityCards && (
-              <>
-                <p><span className="text-gray-500">Street:</span> <span className="text-cyan-400 font-bold">{poker.communityCards.currentStreet}</span> ({BETTING_STREETS[poker.communityCards.currentStreet]})</p>
-                <p><span className="text-gray-500">Community Cards:</span></p>
-                <div className="ml-4 space-y-0.5">
-                  <p className="text-xs">
-                    <span className="text-gray-500">Flop:</span> {poker.communityCards.flopCard1}, {poker.communityCards.flopCard2}, {poker.communityCards.flopCard3}
-                  </p>
-                  <p className="text-xs">
-                    <span className="text-gray-500">Turn:</span> {poker.communityCards.turnCard !== undefined ? poker.communityCards.turnCard : 'Not dealt'}
-                  </p>
-                  <p className="text-xs">
-                    <span className="text-gray-500">River:</span> {poker.communityCards.riverCard !== undefined ? poker.communityCards.riverCard : 'Not dealt'}
+
+            {/* Table */}
+            <PokerTable
+              players={playerData}
+              pot={poker.lastPot || poker.bettingInfo?.pot || BigInt(0)}
+              currentBet={poker.bettingInfo?.currentBet || BigInt(0)}
+              dealerIndex={0}
+              yourAddress={yourAddress}
+              showYourCards={poker.cards[0]?.clear !== undefined}
+              communityCards={
+                poker.decryptedCommunityCards.length > 0
+                  ? {
+                      currentStreet: poker.communityCards?.currentStreet || 0,
+                      flopCard1: poker.decryptedCommunityCards[0] || undefined,
+                      flopCard2: poker.decryptedCommunityCards[1] || undefined,
+                      flopCard3: poker.decryptedCommunityCards[2] || undefined,
+                      turnCard: poker.decryptedCommunityCards[3] || undefined,
+                      riverCard: poker.decryptedCommunityCards[4] || undefined,
+                    }
+                  : poker.communityCards || undefined
+              }
+              currentStreet={poker.communityCards?.currentStreet}
+            />
+
+            {/* Controls */}
+            <div className="space-y-4">
+              {isPlaying && (poker.tableState.isSeated || poker.playerState) && !poker.cards[0]?.clear && (
+                <button
+                  onClick={handleDecryptCards}
+                  disabled={poker.isDecrypting || poker.isLoading}
+                  className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed relative overflow-hidden"
+                >
+                  {poker.isDecrypting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Decrypting Your Cards...
+                    </span>
+                  ) : (
+                    "🔓 Decrypt Your Cards"
+                  )}
+                  {poker.isDecrypting && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+                  )}
+                </button>
+              )}
+
+              {isPlaying && poker.communityCards && poker.communityCards.currentStreet >= 1 && (
+                (() => {
+                  const currentStreet = poker.communityCards.currentStreet;
+                  const expectedCards = currentStreet >= 3 ? 5 : currentStreet >= 2 ? 4 : currentStreet >= 1 ? 3 : 0;
+                  const decryptedCount = poker.decryptedCommunityCards.filter(c => c !== 0).length;
+                  const needsDecryption = decryptedCount < expectedCards;
+
+                  if (!needsDecryption) return null;
+
+                  const streetName = currentStreet === 1 ? "Flop" : currentStreet === 2 ? "Turn" : currentStreet === 3 ? "River" : "Cards";
+                  
+                  return (
+                    <button
+                      onClick={handleDecryptCommunityCards}
+                      disabled={poker.isDecrypting || poker.isLoading}
+                      className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed relative overflow-hidden"
+                    >
+                      {poker.isDecrypting ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Decrypting {streetName}...
+                        </span>
+                      ) : (
+                        <span className="flex items-center justify-center gap-2">
+                          🔓 Decrypt {streetName} ({expectedCards - decryptedCount} new card{expectedCards - decryptedCount > 1 ? 's' : ''})
+                        </span>
+                      )}
+                      {poker.isDecrypting && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+                      )}
+                    </button>
+                  );
+                })()
+              )}
+
+              {(poker.tableState.state === 1 || poker.tableState.state === 3) && (
+                <div className="space-y-2">
+                  <button
+                    onClick={handleAdvanceGame}
+                    disabled={poker.isLoading}
+                    className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed"
+                  >
+                    {poker.isLoading ? "Processing..." : poker.tableState.state === 1 ? "🚀 Start Game" : "🔄 Start New Round"}
+                  </button>
+                  <p className="text-center text-sm text-gray-400">
+                    Game will take you to the table automatically
                   </p>
                 </div>
-              </>
-            )}
-            {poker.playerState && (
-              <>
-                <p><span className="text-gray-500">Your Turn:</span> {poker.playerState.isCurrentPlayer ? "✅ Yes" : "No"}</p>
-                <p><span className="text-gray-500">Has Folded:</span> {poker.playerState.hasFolded ? "Yes" : "No"}</p>
-                <p><span className="text-gray-500">Your Chips:</span> {(Number(poker.playerState.chips) / 1e18).toFixed(4)} ETH</p>
-                <p><span className="text-gray-500">Your Bet:</span> {(Number(poker.playerState.currentBet) / 1e18).toFixed(4)} ETH</p>
-              </>
-            )}
+              )}
+
+              {isPlaying && (poker.tableState.isSeated || poker.playerState) && poker.playerState && (
+              <BettingControls
+                  canAct={isYourTurn && !poker.playerState.hasFolded}
+                  currentBet={poker.bettingInfo?.currentBet || BigInt(0)}
+                  playerBet={poker.playerState.currentBet}
+                  playerChips={poker.playerState.chips}
+                  minRaise={BigInt(Math.floor(Number(poker.tableState.minBuyIn) * 0.1))}
+                  onFold={() => poker.fold(poker.currentTableId!)}
+                  onCheck={() => poker.check(poker.currentTableId!)}
+                onCall={() => poker.call(poker.currentTableId!)}
+                onRaise={(amount) => {
+                  // Interpret input as "raise to" total; convert to delta for the contract
+                  try {
+                    const targetWei = ethers.parseEther(amount);
+                    const current = poker.bettingInfo?.currentBet || 0n;
+                    const deltaWei = targetWei > current ? targetWei - current : 0n;
+                    const deltaEth = ethers.formatEther(deltaWei);
+                    poker.raise(poker.currentTableId!, deltaEth);
+                  } catch {
+                    // Fallback: pass through
+                    poker.raise(poker.currentTableId!, amount);
+                  }
+                }}
+                  isLoading={poker.isLoading}
+                />
+              )}
+
+              {isPlaying && !poker.playerState && (
+                <div className="bg-yellow-500/20 border-l-4 border-yellow-500 rounded-lg p-4">
+                  <p className="text-yellow-200 text-sm font-semibold">
+                    ⏳ Loading player state...
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Debug Info */}
+            <div className="bg-gray-800/50 rounded-lg p-4 text-xs text-gray-300 space-y-1">
+              <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-700">
+                <p className="font-bold text-white">Debug Info</p>
+                <button
+                  onClick={() => poker.refreshTableState(poker.currentTableId!)}
+                  className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white text-xs"
+                >
+                  🔄 Force Refresh
+                </button>
+              </div>
+              <p>
+                <span className="text-gray-500">Game State:</span>{" "}
+                <span className={poker.tableState.state === 2 ? "text-green-400 font-bold" : "text-yellow-400"}>
+                  {poker.tableState.state} ({GAME_STATES[poker.tableState.state]})
+                </span>
+              </p>
+              <p>
+                <span className="text-gray-500">WebSocket:</span>{" "}
+                <span className={poker.isConnected ? "text-green-400" : "text-yellow-400"}>
+                  {poker.isConnected ? "✅ Connected" : "⚠️ Polling Only"}
+                </span>
+              </p>
+              <p className={poker.tableState.isSeated ? "text-green-400" : "text-red-400"}>
+                <span className="text-gray-500">Is Seated (contract):</span> {poker.tableState.isSeated ? "Yes" : "No"}
+              </p>
+              <p className={poker.players.some(p => p.toLowerCase() === yourAddress.toLowerCase()) ? "text-green-400" : "text-red-400"}>
+                <span className="text-gray-500">In Players List:</span>{" "}
+                {poker.players.some(p => p.toLowerCase() === yourAddress.toLowerCase()) ? "Yes" : "No"}
+              </p>
+              <p><span className="text-gray-500">Total Players:</span> {poker.players.length}</p>
+              <p><span className="text-gray-500">Is Playing:</span> {isPlaying ? "Yes" : "No"}</p>
+              <p><span className="text-gray-500">Player State Loaded:</span> {poker.playerState ? "Yes" : "No"}</p>
+              <p><span className="text-gray-500">Cards Decrypted:</span> {poker.cards[0]?.clear !== undefined ? "Yes" : "No"}</p>
+              <p><span className="text-gray-500">Community Cards Decrypted:</span> <span className={poker.decryptedCommunityCards.length > 0 ? "text-green-400" : "text-yellow-400"}>{poker.decryptedCommunityCards.length > 0 ? "✅ Yes" : "No"}</span></p>
+              {poker.decryptedCommunityCards.length > 0 && (
+                <p className="text-xs text-green-400"><span className="text-gray-500">Decrypted Values:</span> [{poker.decryptedCommunityCards.join(', ')}]</p>
+              )}
+              {poker.communityCards && (
+                <>
+                  <p><span className="text-gray-500">Street:</span> <span className="text-cyan-400 font-bold">{poker.communityCards.currentStreet}</span> ({BETTING_STREETS[poker.communityCards.currentStreet]})</p>
+                  <p><span className="text-gray-500">Community Cards (Encrypted):</span></p>
+                  <div className="ml-4 space-y-0.5">
+                    <p className="text-xs">
+                      <span className="text-gray-500">Flop:</span> {poker.communityCards.flopCard1}, {poker.communityCards.flopCard2}, {poker.communityCards.flopCard3}
+                    </p>
+                    <p className="text-xs">
+                      <span className="text-gray-500">Turn:</span> {poker.communityCards.turnCard !== undefined ? poker.communityCards.turnCard : 'Not dealt'}
+                    </p>
+                    <p className="text-xs">
+                      <span className="text-gray-500">River:</span> {poker.communityCards.riverCard !== undefined ? poker.communityCards.riverCard : 'Not dealt'}
+                    </p>
+                  </div>
+                </>
+              )}
+              {poker.playerState && (
+                <>
+                  <p><span className="text-gray-500">Your Turn:</span> {poker.playerState.isCurrentPlayer ? "✅ Yes" : "No"}</p>
+                  <p><span className="text-gray-500">Has Folded:</span> {poker.playerState.hasFolded ? "Yes" : "No"}</p>
+                  <p><span className="text-gray-500">Your Chips:</span> {(Number(poker.playerState.chips) / 1e18).toFixed(4)} ETH</p>
+                  <p><span className="text-gray-500">Your Bet:</span> {(Number(poker.playerState.currentBet) / 1e18).toFixed(4)} ETH</p>
+                </>
+              )}
+            </div>
+
+            {/* Mobile TransactionFlow */}
+            <div className="lg:hidden">
+              <TransactionFlow
+                currentAction={poker.currentAction}
+                isLoading={poker.isLoading || poker.isDecrypting}
+                message={poker.message}
+              />
+            </div>
           </div>
 
-          {/* Game Controls */}
-          <div className="mt-8 max-w-2xl mx-auto space-y-4">
-            {/* Decrypt Cards Button - Use playerState as proof of being seated */}
-            {isPlaying && (poker.tableState.isSeated || poker.playerState) && !poker.cards[0]?.clear && (
-              <button
-                onClick={handleDecryptCards}
-                disabled={poker.isDecrypting || poker.isLoading}
-                className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed"
-              >
-                {poker.isDecrypting ? "🔓 Decrypting Your Cards..." : "🔓 Decrypt Your Cards"}
-              </button>
-            )}
-
-            {/* Advance Game Button */}
-            {(poker.tableState.state === 1 || poker.tableState.state === 3) && (
-              <div className="space-y-2">
-                <button
-                  onClick={handleAdvanceGame}
-                  disabled={poker.isLoading}
-                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed"
-                >
-                  {poker.isLoading ? "Processing..." : poker.tableState.state === 1 ? "🚀 Start Game" : "🔄 Start New Round"}
-                </button>
-                <p className="text-center text-sm text-gray-400">
-                  Game will take you to the table automatically
-                </p>
-              </div>
-            )}
-
-            {/* Betting Controls - Use playerState as proof of being seated */}
-            {isPlaying && (poker.tableState.isSeated || poker.playerState) && poker.playerState && (
-              <BettingControls
-                canAct={isYourTurn && !poker.playerState.hasFolded}
-                currentBet={poker.bettingInfo?.currentBet || BigInt(0)}
-                playerBet={poker.playerState.currentBet}
-                playerChips={poker.playerState.chips}
-                minRaise={BigInt(Math.floor(Number(poker.tableState.minBuyIn) * 0.1))}
-                onFold={() => poker.fold(poker.currentTableId!)}
-                onCheck={() => poker.check(poker.currentTableId!)}
-                onCall={() => poker.call(poker.currentTableId!)}
-                onRaise={(amount) => poker.raise(poker.currentTableId!, amount)}
-                isLoading={poker.isLoading}
-              />
-            )}
-
-            {/* No Controls Message */}
-            {isPlaying && !poker.playerState && (
-              <div className="bg-yellow-500/20 border-l-4 border-yellow-500 rounded-lg p-4">
-                <p className="text-yellow-200 text-sm font-semibold">
-                  ⏳ Loading player state...
-                </p>
-              </div>
-            )}
+          {/* Right sidebar: Transaction flow */}
+          <div className="lg:col-span-4 hidden lg:block">
+            <TransactionFlow
+              currentAction={poker.currentAction}
+              isLoading={poker.isLoading || poker.isDecrypting}
+              message={poker.message}
+            />
           </div>
         </div>
+
+        {/* Mobile portrait rotate overlay */}
+        {isMobile && isPortrait && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8 lg:hidden">
+            <div className="text-center text-white">
+              <div className="text-6xl mb-4">📱↩️</div>
+              <p className="text-xl font-bold">Rotate your phone</p>
+              <p className="text-sm text-gray-300 mt-2">For the best experience, view the table in landscape.</p>
+            </div>
+          </div>
+        )}
 
         {/* Showdown Overlay - Show when game is finished */}
         {poker.tableState.state === 3 && poker.tableState.winner && (
@@ -501,9 +690,25 @@ export function PokerGame() {
                 ? [poker.cards[0].clear, poker.cards[1].clear]
                 : undefined
             }
-            pot={poker.bettingInfo?.pot || BigInt(0)}
+            communityCards={
+              poker.decryptedCommunityCards.length > 0
+                ? poker.decryptedCommunityCards.filter(c => c !== 0)
+                : poker.communityCards 
+                  ? [
+                      poker.communityCards.flopCard1,
+                      poker.communityCards.flopCard2,
+                      poker.communityCards.flopCard3,
+                      poker.communityCards.turnCard,
+                      poker.communityCards.riverCard,
+                    ].filter((c): c is number => c !== undefined && c !== 0)
+                  : undefined
+            }
+            pot={poker.lastPot || poker.bettingInfo?.pot || BigInt(0)}
             allPlayers={playerData}
             onContinue={handleAdvanceGame}
+            tableId={poker.currentTableId}
+            contractAddress={poker.contractAddress}
+            provider={ethersProvider}
           />
         )}
       </div>

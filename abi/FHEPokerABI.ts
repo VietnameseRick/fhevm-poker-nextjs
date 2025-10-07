@@ -34,6 +34,37 @@ export const FHEPokerABI = {
           "type": "uint256"
         },
         {
+          "indexed": true,
+          "internalType": "address",
+          "name": "player",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint32",
+          "name": "card1",
+          "type": "uint32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint32",
+          "name": "card2",
+          "type": "uint32"
+        }
+      ],
+      "name": "CardsRevealed",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        },
+        {
           "indexed": false,
           "internalType": "uint256",
           "name": "startTime",
@@ -425,6 +456,35 @@ export const FHEPokerABI = {
           "internalType": "uint256",
           "name": "tableId",
           "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "player",
+          "type": "address"
+        }
+      ],
+      "name": "evaluateHand",
+      "outputs": [
+        {
+          "internalType": "enum FHEPoker.HandRank",
+          "name": "rank",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint32[5]",
+          "name": "tiebreakers",
+          "type": "uint32[5]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
         }
       ],
       "name": "fold",
@@ -482,29 +542,29 @@ export const FHEPokerABI = {
           "type": "uint8"
         },
         {
-          "internalType": "uint32",
+          "internalType": "euint32",
           "name": "flopCard1",
-          "type": "uint32"
+          "type": "bytes32"
         },
         {
-          "internalType": "uint32",
+          "internalType": "euint32",
           "name": "flopCard2",
-          "type": "uint32"
+          "type": "bytes32"
         },
         {
-          "internalType": "uint32",
+          "internalType": "euint32",
           "name": "flopCard3",
-          "type": "uint32"
+          "type": "bytes32"
         },
         {
-          "internalType": "uint32",
+          "internalType": "euint32",
           "name": "turnCard",
-          "type": "uint32"
+          "type": "bytes32"
         },
         {
-          "internalType": "uint32",
+          "internalType": "euint32",
           "name": "riverCard",
-          "type": "uint32"
+          "type": "bytes32"
         }
       ],
       "stateMutability": "view",
@@ -616,6 +676,35 @@ export const FHEPokerABI = {
           "internalType": "bool",
           "name": "isCurrentPlayer",
           "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "player",
+          "type": "address"
+        }
+      ],
+      "name": "getPlayerCards",
+      "outputs": [
+        {
+          "internalType": "uint32",
+          "name": "card1",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "card2",
+          "type": "uint32"
         }
       ],
       "stateMutability": "view",
@@ -878,34 +967,64 @@ export const FHEPokerABI = {
           "type": "uint8"
         },
         {
-          "internalType": "uint32",
+          "internalType": "euint32",
           "name": "flopCard1",
-          "type": "uint32"
+          "type": "bytes32"
         },
         {
-          "internalType": "uint32",
+          "internalType": "euint32",
           "name": "flopCard2",
-          "type": "uint32"
+          "type": "bytes32"
         },
         {
-          "internalType": "uint32",
+          "internalType": "euint32",
           "name": "flopCard3",
-          "type": "uint32"
+          "type": "bytes32"
         },
         {
-          "internalType": "uint32",
+          "internalType": "euint32",
           "name": "turnCard",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "euint32",
+          "name": "riverCard",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "flopCard1Value",
           "type": "uint32"
         },
         {
           "internalType": "uint32",
-          "name": "riverCard",
+          "name": "flopCard2Value",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "flopCard3Value",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "turnCardValue",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "riverCardValue",
           "type": "uint32"
         },
         {
           "internalType": "bool",
           "name": "communityCardsDealt",
           "type": "bool"
+        },
+        {
+          "internalType": "uint8",
+          "name": "nextCardIndex",
+          "type": "uint8"
         }
       ],
       "stateMutability": "view",

@@ -52,6 +52,7 @@ interface PokerStore {
   communityCards: CommunityCards | null;
   isLoading: boolean;
   message: string;
+  lastPot: bigint; // Track pot amount before it's awarded (for Showdown display)
   
   // Contract info
   contractAddress: string | null;
@@ -90,6 +91,7 @@ export const usePokerStore = create<PokerStore>()(
       communityCards: null,
       isLoading: false,
       message: '',
+      lastPot: BigInt(0),
       contractAddress: null,
       provider: null,
       
@@ -145,16 +147,23 @@ export const usePokerStore = create<PokerStore>()(
       
       // Fetch betting info
       fetchBettingInfo: async (tableId) => {
-        const { contractAddress, provider } = get();
+        const { contractAddress, provider, tableState } = get();
         if (!contractAddress || !provider) return;
         
         try {
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
           const betting = await contract.getBettingInfo(tableId);
           
+          const potAmount = betting[0];
+          
+          // If game is about to finish or is Playing with a pot, save the pot amount
+          if (tableState && (tableState.state === 2 || tableState.state === 3) && potAmount > BigInt(0)) {
+            set({ lastPot: potAmount });
+          }
+          
           set({
             bettingInfo: {
-              pot: betting[0],
+              pot: potAmount,
               currentBet: betting[1],
               currentPlayer: betting[2] as string,
               currentPlayerIndex: betting[3],

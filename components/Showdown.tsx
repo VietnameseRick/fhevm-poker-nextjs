@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { CardHand } from "./CardDisplay";
+import { detectHand, HandRankEmojis, HandRankNames } from "@/utils/handDetection";
+import { ethers } from "ethers";
+import { FHEPokerABI } from "@/abi/FHEPokerABI";
 
 interface ShowdownProps {
   winner: string;
   myAddress: string;
   myCards?: number[];
+  communityCards?: number[];
   pot: bigint;
   allPlayers: Array<{
     address: string;
@@ -14,35 +18,72 @@ interface ShowdownProps {
     hasFolded: boolean;
   }>;
   onContinue: () => void;
+  tableId?: bigint;
+  contractAddress?: string;
+  provider?: ethers.ContractRunner | null;
 }
 
 export function Showdown({
   winner,
   myAddress,
   myCards,
+  communityCards,
   pot,
   allPlayers,
   onContinue,
+  tableId,
+  contractAddress,
+  provider,
 }: ShowdownProps) {
   const [showConfetti, setShowConfetti] = useState(false);
   const [animationStep, setAnimationStep] = useState(0);
+  const [winnerRank, setWinnerRank] = useState<number | null>(null);
+  const [winnerCards, setWinnerCards] = useState<number[] | null>(null);
 
   const isWinner = winner.toLowerCase() === myAddress.toLowerCase();
   const winnerData = allPlayers.find(
     (p) => p.address.toLowerCase() === winner.toLowerCase()
   );
 
+  // Detect hand if we have cards
+  const detectedHand = myCards && communityCards && communityCards.length > 0
+    ? detectHand(myCards, communityCards)
+    : null;
+
   useEffect(() => {
     // Animation sequence
     const timers = [
       setTimeout(() => setAnimationStep(1), 300),
       setTimeout(() => setAnimationStep(2), 800),
-      setTimeout(() => setShowConfetti(true), 1200),
+      // Only show confetti if the user is the winner
+      setTimeout(() => isWinner && setShowConfetti(true), 1200),
       setTimeout(() => setShowConfetti(false), 4000),
     ];
 
     return () => timers.forEach(clearTimeout);
-  }, []);
+  }, [isWinner]);
+
+  // Fetch winner's evaluated hand and revealed hole cards from contract (game is finished)
+  useEffect(() => {
+    const loadWinnerData = async () => {
+      try {
+        if (!contractAddress || !provider || !tableId) return;
+        const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
+        // Evaluate winner's hand
+        const evalRes = await contract.evaluateHand(tableId, winner);
+        const rankNum: number = Number(evalRes[0]);
+        setWinnerRank(rankNum);
+        // Fetch winner's hole cards
+        const cardsRes = await contract.getPlayerCards(tableId, winner);
+        const c1 = Number(cardsRes[0]);
+        const c2 = Number(cardsRes[1]);
+        setWinnerCards([c1, c2]);
+      } catch {
+        // Best effort only
+      }
+    };
+    loadWinnerData();
+  }, [contractAddress, provider, tableId, winner]);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -82,7 +123,7 @@ export function Showdown({
                 : "text-white"
             }`}
           >
-            {isWinner ? "🎉 YOU WIN! 🎉" : "Hand Complete"}
+            {isWinner ? "🎉 YOU WIN! 🎉" : "You Lose"}
           </h2>
 
           {!isWinner && winnerData && (
@@ -99,23 +140,69 @@ export function Showdown({
           }`}
         >
           <div className="text-center">
-            <p className="text-slate-400 text-sm mb-1">Pot Won</p>
+            <p className="text-slate-400 text-sm mb-1">{isWinner ? "Pot Won" : "Final Pot"}</p>
             <p className="text-3xl font-bold text-green-400">
               {parseFloat((Number(pot) / 1e18).toFixed(4))} ETH
             </p>
           </div>
         </div>
 
+        {/* Winning hand breakdown (from contract) */}
+        {winnerRank !== null && (
+          <div className={`bg-slate-800/50 rounded-xl p-6 mb-6 border border-slate-600 transition-all duration-500 delay-250 ${animationStep >= 2 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}`}>
+            <h3 className="text-white text-lg font-semibold mb-3 text-center">Winning Hand</h3>
+            <div className="text-center mb-4">
+              <p className="text-2xl font-bold text-yellow-300">
+                {HandRankEmojis[winnerRank as keyof typeof HandRankEmojis]} {HandRankNames[winnerRank as keyof typeof HandRankNames]}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-slate-400 text-sm mb-2 text-center">Winner&apos;s Cards</p>
+                <div className="flex justify-center">
+                  <CardHand cards={winnerCards || []} />
+                </div>
+              </div>
+              <div>
+                <p className="text-slate-400 text-sm mb-2 text-center">Community Cards</p>
+                <div className="flex justify-center">
+                  <CardHand cards={communityCards || []} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Your cards (if decrypted) */}
         {myCards && myCards.length === 2 && (
           <div
-            className={`bg-slate-800/50 rounded-xl p-6 mb-6 border border-slate-600 transition-all duration-500 delay-300 ${
+            className={`bg-slate-800/50 rounded-xl p-6 mb-6 border transition-all duration-500 delay-300 ${
+              detectedHand && detectedHand.rank >= 4 
+                ? "border-yellow-500 shadow-lg shadow-yellow-500/50 animate-pulse-border" 
+                : "border-slate-600"
+            } ${
               animationStep >= 2 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             }`}
           >
             <h3 className="text-white text-lg font-semibold mb-3 text-center">
               Your Hand
             </h3>
+            
+            {/* Hand rank display */}
+            {detectedHand && (
+              <div className="mb-4 text-center">
+                <p className={`text-2xl font-bold ${
+                  detectedHand.rank >= 7 ? "text-yellow-400" :
+                  detectedHand.rank >= 4 ? "text-purple-400" :
+                  detectedHand.rank >= 1 ? "text-blue-400" :
+                  "text-slate-400"
+                }`}>
+                  {detectedHand.emoji} {detectedHand.name}
+                </p>
+                <p className="text-sm text-slate-400 mt-1">{detectedHand.description}</p>
+              </div>
+            )}
+            
             <div className="flex justify-center">
               <CardHand cards={myCards} />
             </div>
@@ -207,8 +294,21 @@ export function Showdown({
             transform: translateX(0);
           }
         }
+        @keyframes pulseBorder {
+          0%, 100% {
+            border-color: rgb(234 179 8 / 0.5);
+            box-shadow: 0 0 20px rgb(234 179 8 / 0.3);
+          }
+          50% {
+            border-color: rgb(234 179 8 / 0.8);
+            box-shadow: 0 0 30px rgb(234 179 8 / 0.5);
+          }
+        }
         .animate-confetti {
           animation: confetti 3s ease-out forwards;
+        }
+        .animate-pulse-border {
+          animation: pulseBorder 2s ease-in-out infinite;
         }
       `}</style>
     </div>

@@ -22,6 +22,8 @@
   },
   "dependencies": {
     "@fhevm/react": "file:./lib/fhevm-react",
+    "@privy-io/react-auth": "^3.1.0",
+    "@privy-io/wagmi": "^2.0.0",
     "@tanstack/react-query": "^5.90.2",
     "@zama-fhe/relayer-sdk": "0.2.0",
     "class-variance-authority": "^0.7.1",
@@ -33,6 +35,8 @@
     "react-dom": "^19.1.0",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
+    "viem": "^2.38.0",
+    "wagmi": "^2.17.5",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

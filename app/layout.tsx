@@ -3,7 +3,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 import Image from "next/image";
 
-export const runtime = 'edge';
+// Remove edge runtime to support WalletConnect
+// export const runtime = 'edge';
 
 export const metadata: Metadata = {
   title: "Zama FHEVM SDK Quickstart",

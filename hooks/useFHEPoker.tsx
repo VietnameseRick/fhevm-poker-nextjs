@@ -74,7 +74,9 @@ export const useFHEPoker = (parameters: {
   const [currentTableId, setCurrentTableId] = useState<bigint | undefined>(undefined);
   const [message, setMessage] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [currentAction, setCurrentAction] = useState<string | undefined>(undefined);
   const [cards, setCards] = useState<[Card | undefined, Card | undefined]>([undefined, undefined]);
+  const [decryptedCommunityCards, setDecryptedCommunityCards] = useState<number[]>([]);
   const [isDecrypting, setIsDecrypting] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [userAddress, setUserAddress] = useState<string | undefined>(undefined);
@@ -119,6 +121,7 @@ export const useFHEPoker = (parameters: {
   const players = usePokerStore(state => state.players);
   const allPlayersBettingState = usePokerStore(state => state.allPlayersBettingState);
   const communityCards = usePokerStore(state => state.communityCards);
+  const lastPot = usePokerStore(state => state.lastPot);
   const refreshAll = usePokerStore(state => state.refreshAll);
   const setStoreTableId = usePokerStore(state => state.setCurrentTableId);
   const setContractInfo = usePokerStore(state => state.setContractInfo);
@@ -156,6 +159,7 @@ export const useFHEPoker = (parameters: {
       try {
         isLoadingRef.current = true;
         setIsLoading(true);
+        setCurrentAction("Creating");
 
         const contract = new ethers.Contract(
           pokerContract.address,
@@ -226,6 +230,7 @@ export const useFHEPoker = (parameters: {
       try {
         isLoadingRef.current = true;
         setIsLoading(true);
+        setCurrentAction("Joining");
 
         const contract = new ethers.Contract(
           pokerContract.address,
@@ -276,6 +281,7 @@ export const useFHEPoker = (parameters: {
       try {
         isLoadingRef.current = true;
         setIsLoading(true);
+        setCurrentAction("Advancing");
 
         const contract = new ethers.Contract(
           pokerContract.address,
@@ -310,6 +316,7 @@ export const useFHEPoker = (parameters: {
       try {
         isLoadingRef.current = true;
         setIsLoading(true);
+        setCurrentAction("Folding");
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Folding...");
         const tx = await contract.fold(tableId);
@@ -333,6 +340,7 @@ export const useFHEPoker = (parameters: {
       try {
         isLoadingRef.current = true;
         setIsLoading(true);
+        setCurrentAction("Checking");
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Checking...");
         const tx = await contract.check(tableId);
@@ -356,6 +364,7 @@ export const useFHEPoker = (parameters: {
       try {
         isLoadingRef.current = true;
         setIsLoading(true);
+        setCurrentAction("Calling");
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Calling...");
         const tx = await contract.call(tableId);
@@ -379,6 +388,7 @@ export const useFHEPoker = (parameters: {
       try {
         isLoadingRef.current = true;
         setIsLoading(true);
+        setCurrentAction("Raising");
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Raising...");
         const tx = await contract.raise(tableId, ethers.parseEther(raiseAmount));
@@ -418,6 +428,7 @@ export const useFHEPoker = (parameters: {
       try {
         isDecryptingRef.current = true;
         setIsDecrypting(true);
+        setCurrentAction("Decrypting Your Cards");
         setMessage("Fetching encrypted cards...");
 
         const contract = new ethers.Contract(
@@ -476,6 +487,134 @@ export const useFHEPoker = (parameters: {
     [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage]
   );
 
+  // Decrypt community cards
+  const decryptCommunityCards = useCallback(
+    async (tableId: bigint) => {
+      if (
+        !pokerContract.address ||
+        !instance ||
+        !ethersSigner ||
+        isDecryptingRef.current
+      ) {
+        return;
+      }
+
+      try {
+        isDecryptingRef.current = true;
+        setIsDecrypting(true);
+        // Set action label based on current street
+        let actionLabel = "Decrypting";
+        const street = communityCards?.currentStreet;
+        if (street === 1) actionLabel = "Decrypting Flop";
+        else if (street === 2) actionLabel = "Decrypting Turn";
+        else if (street === 3) actionLabel = "Decrypting River";
+        setCurrentAction(actionLabel);
+        setMessage("Fetching encrypted community cards...");
+
+        const contract = new ethers.Contract(
+          pokerContract.address,
+          pokerContract.abi,
+          ethersSigner
+        );
+
+        const communityCardsData = await contract.getCommunityCards(tableId);
+        
+        // communityCardsData = [currentStreet, flopCard1, flopCard2, flopCard3, turnCard, riverCard]
+        const currentStreet = Number(communityCardsData[0]);
+        const handles = [
+          communityCardsData[1], // flopCard1
+          communityCardsData[2], // flopCard2
+          communityCardsData[3], // flopCard3
+          communityCardsData[4], // turnCard
+          communityCardsData[5], // riverCard
+        ];
+
+        // Filter out zero handles (undealt cards) and only decrypt based on current street
+        const validHandles = [];
+        if (currentStreet >= 1) {
+          // Flop cards (3 cards)
+          validHandles.push(handles[0], handles[1], handles[2]);
+        }
+        if (currentStreet >= 2) {
+          // Turn card
+          validHandles.push(handles[3]);
+        }
+        if (currentStreet >= 3) {
+          // River card
+          validHandles.push(handles[4]);
+        }
+
+        // Check if we have any valid handles to decrypt
+        const hasValidHandles = validHandles.some(
+          (h) => h && h !== "0x0000000000000000000000000000000000000000000000000000000000000000"
+        );
+
+        if (!hasValidHandles) {
+          setMessage("⚠️ No community cards to decrypt yet");
+          isDecryptingRef.current = false;
+          setIsDecrypting(false);
+          return;
+        }
+
+        setMessage("Decrypting community cards...");
+
+        const sig = await FhevmDecryptionSignature.loadOrSign(
+          instance,
+          [pokerContract.address as `0x${string}`],
+          ethersSigner,
+          fhevmDecryptionSignatureStorage
+        );
+
+        if (!sig) {
+          setMessage("Unable to build FHEVM decryption signature");
+          return;
+        }
+
+        const decryptRequests = validHandles.map((handle) => ({
+          handle,
+          contractAddress: pokerContract.address as string,
+        }));
+
+        const res = await instance.userDecrypt(
+          decryptRequests,
+          sig.privateKey,
+          sig.publicKey,
+          sig.signature,
+          sig.contractAddresses,
+          sig.userAddress,
+          sig.startTimestamp,
+          sig.durationDays
+        );
+
+        // Build the full decrypted array (5 cards), filling in zeros for undealt cards
+        const decryptedValues = [0, 0, 0, 0, 0];
+        let validIndex = 0;
+        
+        if (currentStreet >= 1) {
+          decryptedValues[0] = Number(res[validHandles[validIndex++]]);
+          decryptedValues[1] = Number(res[validHandles[validIndex++]]);
+          decryptedValues[2] = Number(res[validHandles[validIndex++]]);
+        }
+        if (currentStreet >= 2) {
+          decryptedValues[3] = Number(res[validHandles[validIndex++]]);
+        }
+        if (currentStreet >= 3) {
+          decryptedValues[4] = Number(res[validHandles[validIndex++]]);
+        }
+
+        setDecryptedCommunityCards(decryptedValues);
+        setMessage("✅ Community cards decrypted!");
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        setMessage(`❌ Failed to decrypt community cards: ${errorMessage}`);
+      } finally {
+        isDecryptingRef.current = false;
+        setIsDecrypting(false);
+      }
+    },
+    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet]
+  );
+
   // Track WebSocket connection status
   useEffect(() => {
     // Simple connection tracking based on WebSocket hook
@@ -497,8 +636,11 @@ export const useFHEPoker = (parameters: {
     players,
     cards,
     communityCards,
+    decryptedCommunityCards,
+    lastPot,
     message,
     isLoading,
+    currentAction,
     isDecrypting,
     isConnected,
     createTable,
@@ -510,6 +652,7 @@ export const useFHEPoker = (parameters: {
     raise,
     refreshTableState,
     decryptCards,
+    decryptCommunityCards,
     setCurrentTableId,
   };
 };
