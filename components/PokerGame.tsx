@@ -427,8 +427,8 @@ export function PokerGame() {
                 </div>
               )}
               {/* Turn Indicator */}
-              {poker.bettingInfo && (
-                <div className={`inline-flex items-center gap-2 px-6 py-3 rounded-full shadow-lg border-2 ${
+            {poker.bettingInfo && (
+              <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full shadow-lg border-2 ${
                   poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
                     ? 'bg-gradient-to-r from-green-600 to-green-700 border-green-400 animate-pulse'
                     : 'bg-gradient-to-r from-gray-600 to-gray-700 border-gray-400'
@@ -446,6 +446,12 @@ export function PokerGame() {
                       {poker.bettingInfo.currentPlayer.substring(0, 10)}...
                     </div>
                   </div>
+                {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 2 && (
+                  <div className="ml-2 flex items-center gap-1 bg-black/30 px-2 py-1 rounded-full border border-white/20">
+                    <span className="text-xs">⏱️</span>
+                    <span className="text-xs text-white font-semibold">{poker.timeRemaining}s</span>
+                  </div>
+                )}
                 </div>
               )}
             </div>
