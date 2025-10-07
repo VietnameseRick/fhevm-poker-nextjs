@@ -290,6 +290,25 @@ export const FHEPokerABI = {
           "internalType": "uint256",
           "name": "tableId",
           "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "player",
+          "type": "address"
+        }
+      ],
+      "name": "PlayerTimedOut",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
         }
       ],
       "name": "RiverDealt",
@@ -778,6 +797,54 @@ export const FHEPokerABI = {
           "internalType": "bool",
           "name": "isSeated",
           "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "turnStartTime",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "playerActionTimeout",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getTimeRemaining",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "timeRemaining",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        }
+      ],
+      "name": "hasPlayerTimedOut",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
         }
       ],
       "stateMutability": "view",
@@ -854,6 +921,19 @@ export const FHEPokerABI = {
         }
       ],
       "name": "setWinner",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        }
+      ],
+      "name": "skipTimedOutPlayer",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -1025,6 +1105,16 @@ export const FHEPokerABI = {
           "internalType": "uint8",
           "name": "nextCardIndex",
           "type": "uint8"
+        },
+        {
+          "internalType": "uint256",
+          "name": "playerActionTimeout",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "turnStartTime",
+          "type": "uint256"
         }
       ],
       "stateMutability": "view",
