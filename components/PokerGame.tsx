@@ -9,6 +9,7 @@ import { CardHand } from "./CardDisplay";
 import { BettingControls } from "./BettingControls";
 import { Showdown } from "./Showdown";
 import { TransactionFlow } from "./TransactionFlow";
+import { TableBrowser } from "./TableBrowser";
 import { useInMemoryStorage } from "../hooks/useInMemoryStorage";
 import { usePrivyEthers } from "../hooks/usePrivyEthers";
 
@@ -73,6 +74,7 @@ export function PokerGame() {
   const [showCreateTable, setShowCreateTable] = useState(true);
   const [showJoinTable, setShowJoinTable] = useState(false);
   const [currentView, setCurrentView] = useState<"lobby" | "game">("lobby");
+  const [isTableBrowserOpen, setIsTableBrowserOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isPortrait, setIsPortrait] = useState(false);
 
@@ -759,7 +761,7 @@ export function PokerGame() {
         </div>
 
         {/* Action Tabs */}
-        <div className="flex justify-center gap-4 mb-8">
+        <div className="flex justify-center gap-4 mb-8 flex-wrap">
           <button
             onClick={() => { setShowCreateTable(true); setShowJoinTable(false); }}
             className={`px-8 py-3 rounded-xl font-bold transition-all duration-200 ${
@@ -779,6 +781,12 @@ export function PokerGame() {
             }`}
           >
             Join Table
+          </button>
+          <button
+            onClick={() => setIsTableBrowserOpen(true)}
+            className="px-8 py-3 rounded-xl font-bold transition-all duration-200 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg hover:scale-105"
+          >
+            Browse Tables
           </button>
         </div>
 
@@ -983,6 +991,19 @@ export function PokerGame() {
             </div>
           </div>
         )}
+        {/* Table Browser Modal */}
+        <TableBrowser
+          isOpen={isTableBrowserOpen}
+          onClose={() => setIsTableBrowserOpen(false)}
+          onSelect={(id) => {
+            setShowCreateTable(false);
+            setShowJoinTable(true);
+            setIsTableBrowserOpen(false);
+            setTableIdInput(id.toString());
+          }}
+          contractAddress={poker.contractAddress}
+          provider={ethersProvider}
+        />
       </div>
     </div>
   );
