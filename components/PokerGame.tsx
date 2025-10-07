@@ -589,7 +589,15 @@ export function PokerGame() {
                   minRaise={BigInt(Math.floor(Number(poker.tableState.minBuyIn) * 0.1))}
                   onFold={() => poker.fold(poker.currentTableId!)}
                   onCheck={() => poker.check(poker.currentTableId!)}
-                onCall={() => poker.call(poker.currentTableId!)}
+                onCall={() => {
+                  const currentBet = poker.bettingInfo?.currentBet || 0n;
+                  const myBet = (typeof poker.playerState === 'object' && poker.playerState?.currentBet) ? poker.playerState.currentBet : 0n;
+                  if (myBet >= currentBet) {
+                    // Up-to-date state says no bet to call → check instead
+                    return poker.check(poker.currentTableId!);
+                  }
+                  return poker.call(poker.currentTableId!);
+                }}
                 onRaise={(amount) => {
                   // Interpret input as "raise to" total; convert to delta for the contract
                   try {

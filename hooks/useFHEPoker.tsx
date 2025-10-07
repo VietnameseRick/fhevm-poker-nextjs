@@ -442,7 +442,27 @@ export const useFHEPoker = (parameters: {
         isLoadingRef.current = true;
         setIsLoading(true);
         setCurrentAction("Calling");
-        const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
+        const address = pokerContract.address as string;
+        const contract = new ethers.Contract(address, pokerContract.abi, ethersSigner);
+
+        // Pre-check to avoid overflow/underflow when computing amountToCall on-chain
+        try {
+          const [betting, myState] = await Promise.all([
+            contract.getBettingInfo(tableId),
+            userAddress ? contract.getPlayerBettingState(tableId, userAddress) : Promise.resolve(null),
+          ]);
+          if (betting && myState) {
+            const currentBetOnChain: bigint = betting[1];
+            const myCurrentBet: bigint = myState[1];
+            if (myCurrentBet >= currentBetOnChain) {
+              setMessage("⚠️ No bet to call. You are already matched.");
+              return;
+            }
+          }
+        } catch {
+          // ignore read errors
+        }
+
         setMessage("Calling...");
         const tx = await contract.call(tableId);
         await tx.wait();
@@ -455,7 +475,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner]
+    [pokerContract, ethersSigner, userAddress]
   );
 
   const raise = useCallback(
