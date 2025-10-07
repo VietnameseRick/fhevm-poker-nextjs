@@ -449,7 +449,9 @@ export function PokerGame() {
                 {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 2 && (
                   <div className="ml-2 flex items-center gap-1 bg-black/30 px-2 py-1 rounded-full border border-white/20">
                     <span className="text-xs">⏱️</span>
-                    <span className="text-xs text-white font-semibold">{poker.timeRemaining}s</span>
+                    <span className="text-xs text-white font-semibold">
+                      {Math.floor((poker.timeRemaining || 0) / 60)}:{String(((poker.timeRemaining || 0) % 60)).padStart(2, '0')}
+                    </span>
                   </div>
                 )}
                 </div>

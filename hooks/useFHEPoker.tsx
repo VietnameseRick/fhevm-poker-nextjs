@@ -167,27 +167,27 @@ export const useFHEPoker = (parameters: {
     }
   }, [tableState?.currentRound]);
 
-  // Poll remaining time for the current player's action (from contract)
+  // Client-side countdown using turnStartTime and playerActionTimeout
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
-    if (pokerContract.address && provider && currentTableId && tableState?.state === 2) {
-      interval = setInterval(async () => {
-        try {
-          const address = pokerContract.address as string;
-          const contract = new ethers.Contract(address, pokerContract.abi, provider);
-          const seconds: bigint = await contract.getTimeRemaining(currentTableId);
-          setTimeRemaining(Number(seconds));
-        } catch {
-          // ignore polling errors
-        }
-      }, 1000);
+    if (tableState?.state === 2 && tableState.turnStartTime && tableState.playerActionTimeout) {
+      const startMs = Number(tableState.turnStartTime) * 1000;
+      const timeoutSec = Number(tableState.playerActionTimeout);
+      const tick = () => {
+        const now = Date.now();
+        const elapsedSec = Math.floor((now - startMs) / 1000);
+        const remaining = Math.max(0, timeoutSec - elapsedSec);
+        setTimeRemaining(remaining);
+      };
+      tick();
+      interval = setInterval(tick, 1000);
     } else {
       setTimeRemaining(null);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [pokerContract.address, pokerContract.abi, provider, currentTableId, tableState?.state]);
+  }, [tableState?.state, tableState?.turnStartTime, tableState?.playerActionTimeout]);
 
   // Auto-skip timed-out player (anyone can call this once time is up)
   useEffect(() => {

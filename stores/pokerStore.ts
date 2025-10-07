@@ -17,6 +17,8 @@ export interface TableState {
   dealerIndex?: bigint;
   smallBlind?: bigint;
   bigBlind?: bigint;
+  turnStartTime?: bigint;
+  playerActionTimeout?: bigint;
 }
 
 export interface BettingInfo {
@@ -153,6 +155,8 @@ export const usePokerStore = create<PokerStore>()(
               dealerIndex: tableStruct ? (tableStruct.dealerIndex as bigint) : undefined,
               smallBlind: tableStruct ? (tableStruct.smallBlind as bigint) : undefined,
               bigBlind: tableStruct ? (tableStruct.bigBlind as bigint) : undefined,
+              turnStartTime: state[8],
+              playerActionTimeout: state[9],
             },
           });
         } catch (error) {

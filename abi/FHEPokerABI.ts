@@ -309,6 +309,31 @@ export const FHEPokerABI = {
           "internalType": "uint256",
           "name": "tableId",
           "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "player",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "PlayerWithdrew",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
         }
       ],
       "name": "RiverDealt",
@@ -861,6 +886,19 @@ export const FHEPokerABI = {
       "name": "joinTable",
       "outputs": [],
       "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        }
+      ],
+      "name": "leaveTable",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
