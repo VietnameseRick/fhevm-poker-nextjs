@@ -7,6 +7,8 @@ interface PlayerSeatProps {
   chips: bigint;
   currentBet: bigint;
   isDealer?: boolean;
+  isSmallBlind?: boolean;
+  isBigBlind?: boolean;
   isCurrentTurn?: boolean;
   hasFolded?: boolean;
   isYou?: boolean;
@@ -20,6 +22,8 @@ export function PlayerSeat({
   chips,
   currentBet,
   isDealer = false,
+  isSmallBlind = false,
+  isBigBlind = false,
   isCurrentTurn = false,
   hasFolded = false,
   isYou = false,
@@ -49,6 +53,16 @@ export function PlayerSeat({
       {isDealer && (
         <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full border-2 border-yellow-600 flex items-center justify-center text-xs font-bold shadow-lg z-10">
           D
+        </div>
+      )}
+      {isSmallBlind && !isDealer && (
+        <div className="absolute -top-2 -right-2 w-8 h-8 bg-blue-400 rounded-full border-2 border-blue-600 flex items-center justify-center text-[10px] font-bold shadow-lg z-10">
+          SB
+        </div>
+      )}
+      {isBigBlind && !isDealer && (
+        <div className="absolute -top-2 -right-2 w-8 h-8 bg-purple-400 rounded-full border-2 border-purple-600 flex items-center justify-center text-[10px] font-bold shadow-lg z-10">
+          BB
         </div>
       )}
 

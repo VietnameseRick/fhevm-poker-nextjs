@@ -451,11 +451,11 @@ export function PokerGame() {
             </div>
 
             {/* Table */}
-            <PokerTable
+          <PokerTable
               players={playerData}
               pot={poker.lastPot || poker.bettingInfo?.pot || BigInt(0)}
               currentBet={poker.bettingInfo?.currentBet || BigInt(0)}
-              dealerIndex={0}
+            dealerIndex={poker.tableState?.dealerIndex ? Number(poker.tableState.dealerIndex) : 0}
               yourAddress={yourAddress}
               showYourCards={poker.cards[0]?.clear !== undefined}
               communityCards={

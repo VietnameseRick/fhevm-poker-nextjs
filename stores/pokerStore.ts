@@ -14,6 +14,9 @@ export interface TableState {
   currentRound: bigint;
   isSeated: boolean;
   winner?: string;
+  dealerIndex?: bigint;
+  smallBlind?: bigint;
+  bigBlind?: bigint;
 }
 
 export interface BettingInfo {
@@ -113,6 +116,15 @@ export const usePokerStore = create<PokerStore>()(
         try {
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
           const state = await contract.getTableState(tableId);
+          // Also fetch table struct to get dealerIndex and blinds
+          let tableStruct: {
+            dealerIndex: bigint;
+            smallBlind: bigint;
+            bigBlind: bigint;
+          } | null = null;
+          try {
+            tableStruct = await contract.tables(tableId);
+          } catch {}
           
           // Fetch winner if game is finished (state 3)
           let winner: string | undefined = undefined;
@@ -138,6 +150,9 @@ export const usePokerStore = create<PokerStore>()(
               currentRound: state[6],
               isSeated: state[7],
               winner,
+              dealerIndex: tableStruct ? (tableStruct.dealerIndex as bigint) : undefined,
+              smallBlind: tableStruct ? (tableStruct.smallBlind as bigint) : undefined,
+              bigBlind: tableStruct ? (tableStruct.bigBlind as bigint) : undefined,
             },
           });
         } catch (error) {

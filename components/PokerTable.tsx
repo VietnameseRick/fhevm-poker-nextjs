@@ -89,6 +89,8 @@ export function PokerTable({
             chips={player.chips}
             currentBet={player.currentBet}
             isDealer={index === dealerIndex}
+            isSmallBlind={players.length >= 2 && index === ((dealerIndex + 1) % players.length)}
+            isBigBlind={players.length >= 2 && index === ((dealerIndex + 2) % players.length)}
             isCurrentTurn={player.isCurrentPlayer}
             hasFolded={player.hasFolded}
             isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
@@ -110,6 +112,8 @@ export function PokerTable({
               chips={player.chips}
               currentBet={player.currentBet}
               isDealer={index === dealerIndex}
+              isSmallBlind={players.length >= 2 && index === ((dealerIndex + 1) % players.length)}
+              isBigBlind={players.length >= 2 && index === ((dealerIndex + 2) % players.length)}
               isCurrentTurn={player.isCurrentPlayer}
               hasFolded={player.hasFolded}
               isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
@@ -195,6 +199,8 @@ export function PokerTable({
               chips={player.chips}
               currentBet={player.currentBet}
               isDealer={index === dealerIndex}
+              isSmallBlind={players.length >= 2 && index === ((dealerIndex + 1) % players.length)}
+              isBigBlind={players.length >= 2 && index === ((dealerIndex + 2) % players.length)}
               isCurrentTurn={player.isCurrentPlayer}
               hasFolded={player.hasFolded}
               isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
@@ -215,6 +221,8 @@ export function PokerTable({
             chips={player.chips}
             currentBet={player.currentBet}
             isDealer={index === dealerIndex}
+            isSmallBlind={players.length >= 2 && index === ((dealerIndex + 1) % players.length)}
+            isBigBlind={players.length >= 2 && index === ((dealerIndex + 2) % players.length)}
             isCurrentTurn={player.isCurrentPlayer}
             hasFolded={player.hasFolded}
             isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
