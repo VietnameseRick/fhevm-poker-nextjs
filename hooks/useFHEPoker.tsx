@@ -86,7 +86,7 @@ export const useFHEPoker = (parameters: {
   const pokerContractRef = useRef<PokerTableInfo | undefined>(undefined);
   const isLoadingRef = useRef<boolean>(false);
   const isDecryptingRef = useRef<boolean>(false);
-  const previousRoundRef = useRef<number | undefined>(undefined);
+  const previousRoundRef = useRef<string | undefined>(undefined);
   const timeoutHandledRef = useRef<boolean>(false);
 
   // Contract metadata
@@ -154,8 +154,9 @@ export const useFHEPoker = (parameters: {
   // Reset local decrypted data at the start of a new round
   useEffect(() => {
     const round = tableState?.currentRound;
-    if (typeof round === 'number') {
-      if (previousRoundRef.current !== undefined && round !== previousRoundRef.current) {
+    const roundStr = typeof round === 'bigint' || typeof round === 'number' ? round.toString() : undefined;
+    if (roundStr !== undefined) {
+      if (previousRoundRef.current !== undefined && roundStr !== previousRoundRef.current) {
         setCards([undefined, undefined]);
         setDecryptedCommunityCards([]);
         setIsDecrypting(false);
@@ -163,7 +164,7 @@ export const useFHEPoker = (parameters: {
         // Gentle prompt for users to decrypt again
         setMessage("New round started. 🔓 Decrypt your cards to view them.");
       }
-      previousRoundRef.current = round;
+      previousRoundRef.current = roundStr;
     }
   }, [tableState?.currentRound]);
 
