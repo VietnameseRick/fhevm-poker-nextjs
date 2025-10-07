@@ -85,6 +85,7 @@ export const useFHEPoker = (parameters: {
   const pokerContractRef = useRef<PokerTableInfo | undefined>(undefined);
   const isLoadingRef = useRef<boolean>(false);
   const isDecryptingRef = useRef<boolean>(false);
+  const previousRoundRef = useRef<number | undefined>(undefined);
 
   // Contract metadata
   const pokerContract = useMemo(() => {
@@ -140,6 +141,29 @@ export const useFHEPoker = (parameters: {
   useEffect(() => {
     setStoreTableId(currentTableId ?? null);
   }, [currentTableId, setStoreTableId]);
+
+  // Reset local decrypted data when switching tables
+  useEffect(() => {
+    // Clear decrypted state when table changes
+    setCards([undefined, undefined]);
+    setDecryptedCommunityCards([]);
+  }, [currentTableId]);
+
+  // Reset local decrypted data at the start of a new round
+  useEffect(() => {
+    const round = tableState?.currentRound;
+    if (typeof round === 'number') {
+      if (previousRoundRef.current !== undefined && round !== previousRoundRef.current) {
+        setCards([undefined, undefined]);
+        setDecryptedCommunityCards([]);
+        setIsDecrypting(false);
+        isDecryptingRef.current = false;
+        // Gentle prompt for users to decrypt again
+        setMessage("New round started. 🔓 Decrypt your cards to view them.");
+      }
+      previousRoundRef.current = round;
+    }
+  }, [tableState?.currentRound]);
 
   // WebSocket listener - auto-refreshes store when events fire
   usePokerWebSocket(

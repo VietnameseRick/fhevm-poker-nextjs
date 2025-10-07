@@ -5,6 +5,7 @@ import { ethers } from "ethers";
 import { useFhevm } from "@fhevm/react";
 import { useFHEPoker } from "@/hooks/useFHEPoker";
 import { PokerTable } from "./PokerTable";
+import { CardHand } from "./CardDisplay";
 import { BettingControls } from "./BettingControls";
 import { Showdown } from "./Showdown";
 import { TransactionFlow } from "./TransactionFlow";
@@ -549,8 +550,27 @@ export function PokerGame() {
               )}
 
               {isPlaying && (poker.tableState.isSeated || poker.playerState) && poker.playerState && (
+              <>
+              <div className="bg-black/30 backdrop-blur-sm rounded-xl border border-gray-700 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-white font-semibold">Your Cards</p>
+                  {!(poker.cards[0]?.clear !== undefined) && (
+                    <span className="text-xs text-yellow-300">🔓 Decrypt to reveal</span>
+                  )}
+                </div>
+                <div className="flex justify-center">
+                  <CardHand
+                    cards={[
+                      poker.cards[0]?.clear as number | undefined,
+                      poker.cards[1]?.clear as number | undefined,
+                    ]}
+                    hidden={!(poker.cards[0]?.clear !== undefined)}
+                  />
+                </div>
+              </div>
+
               <BettingControls
-                  canAct={isYourTurn && !poker.playerState.hasFolded}
+                canAct={isYourTurn && !poker.playerState.hasFolded}
                   currentBet={poker.bettingInfo?.currentBet || BigInt(0)}
                   playerBet={poker.playerState.currentBet}
                   playerChips={poker.playerState.chips}
@@ -573,6 +593,7 @@ export function PokerGame() {
                 }}
                   isLoading={poker.isLoading}
                 />
+              </>
               )}
 
               {isPlaying && !poker.playerState && (
