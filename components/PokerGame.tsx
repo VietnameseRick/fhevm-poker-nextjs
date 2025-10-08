@@ -250,9 +250,28 @@ export function PokerGame() {
       setTimeout(checkAndSwitch, 100);
       
       // After joining, refresh multiple times to ensure update
-      setTimeout(() => poker.refreshTableState(tableId), 500);
-      setTimeout(() => poker.refreshTableState(tableId), 1500);
-      setTimeout(() => poker.refreshTableState(tableId), 3000);
+      // Wrap in try-catch to handle any refresh errors
+      setTimeout(() => {
+        try {
+          poker.refreshTableState(tableId);
+        } catch (error) {
+          console.warn('Refresh error (non-critical):', error);
+        }
+      }, 500);
+      setTimeout(() => {
+        try {
+          poker.refreshTableState(tableId);
+        } catch (error) {
+          console.warn('Refresh error (non-critical):', error);
+        }
+      }, 1500);
+      setTimeout(() => {
+        try {
+          poker.refreshTableState(tableId);
+        } catch (error) {
+          console.warn('Refresh error (non-critical):', error);
+        }
+      }, 3000);
     } catch (error) {
       console.error('Failed to join table:', error);
       // Don't switch view if join failed

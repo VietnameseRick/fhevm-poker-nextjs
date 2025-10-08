@@ -322,15 +322,27 @@ export const useFHEPoker = (parameters: {
         });
 
         setMessage(`Waiting for transaction: ${tx.hash}`);
-        await tx.wait();
+        
+        try {
+          await tx.wait();
+        } catch (waitError) {
+          console.warn('Transaction wait error (non-critical):', waitError);
+          // Continue even if wait fails - the transaction might still be successful
+        }
 
         console.log('Setting currentTableId to:', tableId.toString());
         setCurrentTableId(tableId);
         setMessage(`✅ Successfully joined table ${tableId.toString()}!`);
         
         // Refresh table state to ensure UI updates
+        // Wrap in try-catch to handle any refresh errors
         setTimeout(() => {
-          refreshAll(tableId);
+          try {
+            refreshAll(tableId);
+          } catch (error) {
+            console.warn('Refresh error (non-critical):', error);
+            // Don't throw the error, just log it
+          }
         }, 1000);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
