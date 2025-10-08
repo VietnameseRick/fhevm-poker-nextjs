@@ -324,6 +324,7 @@ export const useFHEPoker = (parameters: {
         setMessage(`Waiting for transaction: ${tx.hash}`);
         await tx.wait();
 
+        console.log('Setting currentTableId to:', tableId.toString());
         setCurrentTableId(tableId);
         setMessage(`✅ Successfully joined table ${tableId.toString()}!`);
         

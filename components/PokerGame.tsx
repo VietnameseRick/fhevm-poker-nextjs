@@ -183,15 +183,44 @@ export function PokerGame() {
       }
     }
     
-    await poker.joinTable(tableId, buyInAmountInput);
-    
-    // Switch to game view after successful join
-    setCurrentView("game");
-    
-    // After joining, refresh multiple times to ensure update
-    setTimeout(() => poker.refreshTableState(tableId), 500);
-    setTimeout(() => poker.refreshTableState(tableId), 1500);
-    setTimeout(() => poker.refreshTableState(tableId), 3000);
+    try {
+      await poker.joinTable(tableId, buyInAmountInput);
+      
+      // Wait for the state to be updated and then switch to game view
+      // Check if currentTableId is set before switching
+      let attempts = 0;
+      const maxAttempts = 25; // 5 seconds max wait time
+      
+      const checkAndSwitch = () => {
+        attempts++;
+        
+        if (poker.currentTableId && poker.currentTableId.toString() === tableId.toString()) {
+          console.log('Table ID confirmed, switching to game view');
+          setCurrentView("game");
+        } else if (attempts >= maxAttempts) {
+          console.warn('Timeout waiting for table ID, switching anyway');
+          setCurrentView("game");
+        } else {
+          console.log(`Waiting for table ID to be set... (attempt ${attempts}/${maxAttempts})`, {
+            currentTableId: poker.currentTableId,
+            expectedTableId: tableId.toString()
+          });
+          // Try again in 200ms
+          setTimeout(checkAndSwitch, 200);
+        }
+      };
+      
+      // Start checking after a short delay
+      setTimeout(checkAndSwitch, 100);
+      
+      // After joining, refresh multiple times to ensure update
+      setTimeout(() => poker.refreshTableState(tableId), 500);
+      setTimeout(() => poker.refreshTableState(tableId), 1500);
+      setTimeout(() => poker.refreshTableState(tableId), 3000);
+    } catch (error) {
+      console.error('Failed to join table:', error);
+      // Don't switch view if join failed
+    }
   };
 
   const handleAdvanceGame = async () => {
@@ -337,10 +366,16 @@ export function PokerGame() {
   if (currentView === "game") {
     // Show loading or error if data not ready
     if (poker.currentTableId === undefined) {
+      console.log('Game view: currentTableId is undefined', {
+        currentTableId: poker.currentTableId,
+        tableState: poker.tableState,
+        message: poker.message
+      });
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
           <div className="text-center">
             <p className="text-white text-xl mb-4">⚠️ No table selected</p>
+            <p className="text-gray-400 text-sm mb-4">Debug: currentTableId = {poker.currentTableId?.toString() || 'undefined'}</p>
             <button
               onClick={() => setCurrentView("lobby")}
               className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
