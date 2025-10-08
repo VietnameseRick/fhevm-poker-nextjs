@@ -190,8 +190,8 @@ export function FundingRequiredModal({
                 (like buying into a poker game).
               </p>
               <p>
-                Think of it like this: The paymaster pays for the "shipping" (gas), but you still need
-                to pay for the "product" (buy-in amount).
+                Think of it like this: The paymaster pays for the &ldquo;shipping&rdquo; (gas), but you still need
+                to pay for the &ldquo;product&rdquo; (buy-in amount).
               </p>
             </div>
           </details>
@@ -203,7 +203,7 @@ export function FundingRequiredModal({
             onClick={onClose}
             className="w-full py-3 px-6 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold rounded-lg transition-all duration-200 shadow-lg"
           >
-            Got it! I'll fund my account
+            Got it! I&apos;ll fund my account
           </button>
         </div>
       </div>
