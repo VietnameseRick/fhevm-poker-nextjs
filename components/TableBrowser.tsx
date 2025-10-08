@@ -7,7 +7,7 @@ import { FHEPokerABI } from "@/abi/FHEPokerABI";
 interface TableBrowserProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (tableId: bigint) => void;
+  onSelect: (tableId: bigint, minBuyIn: bigint) => void;
   contractAddress?: `0x${string}` | undefined;
   provider?: ethers.ContractRunner | null;
 }
@@ -137,9 +137,9 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
             ) : tables.length === 0 ? (
               <div className="py-12 text-center text-slate-300">No tables found.</div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
                 <table className="min-w-full text-sm">
-                  <thead>
+                  <thead className="sticky top-0 bg-slate-900 z-10">
                     <tr className="text-left text-slate-400 border-b border-slate-700">
                       <th className="px-3 py-2">Table</th>
                       <th className="px-3 py-2">Status</th>
@@ -159,8 +159,8 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
                         <td className="px-3 py-2"><span className="text-slate-300">{formatEth(t.minBuyIn)} ETH</span></td>
                         <td className="px-3 py-2 text-right">
                           <button
-                            onClick={() => onSelect(t.id)}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                            onClick={() => onSelect(t.id, t.minBuyIn)}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                           >
                             Select
                           </button>

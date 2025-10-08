@@ -11,6 +11,8 @@ import { Showdown } from "./Showdown";
 import { TransactionFlow } from "./TransactionFlow";
 import { TableBrowser } from "./TableBrowser";
 import { WalletHeader } from "./WalletHeader";
+import { FundingRequiredModal } from "./FundingRequiredModal";
+import { ChipsManagementModal } from "./ChipsManagementModal";
 import { useInMemoryStorage } from "../hooks/useInMemoryStorage";
 import { useSmartAccount } from "../hooks/useSmartAccount";
 
@@ -23,7 +25,7 @@ export function PokerGame() {
     ready,
     authenticated,
     login,
-    logout, // eslint-disable-line @typescript-eslint/no-unused-vars
+    logout,
     ethersSigner,
     ethersProvider,
     eip1193Provider,
@@ -35,6 +37,7 @@ export function PokerGame() {
     switchToSepolia,
     isSmartAccount,
     isDeployingSmartAccount,
+    checkBalance,
   } = useSmartAccount();
 
   // Auto-switch to Sepolia on first connection
@@ -90,6 +93,14 @@ export function PokerGame() {
   const [smallBlindInput, setSmallBlindInput] = useState<string>("0.005");
   const [bigBlindInput, setBigBlindInput] = useState<string>("0.01");
   const [buyInAmountInput, setBuyInAmountInput] = useState<string>("0.2");
+
+  // Funding modal states
+  const [showFundingModal, setShowFundingModal] = useState(false);
+  const [currentBalance, setCurrentBalance] = useState<bigint>(0n);
+  const [requiredAmount, setRequiredAmount] = useState<bigint>(0n);
+
+  // Chips management modal state
+  const [showChipsManagementModal, setShowChipsManagementModal] = useState(false);
 
   // Use Privy address directly
   const yourAddress = address || "";
@@ -149,6 +160,21 @@ export function PokerGame() {
 
   const handleJoinTable = async () => {
     const tableId = BigInt(tableIdInput || poker.currentTableId?.toString() || "0");
+    const buyInAmount = ethers.parseEther(buyInAmountInput);
+    
+    // Check balance if using smart account
+    if (isSmartAccount && smartAccountAddress && checkBalance) {
+      const balance = await checkBalance();
+      setCurrentBalance(balance);
+      setRequiredAmount(buyInAmount);
+      
+      if (balance < buyInAmount) {
+        console.warn('Insufficient balance for buy-in');
+        setShowFundingModal(true);
+        return;
+      }
+    }
+    
     await poker.joinTable(tableId, buyInAmountInput);
     // After joining, refresh multiple times to ensure update
     setTimeout(() => poker.refreshTableState(tableId), 500);
@@ -419,6 +445,18 @@ export function PokerGame() {
                   <span className="text-purple-400 text-sm font-semibold">Sepolia Testnet</span>
                 </div>
               )}
+              
+              {/* Chips Management Button */}
+              {poker.tableState.isSeated && (
+                <button
+                  onClick={() => setShowChipsManagementModal(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all duration-200 shadow-lg flex items-center gap-2"
+                >
+                  <span className="text-lg">💰</span>
+                  <span>Manage Chips</span>
+                </button>
+              )}
+              
               <button
                 onClick={() => setCurrentView("lobby")}
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold transition-colors"
@@ -1066,15 +1104,57 @@ export function PokerGame() {
         <TableBrowser
           isOpen={isTableBrowserOpen}
           onClose={() => setIsTableBrowserOpen(false)}
-          onSelect={(id) => {
+          onSelect={(id, minBuyIn) => {
             setShowCreateTable(false);
             setShowJoinTable(true);
             setIsTableBrowserOpen(false);
             setTableIdInput(id.toString());
+            // Auto-fill the buy-in amount with the table's minimum buy-in
+            setBuyInAmountInput(ethers.formatEther(minBuyIn));
           }}
           contractAddress={poker.contractAddress}
           provider={ethersProvider}
         />
+
+        {/* Funding Required Modal */}
+        {isSmartAccount && smartAccountAddress && (
+          <FundingRequiredModal
+            isOpen={showFundingModal}
+            onClose={() => setShowFundingModal(false)}
+            smartAccountAddress={smartAccountAddress}
+            currentBalance={currentBalance}
+            requiredAmount={requiredAmount}
+            eoaAddress={eoaAddress}
+          />
+        )}
+
+        {/* Chips Management Modal */}
+        {poker.currentTableId && poker.tableState && (
+          <ChipsManagementModal
+            isOpen={showChipsManagementModal}
+            onClose={() => setShowChipsManagementModal(false)}
+            currentChips={typeof poker.playerState === 'object' && poker.playerState?.chips ? poker.playerState.chips : 0n}
+            minBuyIn={poker.tableState.minBuyIn}
+            onLeaveTable={async () => {
+              if (poker.currentTableId) {
+                await poker.leaveTable(poker.currentTableId);
+                setShowChipsManagementModal(false);
+              }
+            }}
+            onWithdrawChips={async (amount: string) => {
+              if (poker.currentTableId) {
+                await poker.withdrawChips(poker.currentTableId, amount);
+              }
+            }}
+            onAddChips={async (amount: string) => {
+              if (poker.currentTableId) {
+                await poker.addChips(poker.currentTableId, amount);
+              }
+            }}
+            isLoading={poker.isLoading}
+            gameState={poker.tableState.state}
+          />
+        )}
       </div>
       </div>
     </div>

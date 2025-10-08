@@ -712,6 +712,162 @@ export const useFHEPoker = (parameters: {
     [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet]
   );
 
+  // Leave table and withdraw all chips
+  const leaveTable = useCallback(
+    async (tableId: bigint) => {
+      if (!pokerContract.address || !ethersSigner || isLoadingRef.current) {
+        setMessage("Contract not deployed or signer not available");
+        return;
+      }
+
+      try {
+        isLoadingRef.current = true;
+        setIsLoading(true);
+        setCurrentAction("Leaving");
+
+        const contract = new ethers.Contract(
+          pokerContract.address,
+          pokerContract.abi,
+          ethersSigner
+        );
+
+        setMessage("Leaving table...");
+
+        const tx = await contract.leaveTable(tableId);
+
+        setMessage(`Waiting for transaction: ${tx.hash}`);
+        await tx.wait();
+
+        setMessage(`✅ Successfully left table ${tableId.toString()} and withdrew all chips!`);
+        
+        // Clear current table if leaving the active table
+        if (currentTableId === tableId) {
+          setCurrentTableId(undefined);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        
+        if (errorMessage.includes("NOT_SEATED")) {
+          setMessage("⚠️ You are not seated at this table.");
+        } else if (errorMessage.includes("CANNOT_LEAVE_DURING_GAME")) {
+          setMessage("❌ Cannot leave table during an active game. Wait for the game to finish.");
+        } else if (errorMessage.includes("NO_CHIPS_TO_WITHDRAW")) {
+          setMessage("❌ No chips to withdraw.");
+        } else {
+          setMessage(`❌ Failed to leave table: ${errorMessage}`);
+        }
+      } finally {
+        isLoadingRef.current = false;
+        setIsLoading(false);
+      }
+    },
+    [pokerContract, ethersSigner, currentTableId]
+  );
+
+  // Withdraw chips from table while staying seated
+  const withdrawChips = useCallback(
+    async (tableId: bigint, amount: string) => {
+      if (!pokerContract.address || !ethersSigner || isLoadingRef.current) {
+        setMessage("Contract not deployed or signer not available");
+        return;
+      }
+
+      try {
+        isLoadingRef.current = true;
+        setIsLoading(true);
+        setCurrentAction("Withdrawing");
+
+        const contract = new ethers.Contract(
+          pokerContract.address,
+          pokerContract.abi,
+          ethersSigner
+        );
+
+        setMessage("Withdrawing chips...");
+
+        const tx = await contract.withdrawChips(tableId, ethers.parseEther(amount));
+
+        setMessage(`Waiting for transaction: ${tx.hash}`);
+        await tx.wait();
+
+        setMessage(`✅ Successfully withdrew ${amount} ETH!`);
+        
+        // Refresh table state to show updated balance
+        refreshAll(tableId);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        
+        if (errorMessage.includes("NOT_SEATED")) {
+          setMessage("⚠️ You are not seated at this table.");
+        } else if (errorMessage.includes("CANNOT_WITHDRAW_DURING_GAME")) {
+          setMessage("❌ Cannot withdraw chips during an active game. Wait for the game to finish.");
+        } else if (errorMessage.includes("INSUFFICIENT_CHIPS")) {
+          setMessage("❌ You don't have enough chips to withdraw that amount.");
+        } else if (errorMessage.includes("MUST_LEAVE_MIN_BUYIN_OR_WITHDRAW_ALL")) {
+          setMessage("❌ You must leave at least the minimum buy-in amount or withdraw all chips.");
+        } else {
+          setMessage(`❌ Failed to withdraw chips: ${errorMessage}`);
+        }
+      } finally {
+        isLoadingRef.current = false;
+        setIsLoading(false);
+      }
+    },
+    [pokerContract, ethersSigner, refreshAll]
+  );
+
+  // Add chips to your stack (top up / rebuy)
+  const addChips = useCallback(
+    async (tableId: bigint, amount: string) => {
+      if (!pokerContract.address || !ethersSigner || isLoadingRef.current) {
+        setMessage("Contract not deployed or signer not available");
+        return;
+      }
+
+      try {
+        isLoadingRef.current = true;
+        setIsLoading(true);
+        setCurrentAction("Adding");
+
+        const contract = new ethers.Contract(
+          pokerContract.address,
+          pokerContract.abi,
+          ethersSigner
+        );
+
+        setMessage("Adding chips to your stack...");
+
+        const tx = await contract.addChips(tableId, {
+          value: ethers.parseEther(amount),
+        });
+
+        setMessage(`Waiting for transaction: ${tx.hash}`);
+        await tx.wait();
+
+        setMessage(`✅ Successfully added ${amount} ETH to your stack!`);
+        
+        // Refresh table state to show updated balance
+        refreshAll(tableId);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        
+        if (errorMessage.includes("NOT_SEATED")) {
+          setMessage("⚠️ You are not seated at this table.");
+        } else if (errorMessage.includes("CANNOT_ADD_CHIPS_DURING_GAME")) {
+          setMessage("❌ Cannot add chips during an active game. Wait for the game to finish.");
+        } else if (errorMessage.includes("MUST_SEND_ETH")) {
+          setMessage("❌ You must send ETH to add chips.");
+        } else {
+          setMessage(`❌ Failed to add chips: ${errorMessage}`);
+        }
+      } finally {
+        isLoadingRef.current = false;
+        setIsLoading(false);
+      }
+    },
+    [pokerContract, ethersSigner, refreshAll]
+  );
+
   // Track WebSocket connection status
   useEffect(() => {
     // Simple connection tracking based on WebSocket hook
@@ -743,6 +899,9 @@ export const useFHEPoker = (parameters: {
     timeRemaining,
     createTable,
     joinTable,
+    leaveTable,
+    withdrawChips,
+    addChips,
     advanceGame,
     fold,
     check,

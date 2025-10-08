@@ -47,15 +47,42 @@ class KernelEIP1193Provider {
         const tx = params[0];
         console.log('📤 Sending transaction via Kernel:', tx);
         
-        const hash = await this.kernelClient.sendTransaction({
-          to: tx.to,
-          data: tx.data || '0x',
-          value: tx.value ? BigInt(tx.value) : 0n,
-          ...(tx.gas && { gas: BigInt(tx.gas) }),
-        });
+        // Check smart account balance if value is being sent
+        if (tx.value && BigInt(tx.value) > 0n) {
+          const balance = await this.publicClient.getBalance({
+            address: this.kernelClient.account.address,
+          });
+          console.log('💰 Smart Account Balance:', balance.toString(), 'Required:', tx.value);
+          
+          if (balance < BigInt(tx.value)) {
+            const errorMsg = `Insufficient balance. Smart account has ${balance.toString()} wei but needs ${tx.value} wei. Please fund your smart account at ${this.kernelClient.account.address}`;
+            console.error('❌', errorMsg);
+            throw new Error(errorMsg);
+          }
+        }
         
-        console.log('✅ Transaction sent:', hash);
-        return hash;
+        // Send transaction with proper gas estimation
+        try {
+          const hash = await this.kernelClient.sendTransaction({
+            to: tx.to,
+            data: tx.data || '0x',
+            value: tx.value ? BigInt(tx.value) : 0n,
+            // Let the kernel client estimate gas automatically
+            // Don't pass gas parameter to force estimation
+          });
+          
+          console.log('✅ Transaction sent:', hash);
+          return hash;
+        } catch (error: unknown) {
+          console.error('❌ Transaction failed:', error);
+          
+          // Provide more helpful error messages
+          if (error instanceof Error && error?.message?.includes('insufficient funds')) {
+            throw new Error(`Insufficient funds in smart account (${this.kernelClient.account.address}). Please fund the account first.`);
+          }
+          
+          throw error;
+        }
       
       case 'eth_signTypedData_v4':
       case 'personal_sign':
@@ -256,10 +283,21 @@ export function useSmartAccount() {
           bundlerTransport: http(pimlicoUrl),
           client: publicClient,
           paymaster: pimlicoClient,
+          // Let Pimlico handle gas estimation automatically
           userOperation: {
             estimateFeesPerGas: async () => {
-              const gasPrice = await pimlicoClient.getUserOperationGasPrice();
-              return gasPrice.standard; // Use standard tier
+              try {
+                const gasPrice = await pimlicoClient.getUserOperationGasPrice();
+                return gasPrice.fast; // Use fast tier for better reliability
+              } catch (error) {
+                console.error('Failed to estimate gas price, using fallback:', error);
+                // Fallback to public client gas price
+                const gasPrice = await publicClient.getGasPrice();
+                return {
+                  maxFeePerGas: gasPrice,
+                  maxPriorityFeePerGas: gasPrice / 2n,
+                };
+              }
             },
           },
         });
@@ -316,6 +354,27 @@ export function useSmartAccount() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, authenticated, wallets, walletsReady]);
 
+  // Check smart account balance
+  const checkBalance = useCallback(async (): Promise<bigint> => {
+    if (!ethersProvider || !smartAccountAddress) {
+      return 0n;
+    }
+    
+    try {
+      const balance = await ethersProvider.getBalance(smartAccountAddress);
+      return balance;
+    } catch (error) {
+      console.error('Failed to check balance:', error);
+      return 0n;
+    }
+  }, [ethersProvider, smartAccountAddress]);
+
+  // Check if smart account has sufficient balance for a transaction
+  const hasEnoughBalance = useCallback(async (requiredAmount: bigint): Promise<boolean> => {
+    const balance = await checkBalance();
+    return balance >= requiredAmount;
+  }, [checkBalance]);
+
   // Switch to Sepolia if not on correct chain
   const switchToSepolia = useCallback(async () => {
     if (wallets.length === 0) {
@@ -354,6 +413,9 @@ export function useSmartAccount() {
     // Helper to check if on correct chain
     isCorrectChain: chainId === 11155111, // Sepolia
     switchToSepolia,
+    // Balance checking functions
+    checkBalance,
+    hasEnoughBalance,
   };
 }
 
