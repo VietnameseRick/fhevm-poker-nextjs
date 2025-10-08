@@ -82,6 +82,14 @@ export function PokerGame() {
   const [showCreateTable, setShowCreateTable] = useState(true);
   const [showJoinTable, setShowJoinTable] = useState(false);
   const [currentView, setCurrentView] = useState<"lobby" | "game">("lobby");
+
+  // Auto-switch to game view if user is already seated at a table
+  useEffect(() => {
+    if (poker.currentTableId && poker.tableState?.isSeated && currentView === "lobby") {
+      console.log('User is already seated at table, switching to game view');
+      setCurrentView("game");
+    }
+  }, [poker.currentTableId, poker.tableState?.isSeated, currentView]);
   const [isTableBrowserOpen, setIsTableBrowserOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isPortrait, setIsPortrait] = useState(false);
@@ -176,6 +184,10 @@ export function PokerGame() {
     }
     
     await poker.joinTable(tableId, buyInAmountInput);
+    
+    // Switch to game view after successful join
+    setCurrentView("game");
+    
     // After joining, refresh multiple times to ensure update
     setTimeout(() => poker.refreshTableState(tableId), 500);
     setTimeout(() => poker.refreshTableState(tableId), 1500);

@@ -326,6 +326,11 @@ export const useFHEPoker = (parameters: {
 
         setCurrentTableId(tableId);
         setMessage(`✅ Successfully joined table ${tableId.toString()}!`);
+        
+        // Refresh table state to ensure UI updates
+        setTimeout(() => {
+          refreshAll(tableId);
+        }, 1000);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
@@ -345,7 +350,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner]
+    [pokerContract, ethersSigner, refreshAll]
   );
 
   // Advance game (from countdown to playing)

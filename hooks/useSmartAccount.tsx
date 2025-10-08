@@ -106,6 +106,13 @@ class KernelEIP1193Provider {
         });
         return receipt;
 
+      case 'eth_getTransactionByHash':
+        // Forward to the public client
+        const transaction = await this.publicClient.getTransaction({
+          hash: params?.[0],
+        });
+        return transaction;
+
       case 'eth_call':
         if (!params || !params[0]) throw new Error('No call data provided');
         const callData = params[0];
