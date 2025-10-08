@@ -7,7 +7,7 @@ import { http } from 'viem';
 import { sepolia } from 'viem/chains';
 import { ReactNode, useState } from 'react';
 
-// Wagmi config for Sepolia
+// Wagmi config for Sepolia with smart account support
 export const wagmiConfig = createConfig({
   chains: [sepolia],
   transports: {
@@ -22,7 +22,7 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     <BasePrivyProvider
       appId="cmggia5o900jzjs0cux2xulkj"
       config={{
-        loginMethods: ['email', 'wallet', 'google'],
+        loginMethods: ['email', 'google', 'wallet'],
         appearance: {
           theme: 'dark',
           accentColor: '#676FFF',

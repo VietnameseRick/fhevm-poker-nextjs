@@ -10,8 +10,9 @@ import { BettingControls } from "./BettingControls";
 import { Showdown } from "./Showdown";
 import { TransactionFlow } from "./TransactionFlow";
 import { TableBrowser } from "./TableBrowser";
+import { WalletHeader } from "./WalletHeader";
 import { useInMemoryStorage } from "../hooks/useInMemoryStorage";
-import { usePrivyEthers } from "../hooks/usePrivyEthers";
+import { useSmartAccount } from "../hooks/useSmartAccount";
 
 const GAME_STATES = ["Waiting for Players", "Countdown", "Playing", "Finished"];
 const BETTING_STREETS = ["Pre-Flop", "Flop", "Turn", "River", "Showdown"];
@@ -27,10 +28,14 @@ export function PokerGame() {
     ethersProvider,
     eip1193Provider,
     address,
+    eoaAddress,
+    smartAccountAddress,
     chainId,
     isCorrectChain,
     switchToSepolia,
-  } = usePrivyEthers();
+    isSmartAccount,
+    isDeployingSmartAccount,
+  } = useSmartAccount();
 
   // Auto-switch to Sepolia on first connection
   useEffect(() => {
@@ -181,14 +186,24 @@ export function PokerGame() {
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 " +
     "disabled:opacity-50 disabled:pointer-events-none";
 
-  if (!ready) {
+  if (!ready || isDeployingSmartAccount) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
         <div className="text-center">
           <div className="mb-8">
             <h1 className="text-6xl font-bold text-white mb-4">🎰</h1>
             <h1 className="text-5xl font-bold text-white mb-2">FHE Poker</h1>
-            <p className="text-xl text-gray-300">Loading...</p>
+            {isDeployingSmartAccount ? (
+              <>
+                <div className="flex items-center justify-center gap-3 mt-6">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+                  <p className="text-xl text-purple-300">Setting up your Smart Account...</p>
+                </div>
+                <p className="text-sm text-gray-400 mt-3">This will only take a moment</p>
+              </>
+            ) : (
+              <p className="text-xl text-gray-300">Loading...</p>
+            )}
           </div>
         </div>
       </div>
@@ -197,24 +212,26 @@ export function PokerGame() {
 
   if (!authenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-        <div className="text-center">
-          <div className="mb-8">
-            <h1 className="text-6xl font-bold text-white mb-4">🎰</h1>
-            <h1 className="text-5xl font-bold text-white mb-2">FHE Poker</h1>
-            <p className="text-xl text-gray-300">Fully Homomorphic Encrypted Poker</p>
-            {!isCorrectChain && address && (
-              <p className="text-sm text-yellow-400 mt-2">⚠️ Please switch to Sepolia network</p>
-            )}
+      <>
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+          <div className="text-center">
+            <div className="mb-8">
+              <h1 className="text-6xl font-bold text-white mb-4">🎰</h1>
+              <h1 className="text-5xl font-bold text-white mb-2">FHE Poker</h1>
+              <p className="text-xl text-gray-300">Fully Homomorphic Encrypted Poker</p>
+              {!isCorrectChain && address && (
+                <p className="text-sm text-yellow-400 mt-2">⚠️ Please switch to Sepolia network</p>
+              )}
+            </div>
+            <button
+              className={buttonClass}
+              onClick={login}
+            >
+              <span className="text-2xl px-8 py-4">Connect Wallet</span>
+            </button>
           </div>
-          <button
-            className={buttonClass}
-            onClick={login}
-          >
-            <span className="text-2xl px-8 py-4">Connect Wallet</span>
-          </button>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -336,7 +353,18 @@ export function PokerGame() {
     const isPlaying = poker.tableState?.state === 2;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        {/* Wallet Header */}
+        <WalletHeader
+          address={address}
+          smartAccountAddress={smartAccountAddress}
+          eoaAddress={eoaAddress}
+          isSmartAccount={isSmartAccount}
+          onLogout={logout}
+          chainId={chainId}
+        />
+        
+        <div className="p-6">
         {/* Top Bar */}
         <div className="max-w-7xl mx-auto mb-6">
           <div className="bg-black/50 backdrop-blur-sm rounded-xl p-4 flex items-center justify-between border border-gray-700">
@@ -351,6 +379,19 @@ export function PokerGame() {
             </div>
             
             <div className="flex items-center gap-3">
+              {/* Smart Account Badge */}
+              {isSmartAccount && smartAccountAddress && (
+                <div className="px-3 py-1 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">✨</span>
+                    <div>
+                      <div className="text-purple-300 text-xs font-semibold">Smart Account</div>
+                      <div className="text-purple-400 text-[10px]">{smartAccountAddress.substring(0, 8)}...{smartAccountAddress.substring(38)}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* WebSocket Connection Status */}
               {poker.isConnected ? (
                 <div className="px-3 py-1 bg-green-500/20 border border-green-500 rounded-lg">
@@ -752,13 +793,25 @@ export function PokerGame() {
             provider={ethersProvider}
           />
         )}
+        </div>
       </div>
     );
   }
 
   // Lobby View
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      {/* Wallet Header */}
+      <WalletHeader
+        address={address}
+        smartAccountAddress={smartAccountAddress}
+        eoaAddress={eoaAddress}
+        isSmartAccount={isSmartAccount}
+        onLogout={logout}
+        chainId={chainId}
+      />
+      
+      <div className="p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
@@ -1022,6 +1075,7 @@ export function PokerGame() {
           contractAddress={poker.contractAddress}
           provider={ethersProvider}
         />
+      </div>
       </div>
     </div>
   );
