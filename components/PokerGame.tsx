@@ -90,6 +90,38 @@ export function PokerGame() {
       setCurrentView("game");
     }
   }, [poker.currentTableId, poker.tableState?.isSeated, currentView]);
+
+  // Update balances periodically
+  useEffect(() => {
+    const updateBalances = async () => {
+      if (smartAccountAddress && checkBalance) {
+        try {
+          const balance = await checkBalance();
+          setSmartAccountBalance(balance);
+        } catch (error) {
+          console.error('Failed to get smart account balance:', error);
+        }
+      }
+      
+      if (eoaAddress && ethersProvider) {
+        try {
+          const balance = await ethersProvider.getBalance(eoaAddress);
+          setEoaBalance(balance);
+        } catch (error) {
+          console.error('Failed to get EOA balance:', error);
+        }
+      }
+    };
+
+    updateBalances();
+    const interval = setInterval(updateBalances, 10000); // Update every 10 seconds
+    return () => clearInterval(interval);
+  }, [smartAccountAddress, eoaAddress, checkBalance, ethersProvider]);
+
+  // Deposit function
+  const handleDepositToSmartAccount = () => {
+    setShowFundingModal(true);
+  };
   const [isTableBrowserOpen, setIsTableBrowserOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isPortrait, setIsPortrait] = useState(false);
@@ -106,6 +138,10 @@ export function PokerGame() {
   const [showFundingModal, setShowFundingModal] = useState(false);
   const [currentBalance, setCurrentBalance] = useState<bigint>(0n);
   const [requiredAmount, setRequiredAmount] = useState<bigint>(0n);
+  
+  // Balance states
+  const [smartAccountBalance, setSmartAccountBalance] = useState<bigint>(0n);
+  const [eoaBalance, setEoaBalance] = useState<bigint>(0n);
 
   // Chips management modal state
   const [showChipsManagementModal, setShowChipsManagementModal] = useState(false);
@@ -375,7 +411,6 @@ export function PokerGame() {
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
           <div className="text-center">
             <p className="text-white text-xl mb-4">⚠️ No table selected</p>
-            <p className="text-gray-400 text-sm mb-4">Debug: currentTableId = {poker.currentTableId?.toString() || 'undefined'}</p>
             <button
               onClick={() => setCurrentView("lobby")}
               className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
@@ -435,6 +470,9 @@ export function PokerGame() {
           isSmartAccount={isSmartAccount}
           onLogout={logout}
           chainId={chainId}
+          smartAccountBalance={smartAccountBalance}
+          eoaBalance={eoaBalance}
+          onDepositToSmartAccount={handleDepositToSmartAccount}
         />
         
         <div className="p-6">
@@ -894,6 +932,9 @@ export function PokerGame() {
         isSmartAccount={isSmartAccount}
         onLogout={logout}
         chainId={chainId}
+        smartAccountBalance={smartAccountBalance}
+        eoaBalance={eoaBalance}
+        onDepositToSmartAccount={handleDepositToSmartAccount}
       />
       
       <div className="p-6">

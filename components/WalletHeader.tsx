@@ -9,6 +9,9 @@ interface WalletHeaderProps {
   isSmartAccount?: boolean;
   onLogout?: () => void;
   chainId?: number;
+  smartAccountBalance?: bigint;
+  eoaBalance?: bigint;
+  onDepositToSmartAccount?: () => void;
 }
 
 export function WalletHeader({
@@ -18,6 +21,9 @@ export function WalletHeader({
   isSmartAccount,
   onLogout,
   chainId,
+  smartAccountBalance,
+  eoaBalance,
+  onDepositToSmartAccount,
 }: WalletHeaderProps) {
   const [copied, setCopied] = useState(false);
   const [copiedEOA, setCopiedEOA] = useState(false);
@@ -35,6 +41,12 @@ export function WalletHeader({
 
   const formatAddress = (addr: string) => {
     return `${addr.substring(0, 6)}...${addr.substring(38)}`;
+  };
+
+  const formatBalance = (balance: bigint | undefined) => {
+    if (balance === undefined) return "Loading...";
+    const eth = Number(balance) / 1e18;
+    return `${eth.toFixed(4)} ETH`;
   };
 
   if (!address) return null;
@@ -80,6 +92,20 @@ export function WalletHeader({
                         )}
                       </button>
                     </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-purple-200">
+                        Balance: {formatBalance(smartAccountBalance)}
+                      </span>
+                      {onDepositToSmartAccount && (
+                        <button
+                          onClick={onDepositToSmartAccount}
+                          className="px-2 py-1 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400 text-purple-200 text-xs rounded transition-colors"
+                          title="Deposit ETH to Smart Account"
+                        >
+                          Deposit
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -117,6 +143,9 @@ export function WalletHeader({
                         </svg>
                       )}
                     </button>
+                  </div>
+                  <div className="text-xs text-gray-300 mt-1">
+                    Balance: {formatBalance(eoaBalance)}
                   </div>
                 </div>
               </div>
