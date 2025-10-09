@@ -5,12 +5,13 @@ import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { ethers } from 'ethers';
 import type { Eip1193Provider } from 'ethers';
 import { createPublicClient, createWalletClient, custom, type Account, type Chain, type Transport, type WalletClient, http } from 'viem';
-import { sepolia } from 'viem/chains';
+import { sepolia, hardhat } from 'viem/chains';
 import { createKernelAccount, createKernelAccountClient } from '@zerodev/sdk';
 import { getEntryPoint } from "@zerodev/sdk/constants"; 
 import { signerToEcdsaValidator } from "@zerodev/ecdsa-validator";
 import { KERNEL_V3_1 } from "@zerodev/sdk/constants";
 import { createPimlicoClient } from "permissionless/clients/pimlico";
+import config from '@/utils/config';
 
 /**
  * Type-safe utility to convert viem transaction type format to ethers format
@@ -458,9 +459,16 @@ export function useSmartAccount() {
         // Get the embedded wallet (EOA) from Privy - prioritize Privy embedded wallets
         const embeddedWallet = wallets.find(w => w.walletClientType === 'privy') || wallets[0];
         
-        // If no embedded wallet found, fallback to regular EOA
-        if (!embeddedWallet || embeddedWallet.walletClientType !== 'privy') {
-          console.log('⚠️ No Privy embedded wallet found, using regular wallet (no smart account)');
+        // Determine if we should use smart account
+        // Smart accounts only work on Sepolia, not on local hardhat
+        const shouldUseSmartAccount = 
+          config.enableSmartAccount && 
+          !config.isLocal && 
+          embeddedWallet?.walletClientType === 'privy';
+        
+        // If smart account is disabled or we're on local network, use regular EOA
+        if (!shouldUseSmartAccount) {
+          console.log(`⚠️ Using regular EOA wallet (smart account: ${config.enableSmartAccount}, network: ${config.network})`);
           setIsDeployingSmartAccount(false);
           
           const activeWallet = wallets[0];
@@ -480,7 +488,8 @@ export function useSmartAccount() {
         console.log('🔄 Setting up Smart Account with Privy embedded wallet:', {
           address: embeddedWallet.address,
           walletClientType: embeddedWallet.walletClientType,
-          chainId: embeddedWallet.chainId
+          chainId: embeddedWallet.chainId,
+          network: config.network,
         });
 
         // Get EIP-1193 provider from Privy wallet
@@ -489,25 +498,28 @@ export function useSmartAccount() {
 
         // Set the EOA address
         setAddress(embeddedWallet.address);
-        setChainId(11155111); // Sepolia
+        setChainId(config.chainId);
 
+        // Get the appropriate chain
+        const chain = config.isLocal ? hardhat : sepolia;
+        
         // Create viem wallet client from the EOA
         const walletClient = createWalletClient({
           account: embeddedWallet.address as `0x${string}`,
-          chain: sepolia,
+          chain,
           transport: custom(eoaProvider),
         }) as WalletClient<Transport, Chain, Account>;
 
         console.log('✅ Created viem wallet client');
 
         // Create public client for reading blockchain data
-        // Use Sepolia public RPC that supports event filtering (eth_newFilter, etc.)
+        // Use RPC from config (supports event filtering: eth_newFilter, etc.)
         const publicClient = createPublicClient({
-          chain: sepolia,
-          transport: http('https://sepolia.infura.io/v3/472e39d0d0e4446d933eb750d348b337'),
+          chain,
+          transport: http(config.rpcUrl),
         });
 
-        console.log('✅ Created public client with event filtering support');
+        console.log('✅ Created public client with event filtering support:', config.rpcUrl);
         
         // Create ECDSA validator from the EOA signer
         const ecdsaValidator = await signerToEcdsaValidator(publicClient, {
@@ -530,21 +542,20 @@ export function useSmartAccount() {
         console.log('✅ Created Kernel Account:', kernelAccount.address);
 
         // Setup Pimlico bundler and paymaster for gas sponsorship
-        const pimlicoApiKey = 'pim_5FMzCjv9XBFeD8rtYWz6N5';
-        const pimlicoUrl = `https://api.pimlico.io/v2/sepolia/rpc?apikey=${pimlicoApiKey}`;
+        console.log('🔄 Setting up Pimlico with bundler URL:', config.pimlico.bundlerUrl);
         
         // Create Pimlico client (handles both bundler and paymaster)
         const pimlicoClient = createPimlicoClient({
-          chain: sepolia,
-          transport: http(pimlicoUrl),
+          chain,
+          transport: http(config.pimlico.bundlerUrl),
           entryPoint: getEntryPoint("0.7"),
         });
         
         // Create Kernel Account Client with Pimlico sponsorship
         const kernelClient = createKernelAccountClient({
           account: kernelAccount,
-          chain: sepolia,
-          bundlerTransport: http(pimlicoUrl),
+          chain,
+          bundlerTransport: http(config.pimlico.bundlerUrl),
           client: publicClient,
           paymaster: pimlicoClient,
           // Let Pimlico handle gas estimation automatically
@@ -569,7 +580,7 @@ export function useSmartAccount() {
         console.log('✅ Created Kernel Client');
 
         // Create custom EIP-1193 provider for the smart account
-        const smartAccountProvider = new KernelEIP1193Provider(kernelClient, publicClient, 11155111) as unknown as Eip1193Provider;
+        const smartAccountProvider = new KernelEIP1193Provider(kernelClient, publicClient, config.chainId) as unknown as Eip1193Provider;
         
         // Create ethers provider and signer from smart account
         const ethersProvider = new ethers.BrowserProvider(smartAccountProvider);
@@ -586,7 +597,8 @@ export function useSmartAccount() {
         console.log('✅ Smart Account setup complete:', {
           eoaAddress: embeddedWallet.address,
           smartAccountAddress: kernelAccount.address,
-          chainId: 11155111
+          network: config.network,
+          chainId: config.chainId,
         });
 
         setIsDeployingSmartAccount(false);
@@ -639,7 +651,7 @@ export function useSmartAccount() {
     return balance >= requiredAmount;
   }, [checkBalance]);
 
-  // Switch to Sepolia if not on correct chain
+  // Switch to correct chain based on config
   const switchToSepolia = useCallback(async () => {
     if (wallets.length === 0) {
       console.log('No wallets available to switch chain');
@@ -649,8 +661,8 @@ export function useSmartAccount() {
     const activeWallet = wallets[0];
     
     try {
-      console.log('Switching to Sepolia...');
-      await activeWallet.switchChain(11155111); // Sepolia
+      console.log(`Switching to ${config.network} (chain ID: ${config.chainId})...`);
+      await activeWallet.switchChain(config.chainId);
       
       // Re-setup smart account after chain switch
       window.location.reload(); // Simple reload to re-initialize
@@ -675,7 +687,7 @@ export function useSmartAccount() {
     isSmartAccount: !!smartAccountAddress,
     isDeployingSmartAccount,
     // Helper to check if on correct chain
-    isCorrectChain: chainId === 11155111, // Sepolia
+    isCorrectChain: chainId === config.chainId,
     switchToSepolia,
     // Balance checking functions
     checkBalance,

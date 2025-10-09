@@ -4,24 +4,35 @@ import { PrivyProvider as BasePrivyProvider } from '@privy-io/react-auth';
 import { WagmiProvider, createConfig } from '@privy-io/wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http } from 'viem';
-import { sepolia } from 'viem/chains';
+import { sepolia, hardhat } from 'viem/chains';
 import { ReactNode, useState } from 'react';
+import config from '@/utils/config';
 
-// Wagmi config for Sepolia with smart account support
-// Use Infura Sepolia RPC that supports event filtering (drpc.org free tier doesn't)
-export const wagmiConfig = createConfig({
-  chains: [sepolia],
-  transports: {
-    [sepolia.id]: http('https://sepolia.infura.io/v3/472e39d0d0e4446d933eb750d348b337'),
-  },
-});
+// Get the appropriate chain based on network
+const chain = config.isLocal ? hardhat : sepolia;
+
+// Wagmi config with environment-based RPC
+// Uses config.rpcUrl which switches based on NEXT_PUBLIC_NETWORK env var
+export const wagmiConfig = config.isLocal 
+  ? createConfig({
+      chains: [hardhat],
+      transports: {
+        [hardhat.id]: http(config.rpcUrl),
+      },
+    })
+  : createConfig({
+      chains: [sepolia],
+      transports: {
+        [sepolia.id]: http(config.rpcUrl),
+      },
+    });
 
 export function PrivyProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
 
   return (
     <BasePrivyProvider
-      appId="cmggia5o900jzjs0cux2xulkj"
+      appId={config.privyAppId}
       config={{
         loginMethods: ['email', 'google', 'wallet'],
         appearance: {
@@ -29,8 +40,8 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
           accentColor: '#676FFF',
           logo: '/zama-logo.svg',
         },
-        defaultChain: sepolia,
-        supportedChains: [sepolia],
+        defaultChain: chain,
+        supportedChains: [chain],
         embeddedWallets: {
           ethereum: {
             createOnLogin: 'users-without-wallets',
