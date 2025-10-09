@@ -49,9 +49,23 @@ export function ChipsManagementModal({
   };
 
   const handleLeave = async () => {
-    if (isLoading) return;
-    await onLeaveTable();
-    onClose();
+    console.log('🔘 Leave button clicked', { isLoading, canManageChips, gameState });
+    if (isLoading) {
+      console.log('⏳ Already loading, ignoring click');
+      return;
+    }
+    if (!canManageChips) {
+      console.log('⚠️ Cannot manage chips in current game state:', gameState);
+      return;
+    }
+    console.log('✅ Calling onLeaveTable...');
+    try {
+      await onLeaveTable();
+      console.log('✅ onLeaveTable completed successfully');
+      onClose();
+    } catch (error) {
+      console.error('❌ Error in handleLeave:', error);
+    }
   };
 
   return (
@@ -248,13 +262,22 @@ export function ChipsManagementModal({
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={handleLeave}
-                  disabled={!canManageChips || isLoading}
-                  className="w-full py-3 px-6 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold rounded-lg transition-all duration-200 shadow-lg disabled:cursor-not-allowed"
-                >
-                  {isLoading ? "Processing..." : `Leave Table & Withdraw ${currentChipsEth} ETH`}
-                </button>
+                <div className="space-y-2">
+                  {!canManageChips && (
+                    <div className="bg-red-900 bg-opacity-30 border border-red-700 rounded-lg p-3">
+                      <p className="text-sm text-red-200">
+                        ⚠️ Cannot leave during {gameState === 1 ? 'countdown' : 'active game'}. Wait for the game to finish.
+                      </p>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleLeave}
+                    disabled={!canManageChips || isLoading}
+                    className="w-full py-3 px-6 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold rounded-lg transition-all duration-200 shadow-lg disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? "Processing..." : `Leave Table & Withdraw ${currentChipsEth} ETH`}
+                  </button>
+                </div>
               </div>
             )}
           </div>

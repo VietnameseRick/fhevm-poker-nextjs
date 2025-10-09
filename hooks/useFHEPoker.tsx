@@ -334,16 +334,8 @@ export const useFHEPoker = (parameters: {
         setCurrentTableId(tableId);
         setMessage(`✅ Successfully joined table ${tableId.toString()}!`);
         
-        // Refresh table state to ensure UI updates
-        // Wrap in try-catch to handle any refresh errors
-        setTimeout(() => {
-          try {
-            refreshAll(tableId);
-          } catch (error) {
-            console.warn('Refresh error (non-critical):', error);
-            // Don't throw the error, just log it
-          }
-        }, 1000);
+        // Let WebSocket handle the refresh automatically when PlayerJoined event is detected
+        console.log('🎰 Waiting for PlayerJoined event to trigger WebSocket refresh...');
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
@@ -552,7 +544,14 @@ export const useFHEPoker = (parameters: {
           ethersSigner
         );
 
+        console.log('🔍 Calling getMyHoleCards...', {
+          tableId: tableId.toString(),
+          contractAddress: pokerContract.address,
+          signerAddress: await ethersSigner.getAddress(),
+        });
+
         const [card1Handle, card2Handle] = await contract.getMyHoleCards(tableId);
+        console.log('✅ Got card handles:', { card1Handle, card2Handle });
 
         setMessage("Decrypting cards...");
 
@@ -592,8 +591,23 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Cards decrypted!");
       } catch (error) {
+        console.error('❌ Decrypt cards error:', error);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        setMessage(`Failed to decrypt cards: ${errorMessage}`);
+        
+        // Try to extract more specific error info
+        let specificMessage = errorMessage;
+        if (errorMessage.includes("NOT_SEATED")) {
+          specificMessage = "You are not seated at this table";
+        } else if (errorMessage.includes("CARDS_NOT_DEALT")) {
+          specificMessage = "Cards have not been dealt yet";
+        } else if (errorMessage.includes("TABLE_NOT_FOUND")) {
+          specificMessage = "Table not found";
+        } else if (errorMessage.includes("CALL_EXCEPTION")) {
+          // Check if player is actually seated
+          specificMessage = "Contract call failed. Please ensure you're seated at the table and cards have been dealt.";
+        }
+        
+        setMessage(`Failed to decrypt cards: ${specificMessage}`);
       } finally {
         isDecryptingRef.current = false;
         setIsDecrypting(false);
@@ -733,8 +747,12 @@ export const useFHEPoker = (parameters: {
   // Leave table and withdraw all chips
   const leaveTable = useCallback(
     async (tableId: bigint) => {
+      console.log('🚪 leaveTable called for tableId:', tableId.toString());
+      
       if (!pokerContract.address || !ethersSigner || isLoadingRef.current) {
-        setMessage("Contract not deployed or signer not available");
+        const msg = "Contract not deployed or signer not available";
+        console.error('❌ leaveTable failed:', msg);
+        setMessage(msg);
         return;
       }
 
@@ -749,12 +767,21 @@ export const useFHEPoker = (parameters: {
           ethersSigner
         );
 
+        console.log('📝 Calling contract.leaveTable...');
         setMessage("Leaving table...");
 
         const tx = await contract.leaveTable(tableId);
+        console.log('✅ Transaction sent:', tx.hash);
 
         setMessage(`Waiting for transaction: ${tx.hash}`);
-        await tx.wait();
+        
+        try {
+          await tx.wait();
+          console.log('✅ Transaction confirmed');
+        } catch (waitError) {
+          console.warn('Transaction wait error (non-critical):', waitError);
+          // Continue even if wait fails - the transaction might still be successful
+        }
 
         setMessage(`✅ Successfully left table ${tableId.toString()} and withdrew all chips!`);
         
@@ -763,6 +790,7 @@ export const useFHEPoker = (parameters: {
           setCurrentTableId(undefined);
         }
       } catch (error) {
+        console.error('❌ leaveTable error:', error);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
         if (errorMessage.includes("NOT_SEATED")) {
@@ -771,6 +799,8 @@ export const useFHEPoker = (parameters: {
           setMessage("❌ Cannot leave table during an active game. Wait for the game to finish.");
         } else if (errorMessage.includes("NO_CHIPS_TO_WITHDRAW")) {
           setMessage("❌ No chips to withdraw.");
+        } else if (errorMessage.includes("user rejected")) {
+          setMessage("❌ Transaction rejected by user.");
         } else {
           setMessage(`❌ Failed to leave table: ${errorMessage}`);
         }

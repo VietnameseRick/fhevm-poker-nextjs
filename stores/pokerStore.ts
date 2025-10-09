@@ -115,9 +115,25 @@ export const usePokerStore = create<PokerStore>()(
         const { contractAddress, provider } = get();
         if (!contractAddress || !provider) return;
         
+        console.log('📊 Fetching table state for tableId:', tableId.toString());
+        
         try {
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
+          
+          // First check if table exists by checking nextTableId
+          try {
+            const nextTableId = await contract.nextTableId();
+            console.log('Next table ID:', nextTableId.toString(), 'Requested:', tableId.toString());
+            if (tableId >= nextTableId) {
+              console.warn(`⚠️ Table ${tableId} doesn't exist yet. Next available ID: ${nextTableId}`);
+              return;
+            }
+          } catch (err) {
+            console.warn('Failed to check nextTableId:', err);
+          }
+          
           const state = await contract.getTableState(tableId);
+          console.log('✅ Got table state:', state);
           // Also fetch table struct to get dealerIndex and blinds
           let tableStruct: {
             dealerIndex: bigint;
@@ -169,6 +185,12 @@ export const usePokerStore = create<PokerStore>()(
         const { contractAddress, provider, tableState } = get();
         if (!contractAddress || !provider) return;
         
+        // Skip if table doesn't exist
+        if (!tableState) {
+          console.log('⏭️ Skipping betting info fetch - no table state');
+          return;
+        }
+        
         try {
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
           const betting = await contract.getBettingInfo(tableId);
@@ -196,14 +218,26 @@ export const usePokerStore = create<PokerStore>()(
       
       // Fetch players
       fetchPlayers: async (tableId) => {
-        const { contractAddress, provider } = get();
+        const { contractAddress, provider, tableState } = get();
         if (!contractAddress || !provider) return;
+        
+        // Skip if table doesn't exist
+        if (!tableState) {
+          console.log('⏭️ Skipping players fetch - no table state');
+          return;
+        }
         
         try {
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
           const players = await contract.getPlayers(tableId);
           
+          console.log('👥 Fetched players from contract:', {
+            players,
+            count: players.length,
+            addresses: players.map((p: string) => p)
+          });
           set({ players: players as string[] });
+          console.log('✅ Players set in store:', get().players);
         } catch (error) {
           console.error('Failed to fetch players:', error);
         }
@@ -313,10 +347,13 @@ export const usePokerStore = create<PokerStore>()(
       
       // Refresh all data at once (called by WebSocket events)
       refreshAll: async (tableId) => {
+        console.log('🔄 refreshAll called for tableId:', tableId.toString());
         try {
-          // Fetch all data in parallel
+          // Fetch table state first to ensure it exists
+          await get().fetchTableState(tableId);
+          
+          // Then fetch everything else in parallel
           await Promise.all([
-            get().fetchTableState(tableId),
             get().fetchBettingInfo(tableId),
             get().fetchPlayers(tableId),
             get().fetchCommunityCards(tableId),
@@ -324,6 +361,8 @@ export const usePokerStore = create<PokerStore>()(
           
           // After players are fetched, fetch their states
           await get().fetchAllPlayerStates(tableId);
+          
+          console.log('✅ refreshAll completed. Players:', get().players);
         } catch (error) {
           console.error('Failed to refresh all data:', error);
         }

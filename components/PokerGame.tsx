@@ -148,6 +148,20 @@ export function PokerGame() {
 
   // Use Privy address directly
   const yourAddress = address || "";
+  
+  // Debug: Log addresses
+  useEffect(() => {
+    if (yourAddress) {
+      console.log('🔍 Address Debug:', {
+        yourAddress,
+        smartAccountAddress,
+        eoaAddress,
+        isSmartAccount,
+        players: poker.players,
+        playersCount: poker.players.length,
+      });
+    }
+  }, [yourAddress, smartAccountAddress, eoaAddress, isSmartAccount, poker.players]);
 
   // Responsive detection (mobile + orientation)
   useEffect(() => {
@@ -188,18 +202,10 @@ export function PokerGame() {
   }, [poker.currentTableId, poker.tableState?.state, poker.players, yourAddress, currentView]);
 
   const handleCreateTable = async () => {
+    // Create the table - this waits for the transaction and sets currentTableId
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
-    // After creating, refresh multiple times to ensure update
-    setTimeout(() => {
-      if (poker.currentTableId) {
-        poker.refreshTableState(poker.currentTableId);
-      }
-    }, 500);
-    setTimeout(() => {
-      if (poker.currentTableId) {
-        poker.refreshTableState(poker.currentTableId);
-      }
-    }, 2000);
+    // WebSocket will automatically refresh when TableCreated event is detected
+    console.log('✅ Table created, WebSocket will handle state updates');
   };
 
   const handleJoinTable = async () => {
@@ -220,60 +226,15 @@ export function PokerGame() {
     }
     
     try {
+      // Join the table - this waits for the transaction to succeed
       await poker.joinTable(tableId, buyInAmountInput);
       
-      // Wait for the state to be updated and then switch to game view
-      // Check if currentTableId is set before switching
-      let attempts = 0;
-      const maxAttempts = 25; // 5 seconds max wait time
-      
-      const checkAndSwitch = () => {
-        attempts++;
-        
-        if (poker.currentTableId && poker.currentTableId.toString() === tableId.toString()) {
-          console.log('Table ID confirmed, switching to game view');
-          setCurrentView("game");
-        } else if (attempts >= maxAttempts) {
-          console.warn('Timeout waiting for table ID, switching anyway');
-          setCurrentView("game");
-        } else {
-          console.log(`Waiting for table ID to be set... (attempt ${attempts}/${maxAttempts})`, {
-            currentTableId: poker.currentTableId,
-            expectedTableId: tableId.toString()
-          });
-          // Try again in 200ms
-          setTimeout(checkAndSwitch, 200);
-        }
-      };
-      
-      // Start checking after a short delay
-      setTimeout(checkAndSwitch, 100);
-      
-      // After joining, refresh multiple times to ensure update
-      // Wrap in try-catch to handle any refresh errors
-      setTimeout(() => {
-        try {
-          poker.refreshTableState(tableId);
-        } catch (error) {
-          console.warn('Refresh error (non-critical):', error);
-        }
-      }, 500);
-      setTimeout(() => {
-        try {
-          poker.refreshTableState(tableId);
-        } catch (error) {
-          console.warn('Refresh error (non-critical):', error);
-        }
-      }, 1500);
-      setTimeout(() => {
-        try {
-          poker.refreshTableState(tableId);
-        } catch (error) {
-          console.warn('Refresh error (non-critical):', error);
-        }
-      }, 3000);
+      // Transaction succeeded! Switch to game view immediately
+      // The WebSocket will refresh the table state automatically
+      console.log('✅ Join successful, switching to game view');
+      setCurrentView("game");
     } catch (error) {
-      console.error('Failed to join table:', error);
+      console.error('❌ Failed to join table:', error);
       // Don't switch view if join failed
     }
   };

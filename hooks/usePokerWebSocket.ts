@@ -83,16 +83,25 @@ export function usePokerWebSocket(
           if (!mountedRef.current) return;
           
           const event = args[args.length - 1] as { 
-            args?: { tableId?: bigint }; 
+            args?: { tableId?: bigint; player?: string; amount?: bigint }; 
             fragment?: { name?: string } 
           };
+          
+          console.log(`🎰 [WebSocket] ⚡ Event received:`, {
+            event: event.fragment?.name,
+            tableId: event.args?.tableId?.toString(),
+            player: event.args?.player,
+            amount: event.args?.amount?.toString(),
+          });
           
           if (event.args?.tableId) {
             const eventTableId = BigInt(event.args.tableId.toString());
             if (eventTableId === currentTableId) {
-              console.log(`🎰 [Event] ${event.fragment?.name} detected`);
+              console.log(`✅ [WebSocket] ${event.fragment?.name} is for OUR table ${currentTableId} - refreshing!`);
               // Debounced refresh to prevent spam
               debouncedRefresh(currentTableId);
+            } else {
+              console.log(`⏭️ [WebSocket] ${event.fragment?.name} is for table ${eventTableId}, we're watching ${currentTableId} - ignoring`);
             }
           }
         };

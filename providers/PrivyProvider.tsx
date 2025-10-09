@@ -8,10 +8,11 @@ import { sepolia } from 'viem/chains';
 import { ReactNode, useState } from 'react';
 
 // Wagmi config for Sepolia with smart account support
+// Use Infura Sepolia RPC that supports event filtering (drpc.org free tier doesn't)
 export const wagmiConfig = createConfig({
   chains: [sepolia],
   transports: {
-    [sepolia.id]: http(),
+    [sepolia.id]: http('https://sepolia.infura.io/v3/472e39d0d0e4446d933eb750d348b337'),
   },
 });
 

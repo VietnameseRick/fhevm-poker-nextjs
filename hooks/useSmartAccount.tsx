@@ -13,6 +13,39 @@ import { KERNEL_V3_1 } from "@zerodev/sdk/constants";
 import { createPimlicoClient } from "permissionless/clients/pimlico";
 
 /**
+ * Type-safe utility to convert viem transaction type format to ethers format
+ * Viem returns type as string ("eip1559", "legacy", "eip2930")
+ * Ethers expects type as hex number ("0x2", "0x0", "0x1")
+ */
+const convertTransactionType = (type: unknown): string | undefined => {
+  if (typeof type === 'string') {
+    const typeMap: Record<string, string> = {
+      'legacy': '0x0',
+      'eip2930': '0x1',
+      'eip1559': '0x2',
+    };
+    return typeMap[type] ?? type;
+  }
+  return type as string | undefined;
+};
+
+/**
+ * Type-safe utility to convert viem status format to ethers format
+ * Viem returns status as string ("success", "reverted")
+ * Ethers expects status as hex number ("0x1" for success, "0x0" for failure)
+ */
+const convertReceiptStatus = (status: unknown): string | undefined => {
+  if (typeof status === 'string') {
+    const statusMap: Record<string, string> = {
+      'success': '0x1',
+      'reverted': '0x0',
+    };
+    return statusMap[status] ?? status;
+  }
+  return status as string | undefined;
+};
+
+/**
  * Custom EIP-1193 provider wrapper for Kernel smart account
  * This makes the smart account compatible with ethers.js
  */
@@ -22,6 +55,10 @@ class KernelEIP1193Provider {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private publicClient: any;
   private chainId: number;
+  // Track filters for event watching
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private filters: Map<string, any> = new Map();
+  private filterIdCounter: number = 0;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(kernelClient: any, publicClient: any, chainId: number) {
@@ -100,12 +137,17 @@ class KernelEIP1193Provider {
         return '0x100000'; // Return a reasonable default
       
       case 'eth_getTransactionReceipt':
-        // Forward to the public client
+        // Forward to the public client and convert formats for ethers compatibility
         try {
           const receipt = await this.publicClient.getTransactionReceipt({
             hash: params?.[0],
           });
-          return receipt;
+          // Convert viem's string formats to ethers' hex formats
+          return {
+            ...receipt,
+            type: convertTransactionType(receipt.type),
+            status: convertReceiptStatus(receipt.status),
+          };
         } catch (error) {
           console.warn('Failed to get transaction receipt:', error);
           // Return a minimal receipt to avoid breaking the flow
@@ -122,12 +164,16 @@ class KernelEIP1193Provider {
         }
 
       case 'eth_getTransactionByHash':
-        // Forward to the public client
+        // Forward to the public client and convert type format for ethers compatibility
         try {
           const transaction = await this.publicClient.getTransaction({
             hash: params?.[0],
           });
-          return transaction;
+          // Convert viem's string type to ethers' hex type
+          return {
+            ...transaction,
+            type: convertTransactionType(transaction.type),
+          };
         } catch (error) {
           console.warn('Failed to get transaction by hash:', error);
           // Return a minimal transaction to avoid breaking the flow
@@ -152,12 +198,64 @@ class KernelEIP1193Provider {
       case 'eth_call':
         if (!params || !params[0]) throw new Error('No call data provided');
         const callData = params[0];
-        const result = await this.publicClient.call({
-          to: callData.to,
-          data: callData.data,
-          ...(callData.value && { value: BigInt(callData.value) }),
-        });
-        return result.data;
+        // Use smart account address for 'from' if not explicitly provided
+        const fromAddress = callData.from || this.kernelClient.account.address;
+        try {
+          console.log('🔵 eth_call:', {
+            from: fromAddress,
+            to: callData.to,
+            data: callData.data?.substring(0, 10),
+            blockTag: params[1],
+          });
+          
+          // Handle block parameter - it can be "latest", "earliest", "pending", or a hex number
+          const blockParam: Record<string, unknown> = {};
+          if (params[1]) {
+            const blockTag = params[1];
+            if (blockTag === 'latest' || blockTag === 'earliest' || blockTag === 'pending') {
+              blockParam.blockTag = blockTag;
+            } else if (typeof blockTag === 'string' && blockTag.startsWith('0x')) {
+              // It's a hex number
+              blockParam.blockNumber = BigInt(blockTag);
+            } else if (typeof blockTag === 'number') {
+              blockParam.blockNumber = BigInt(blockTag);
+            }
+          }
+          
+          const result = await this.publicClient.call({
+            account: fromAddress,
+            to: callData.to,
+            data: callData.data,
+            ...(callData.value && { value: BigInt(callData.value) }),
+            ...blockParam,
+          });
+          
+          console.log('✅ eth_call result:', result.data?.substring(0, 20));
+          return result.data;
+        } catch (error: unknown) {
+          const err = error as { message?: string; data?: unknown; code?: string; shortMessage?: string };
+          console.error('❌ eth_call failed:', {
+            error,
+            errorMessage: err?.message,
+            shortMessage: err?.shortMessage,
+            errorData: err?.data,
+            from: fromAddress,
+            to: callData.to,
+            data: callData.data?.substring(0, 50),
+          });
+          
+          // Re-throw with more context
+          if (err?.data) {
+            // If there's revert data, include it
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const enhancedError: any = new Error(err.message || err.shortMessage || 'Contract call reverted');
+            enhancedError.data = err.data;
+            enhancedError.code = err.code || 'CALL_EXCEPTION';
+            throw enhancedError;
+          }
+          
+          throw error;
+        }
 
       case 'eth_getBalance':
         const balance = await this.publicClient.getBalance({
@@ -180,6 +278,128 @@ class KernelEIP1193Provider {
           address: params?.[0] || this.kernelClient.account.address,
         });
         return `0x${nonce.toString(16)}`;
+
+      // Event filtering methods for ethers.js event watching
+      case 'eth_newFilter':
+        console.log('📋 eth_newFilter called with params:', params);
+        try {
+          const filterId = `0x${(++this.filterIdCounter).toString(16)}`;
+          const filter = await this.publicClient.createEventFilter(params?.[0] || {});
+          this.filters.set(filterId, filter);
+          console.log('✅ Created filter successfully:', filterId, 'for contract:', params?.[0]?.address);
+          return filterId;
+        } catch (error) {
+          console.error('❌ CRITICAL: Failed to create filter!', error);
+          console.error('This means WebSocket events will NOT work!');
+          console.error('Filter params:', params?.[0]);
+          // Return a dummy filter ID to avoid breaking the flow
+          const filterId = `0x${(++this.filterIdCounter).toString(16)}`;
+          this.filters.set(filterId, { type: 'dummy', params: params?.[0] });
+          console.warn('🔸 Created dummy filter (no events will be received):', filterId);
+          return filterId;
+        }
+
+      case 'eth_newBlockFilter':
+        try {
+          const filterId = `0x${(++this.filterIdCounter).toString(16)}`;
+          const filter = await this.publicClient.createBlockFilter();
+          this.filters.set(filterId, filter);
+          return filterId;
+        } catch (error) {
+          console.warn('Failed to create block filter:', error);
+          return `0x${(++this.filterIdCounter).toString(16)}`;
+        }
+
+      case 'eth_newPendingTransactionFilter':
+        try {
+          const filterId = `0x${(++this.filterIdCounter).toString(16)}`;
+          const filter = await this.publicClient.createPendingTransactionFilter();
+          this.filters.set(filterId, filter);
+          return filterId;
+        } catch (error) {
+          console.warn('Failed to create pending tx filter:', error);
+          return `0x${(++this.filterIdCounter).toString(16)}`;
+        }
+
+      case 'eth_getFilterChanges':
+        try {
+          const filterId = params?.[0];
+          const filter = this.filters.get(filterId);
+          if (!filter) {
+            console.warn('⚠️ Filter not found:', filterId);
+            return [];
+          }
+          
+          // For dummy filters, use getLogs as fallback
+          if (filter.type === 'dummy') {
+            console.log('⚠️ Polling dummy filter (no real events)');
+            try {
+              const logs = await this.publicClient.getLogs({
+                address: filter.params?.address,
+                topics: filter.params?.topics,
+                fromBlock: 'latest',
+              });
+              if (logs && logs.length > 0) {
+                console.log('📬 getLogs found', logs.length, 'events');
+              }
+              return logs || [];
+            } catch (err) {
+              console.warn('getLogs fallback failed:', err);
+              return [];
+            }
+          }
+          
+          const changes = await this.publicClient.getFilterChanges({ filter });
+          if (changes && changes.length > 0) {
+            console.log('📬 Filter changes:', changes.length, 'events');
+          }
+          return changes || [];
+        } catch (error) {
+          console.warn('Failed to get filter changes:', error);
+          return [];
+        }
+
+      case 'eth_getFilterLogs':
+        try {
+          const filterId = params?.[0];
+          const filter = this.filters.get(filterId);
+          if (!filter) return [];
+          if (filter.type === 'dummy') return []; // Return empty for dummy filters
+          
+          const logs = await this.publicClient.getFilterLogs({ filter });
+          return logs || [];
+        } catch (error) {
+          console.warn('Failed to get filter logs:', error);
+          return [];
+        }
+
+      case 'eth_uninstallFilter':
+        try {
+          const filterId = params?.[0];
+          const filter = this.filters.get(filterId);
+          if (!filter) return true;
+          if (filter.type === 'dummy') {
+            this.filters.delete(filterId);
+            return true;
+          }
+          
+          const result = await this.publicClient.uninstallFilter({ filter });
+          this.filters.delete(filterId);
+          return result;
+        } catch (error) {
+          console.warn('Failed to uninstall filter:', error);
+          this.filters.delete(params?.[0]);
+          return true;
+        }
+
+      case 'eth_getLogs':
+        try {
+          const logs = await this.publicClient.getLogs(params?.[0] || {});
+          return logs || [];
+        } catch (error) {
+          console.warn('Failed to get logs:', error);
+          return [];
+        }
 
       default:
         console.warn(`⚠️ Unhandled method: ${method}`, params);
@@ -281,12 +501,13 @@ export function useSmartAccount() {
         console.log('✅ Created viem wallet client');
 
         // Create public client for reading blockchain data
+        // Use Sepolia public RPC that supports event filtering (eth_newFilter, etc.)
         const publicClient = createPublicClient({
           chain: sepolia,
-          transport: http(),
+          transport: http('https://sepolia.infura.io/v3/472e39d0d0e4446d933eb750d348b337'),
         });
 
-        console.log('✅ Created public client');
+        console.log('✅ Created public client with event filtering support');
         
         // Create ECDSA validator from the EOA signer
         const ecdsaValidator = await signerToEcdsaValidator(publicClient, {
