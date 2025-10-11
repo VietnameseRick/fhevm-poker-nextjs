@@ -5,7 +5,6 @@ import { ethers } from "ethers";
 import { useFhevm } from "@fhevm/react";
 import { useFHEPoker } from "@/hooks/useFHEPoker";
 import { PokerTable } from "./PokerTable";
-import { CardHand } from "./CardDisplay";
 import { BettingControls } from "./BettingControls";
 import { Showdown } from "./Showdown";
 import { TransactionFlow } from "./TransactionFlow";
