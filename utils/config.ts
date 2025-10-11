@@ -37,12 +37,22 @@ export const CHAIN_ID = CHAIN_IDS[NETWORK];
 const DEFAULT_LOCAL_RPC = 'http://127.0.0.1:8545';
 const DEFAULT_SEPOLIA_RPC = 'https://sepolia.infura.io/v3/472e39d0d0e4446d933eb750d348b337';
 
+// WebSocket endpoints for event listening (more efficient than HTTP polling)
+const DEFAULT_LOCAL_WS = 'ws://127.0.0.1:8545';
+const DEFAULT_SEPOLIA_WS = 'wss://sepolia.infura.io/ws/v3/472e39d0d0e4446d933eb750d348b337';
+
 export const RPC_URLS = {
   local: process.env.NEXT_PUBLIC_LOCAL_RPC_URL || DEFAULT_LOCAL_RPC,
   sepolia: process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || DEFAULT_SEPOLIA_RPC,
 } as const;
 
+export const WS_RPC_URLS = {
+  local: process.env.NEXT_PUBLIC_LOCAL_WS_RPC_URL || DEFAULT_LOCAL_WS,
+  sepolia: process.env.NEXT_PUBLIC_SEPOLIA_WS_RPC_URL || DEFAULT_SEPOLIA_WS,
+} as const;
+
 export const RPC_URL = RPC_URLS[NETWORK];
+export const WS_RPC_URL = WS_RPC_URLS[NETWORK];
 
 // =============================================================================
 // SMART ACCOUNT CONFIGURATION (ZeroDev + Pimlico)
@@ -110,6 +120,7 @@ export const config = {
   isSepolia: IS_SEPOLIA,
   chainId: CHAIN_ID,
   rpcUrl: RPC_URL,
+  wsRpcUrl: WS_RPC_URL,
   privyAppId: PRIVY_APP_ID,
   enableSmartAccount: ENABLE_SMART_ACCOUNT,
   enableWebSocket: ENABLE_WEBSOCKET,

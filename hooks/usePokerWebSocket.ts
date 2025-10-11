@@ -2,10 +2,14 @@ import { useEffect, useRef, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { usePokerStore } from '@/stores/pokerStore';
 import { FHEPokerABI } from '@/abi/FHEPokerABI';
+import config from '@/utils/config';
 
 /**
  * Hook to manage WebSocket event listeners for poker game
  * Automatically refreshes store when events are detected
+ * 
+ * Uses WebSocket provider for event listening to avoid HTTP polling rate limits.
+ * Falls back to HTTP polling with increased interval if WebSocket is unavailable.
  */
 export function usePokerWebSocket(
   contractAddress: string | null | undefined,
@@ -15,6 +19,8 @@ export function usePokerWebSocket(
   const mountedRef = useRef(true);
   const lastRefreshRef = useRef<number>(0);
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const wsProviderRef = useRef<ethers.WebSocketProvider | ethers.JsonRpcProvider | null>(null);
+  const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Debounced refresh - prevents rapid-fire event spam
   const debouncedRefresh = useCallback((tableId: bigint) => {
@@ -45,7 +51,7 @@ export function usePokerWebSocket(
   useEffect(() => {
     mountedRef.current = true;
     
-    if (!contractAddress || !provider || !currentTableId) {
+    if (!contractAddress || !currentTableId) {
       return;
     }
     
@@ -53,7 +59,56 @@ export function usePokerWebSocket(
     
     const setupListeners = async () => {
       try {
-        contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
+        // Create event provider - prefer WebSocket to avoid HTTP polling rate limits
+        let eventProvider: ethers.WebSocketProvider | ethers.JsonRpcProvider;
+        
+        try {
+          // Try WebSocket first (more efficient, no polling needed)
+          console.log(`🔌 [WebSocket] Attempting WebSocket connection to ${config.wsRpcUrl}`);
+          eventProvider = new ethers.WebSocketProvider(config.wsRpcUrl);
+          
+          // Test the connection
+          await eventProvider.getNetwork();
+          
+          console.log(`✅ [WebSocket] Successfully connected via WebSocket`);
+          wsProviderRef.current = eventProvider;
+          
+          // Handle WebSocket errors and reconnection
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (eventProvider as any)._websocket?.on('error', (error: Error) => {
+            console.error('❌ [WebSocket] Connection error:', error);
+          });
+          
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (eventProvider as any)._websocket?.on('close', () => {
+            console.warn('⚠️ [WebSocket] Connection closed');
+            // Attempt reconnection after 5 seconds
+            if (mountedRef.current && !reconnectTimerRef.current) {
+              reconnectTimerRef.current = setTimeout(() => {
+                console.log('🔄 [WebSocket] Attempting to reconnect...');
+                reconnectTimerRef.current = null;
+                // Trigger re-setup by clearing and re-running effect
+                if (mountedRef.current) {
+                  setupListeners();
+                }
+              }, 5000);
+            }
+          });
+        } catch (wsError) {
+          console.warn('⚠️ [WebSocket] WebSocket connection failed, falling back to HTTP with increased polling interval:', wsError);
+          
+          // Fallback to HTTP with increased polling interval to avoid rate limits
+          eventProvider = new ethers.JsonRpcProvider(config.rpcUrl, undefined, {
+            polling: true,
+            // Increase polling interval from default 4s to 30s to avoid rate limits
+            pollingInterval: 30000, // 30 seconds
+          });
+          
+          console.log(`✅ [WebSocket] Using HTTP polling with 30s interval`);
+          wsProviderRef.current = eventProvider;
+        }
+        
+        contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, eventProvider);
         
         // Initial data load
         if (mountedRef.current) {
@@ -129,6 +184,12 @@ export function usePokerWebSocket(
         refreshTimerRef.current = null;
       }
       
+      // Clear reconnection timer
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      
       // Remove all listeners
       if (contract) {
         try {
@@ -138,7 +199,20 @@ export function usePokerWebSocket(
           console.error('[WebSocket] Error removing listeners:', error);
         }
       }
+      
+      // Clean up WebSocket provider
+      if (wsProviderRef.current) {
+        try {
+          if (wsProviderRef.current instanceof ethers.WebSocketProvider) {
+            wsProviderRef.current.destroy();
+            console.log(`🔌 [WebSocket] WebSocket provider destroyed`);
+          }
+          wsProviderRef.current = null;
+        } catch (error) {
+          console.error('[WebSocket] Error cleaning up provider:', error);
+        }
+      }
     };
-  }, [contractAddress, provider, currentTableId, debouncedRefresh]);
+  }, [contractAddress, currentTableId, debouncedRefresh]);
 }
 
