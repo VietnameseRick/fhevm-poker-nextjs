@@ -202,10 +202,6 @@ export function Showdown({
                 <p className="text-sm text-slate-400 mt-1">{detectedHand.description}</p>
               </div>
             )}
-            
-            <div className="flex justify-center">
-              <CardHand cards={myCards} />
-            </div>
           </div>
         )}
 

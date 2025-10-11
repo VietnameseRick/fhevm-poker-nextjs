@@ -483,6 +483,25 @@ export function PokerGame() {
                 </div>
               )}
               
+              {/* Manual Refresh Button */}
+              <button
+                onClick={() => {
+                  if (poker.currentTableId !== undefined) {
+                    poker.refreshTableState(poker.currentTableId);
+                  }
+                }}
+                disabled={poker.isLoading || poker.currentTableId === undefined}
+                className="px-3 py-1 bg-gradient-to-r from-cyan-600/30 to-purple-600/30 hover:from-cyan-600/50 hover:to-purple-600/50 border border-cyan-500/50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Manually refresh game state"
+              >
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span className="text-cyan-400 text-sm font-semibold mono">Refresh</span>
+                </div>
+              </button>
+
               {/* WebSocket Connection Status */}
               {poker.isConnected ? (
                 <div className="px-3 py-1 bg-green-500/20 border border-green-500 rounded-lg">
@@ -565,9 +584,9 @@ export function PokerGame() {
             <div className="flex justify-center gap-4">
               {/* Betting Street Indicator */}
               {poker.communityCards && (
-                <div className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 rounded-full shadow-lg border-2 border-white/20">
+                <div className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-purple-600 px-6 py-3 rounded-full shadow-lg border-2 border-cyan-400/50 box-glow">
                   <span className="text-2xl">🎴</span>
-                  <span className="text-white font-bold text-xl">{BETTING_STREETS[poker.communityCards.currentStreet]}</span>
+                  <span className="text-white font-bold text-xl mono">{BETTING_STREETS[poker.communityCards.currentStreet]}</span>
                 </div>
               )}
               {/* Turn Indicator */}
@@ -631,7 +650,7 @@ export function PokerGame() {
                 <button
                   onClick={handleDecryptCards}
                   disabled={poker.isDecrypting || poker.isLoading}
-                  className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed relative overflow-hidden"
+                  className="w-full bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg shadow-cyan-500/30 hover:shadow-purple-500/50 transition-all duration-200 disabled:cursor-not-allowed relative overflow-hidden border border-cyan-500/30"
                 >
                   {poker.isDecrypting ? (
                     <span className="flex items-center justify-center gap-2">
@@ -705,25 +724,6 @@ export function PokerGame() {
 
               {isPlaying && (poker.tableState.isSeated || poker.playerState) && poker.playerState && (
               <>
-              <div className="bg-black/30 backdrop-blur-sm rounded-xl border border-gray-700 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-white font-semibold">Your Cards</p>
-                  {!(poker.cards[0]?.clear !== undefined) && (
-                    <span className="text-xs text-yellow-300">🔓 Decrypt to reveal</span>
-                  )}
-                </div>
-                <div className="flex justify-center">
-                  <CardHand
-                    cards={[
-                      poker.cards[0]?.clear as number | undefined,
-                      poker.cards[1]?.clear as number | undefined,
-                    ]}
-                    hidden={!(poker.cards[0]?.clear !== undefined)}
-                    flip={poker.cards[0]?.clear !== undefined}
-                    staggerMs={120}
-                  />
-                </div>
-              </div>
 
               <BettingControls
                 canAct={isYourTurn && !poker.playerState.hasFolded}

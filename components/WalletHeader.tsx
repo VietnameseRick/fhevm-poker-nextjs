@@ -52,32 +52,32 @@ export function WalletHeader({
   if (!address) return null;
 
   return (
-    <div className="w-full bg-black/30 backdrop-blur-sm border-b border-gray-700">
+    <div className="w-full glass-card border-b border-cyan-500/30">
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
           {/* Left: Wallet Info */}
           <div className="flex items-center gap-3">
             {/* Smart Account Address */}
             {isSmartAccount && smartAccountAddress && (
-              <div className="flex items-center gap-2 bg-gradient-to-r from-purple-600/20 to-pink-600/20 border border-purple-500 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 bg-gradient-to-r from-cyan-600/20 to-purple-600/20 border border-cyan-500/50 rounded-lg px-3 py-2 box-glow">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">✨</span>
                   <div>
-                    <div className="text-xs text-purple-300 font-semibold">Smart Account</div>
+                    <div className="text-xs text-cyan-300 font-bold mono">Smart Account</div>
                     <div className="flex items-center gap-2">
                       <code className="text-sm text-white font-mono">
                         {formatAddress(smartAccountAddress)}
                       </code>
                       <button
                         onClick={() => copyToClipboard(smartAccountAddress)}
-                        className="p-1 hover:bg-white/10 rounded transition-colors"
+                        className="p-1 hover:bg-cyan-500/20 rounded transition-colors"
                         title="Copy smart account address"
                       >
                         {copied ? (
                           <span className="text-green-400 text-xs">✓</span>
                         ) : (
                           <svg
-                            className="w-4 h-4 text-purple-300"
+                            className="w-4 h-4 text-cyan-300"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -93,13 +93,13 @@ export function WalletHeader({
                       </button>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-purple-200">
+                      <span className="text-xs text-cyan-200 mono">
                         Balance: {formatBalance(smartAccountBalance)}
                       </span>
                       {onDepositToSmartAccount && (
                         <button
                           onClick={onDepositToSmartAccount}
-                          className="px-2 py-1 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400 text-purple-200 text-xs rounded transition-colors"
+                          className="px-2 py-1 bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-400 text-cyan-200 text-xs rounded transition-colors mono"
                           title="Deposit ETH to Smart Account"
                         >
                           Deposit
@@ -113,9 +113,9 @@ export function WalletHeader({
 
             {/* EOA Address (if smart account is active, show as secondary) */}
             {isSmartAccount && eoaAddress ? (
-              <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 bg-gray-800/50 border border-gray-600/50 rounded-lg px-3 py-2">
                 <div>
-                  <div className="text-xs text-gray-400">EOA Signer</div>
+                  <div className="text-xs text-gray-400 mono font-bold">EOA Signer</div>
                   <div className="flex items-center gap-2">
                     <code className="text-xs text-gray-300 font-mono">
                       {formatAddress(eoaAddress)}
@@ -144,7 +144,7 @@ export function WalletHeader({
                       )}
                     </button>
                   </div>
-                  <div className="text-xs text-gray-300 mt-1">
+                  <div className="text-xs text-gray-300 mt-1 mono">
                     Balance: {formatBalance(eoaBalance)}
                   </div>
                 </div>
@@ -152,9 +152,9 @@ export function WalletHeader({
             ) : (
               // Regular wallet (no smart account)
               !isSmartAccount && address && (
-                <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2 bg-gray-800/50 border border-purple-500/50 rounded-lg px-3 py-2">
                   <div>
-                    <div className="text-xs text-gray-400">Wallet</div>
+                    <div className="text-xs text-purple-400 mono font-bold">Wallet</div>
                     <div className="flex items-center gap-2">
                       <code className="text-sm text-white font-mono">
                         {formatAddress(address)}
@@ -190,8 +190,8 @@ export function WalletHeader({
 
             {/* Chain Badge */}
             {chainId && (
-              <div className="px-3 py-2 bg-blue-600/20 border border-blue-500 rounded-lg">
-                <div className="text-xs text-blue-300 font-semibold">
+              <div className="px-3 py-2 bg-gradient-to-r from-purple-600/20 to-pink-600/20 border border-purple-500/50 rounded-lg">
+                <div className="text-xs text-purple-300 font-bold mono">
                   {chainId === 11155111 ? "Sepolia" : chainId === 31337 ? "Hardhat" : `Chain ${chainId}`}
                 </div>
               </div>
@@ -202,7 +202,7 @@ export function WalletHeader({
           {onLogout && (
             <button
               onClick={onLogout}
-              className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500 text-red-300 rounded-lg transition-colors font-semibold text-sm"
+              className="px-4 py-2 bg-gradient-to-br from-red-600/20 to-red-700/20 hover:from-red-600/30 hover:to-red-700/30 border border-red-500/50 text-red-300 rounded-lg transition-all font-semibold text-sm mono"
             >
               Logout
             </button>

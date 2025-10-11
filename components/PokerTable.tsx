@@ -126,9 +126,26 @@ export function PokerTable({
 
         {/* Poker Table (Center) */}
         <div className="flex-1 min-w-[400px]">
-          <div className="relative bg-gradient-to-br from-green-700 via-green-800 to-green-900 rounded-full border-8 border-amber-900 shadow-2xl p-12 min-h-[300px] flex flex-col items-center justify-center">
-            {/* Table felt texture */}
-            <div className="absolute inset-0 rounded-full opacity-10 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent)]"></div>
+          <div className="relative bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-full border-4 border-cyan-500/50 shadow-2xl p-12 min-h-[300px] flex flex-col items-center justify-center overflow-hidden">
+            {/* Futuristic grid texture */}
+            <div className="absolute inset-0 rounded-full opacity-5">
+              <div className="absolute inset-0" style={{
+                backgroundImage: `
+                  linear-gradient(to right, cyan 1px, transparent 1px),
+                  linear-gradient(to bottom, cyan 1px, transparent 1px)
+                `,
+                backgroundSize: '30px 30px',
+              }}></div>
+            </div>
+
+            {/* Glow effect */}
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-500/10 via-purple-500/10 to-pink-500/10"></div>
+            
+            {/* Corner brackets */}
+            <div className="absolute top-4 left-4 w-16 h-16 border-t-2 border-l-2 border-cyan-500/50"></div>
+            <div className="absolute top-4 right-4 w-16 h-16 border-t-2 border-r-2 border-cyan-500/50"></div>
+            <div className="absolute bottom-4 left-4 w-16 h-16 border-b-2 border-l-2 border-purple-500/50"></div>
+            <div className="absolute bottom-4 right-4 w-16 h-16 border-b-2 border-r-2 border-purple-500/50"></div>
             
             {/* Community Cards */}
             {communityCards && currentStreet > 0 && (
@@ -156,25 +173,25 @@ export function PokerTable({
             
             {/* Pot display */}
             <div className="relative z-10 text-center">
-              <div className="bg-black/40 backdrop-blur-sm rounded-2xl px-8 py-6 border-2 border-yellow-400 shadow-xl">
-                <div className="text-yellow-400 text-sm font-semibold mb-2 uppercase tracking-wider">
+              <div className="glass-card rounded-2xl px-8 py-6 border-2 border-cyan-500/50 shadow-xl box-glow">
+                <div className="text-cyan-400 text-sm font-bold mb-2 uppercase tracking-wider mono">
                   Pot
                 </div>
-                <div className="text-white text-4xl font-bold mb-2">
+                <div className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-4xl font-bold mb-2 mono">
                   {formatEth(pot)} ETH
                 </div>
                 {currentBet > BigInt(0) && (
-                  <div className="text-yellow-300 text-sm">
+                  <div className="text-purple-300 text-sm mono">
                     Current Bet: {formatEth(currentBet)} ETH
                   </div>
                 )}
                 
-                {/* Chip stack animation */}
+                {/* Chip stack animation with futuristic glow */}
                 <div className="flex justify-center gap-1 mt-4">
                   {[...Array(Math.min(5, Math.floor(Number(pot) / 1e17) + 1))].map((_, i) => (
                     <div
                       key={i}
-                      className="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-600 border-2 border-yellow-700 shadow-lg"
+                      className="w-6 h-6 rounded-full bg-gradient-to-br from-cyan-400 to-purple-600 border-2 border-cyan-500 shadow-lg shadow-cyan-500/50"
                       style={{
                         transform: `translateY(${-i * 4}px)`,
                         zIndex: i,
@@ -185,8 +202,8 @@ export function PokerTable({
               </div>
             </div>
 
-            {/* Table edge highlight */}
-            <div className="absolute inset-0 rounded-full ring-2 ring-inset ring-green-600/50"></div>
+            {/* Table edge highlight with neon effect */}
+            <div className="absolute inset-0 rounded-full ring-2 ring-inset ring-cyan-500/30 animate-pulse"></div>
           </div>
         </div>
 

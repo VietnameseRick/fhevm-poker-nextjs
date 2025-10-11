@@ -95,16 +95,16 @@ export function usePokerWebSocket(
             }
           });
         } catch (wsError) {
-          console.warn('⚠️ [WebSocket] WebSocket connection failed, falling back to HTTP with increased polling interval:', wsError);
+          console.warn('⚠️ [WebSocket] WebSocket connection failed, falling back to HTTP polling:', wsError);
           
-          // Fallback to HTTP with increased polling interval to avoid rate limits
+          // Fallback to HTTP polling - use 5s interval for better responsiveness
           eventProvider = new ethers.JsonRpcProvider(config.rpcUrl, undefined, {
             polling: true,
-            // Increase polling interval from default 4s to 30s to avoid rate limits
-            pollingInterval: 30000, // 30 seconds
+            // Use 5s polling interval - balance between responsiveness and rate limits
+            pollingInterval: 5000, // 5 seconds
           });
           
-          console.log(`✅ [WebSocket] Using HTTP polling with 30s interval`);
+          console.log(`✅ [WebSocket] Using HTTP polling with 5s interval`);
           wsProviderRef.current = eventProvider;
         }
         
