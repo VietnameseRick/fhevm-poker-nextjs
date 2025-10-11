@@ -86,7 +86,7 @@ export function Showdown({
   }, [contractAddress, provider, tableId, winner]);
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
       {/* Confetti effect */}
       {showConfetti && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -108,14 +108,14 @@ export function Showdown({
       <div
         className={`bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 rounded-2xl shadow-2xl border-2 ${
           isWinner ? "border-yellow-500/50" : "border-slate-700"
-        } p-8 max-w-2xl w-full transform transition-all duration-500 ${
+        } p-4 sm:p-6 md:p-8 max-w-2xl w-full my-auto transform transition-all duration-500 ${
           animationStep >= 1 ? "scale-100 opacity-100" : "scale-95 opacity-0"
-        }`}
+        } max-h-[95vh] overflow-y-auto`}
       >
         {/* Winner announcement */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-4 sm:mb-6">
           <h2
-            className={`text-4xl font-bold mb-4 transition-all duration-500 ${
+            className={`text-2xl sm:text-3xl md:text-4xl font-bold mb-2 sm:mb-4 transition-all duration-500 ${
               animationStep >= 1 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             } ${
               isWinner
@@ -127,7 +127,7 @@ export function Showdown({
           </h2>
 
           {!isWinner && winnerData && (
-            <p className="text-slate-300 text-lg">
+            <p className="text-slate-300 text-sm sm:text-base md:text-lg">
               Winner: <span className="text-green-400 font-mono">{winner.slice(0, 6)}...{winner.slice(-4)}</span>
             </p>
           )}
@@ -135,13 +135,13 @@ export function Showdown({
 
         {/* Pot amount */}
         <div
-          className={`bg-gradient-to-r from-green-900/30 to-emerald-900/30 rounded-xl p-6 mb-6 border border-green-500/30 transition-all duration-500 delay-200 ${
+          className={`bg-gradient-to-r from-green-900/30 to-emerald-900/30 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 border border-green-500/30 transition-all duration-500 delay-200 ${
             animationStep >= 2 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
           }`}
         >
           <div className="text-center">
-            <p className="text-slate-400 text-sm mb-1">{isWinner ? "Pot Won" : "Final Pot"}</p>
-            <p className="text-3xl font-bold text-green-400">
+            <p className="text-slate-400 text-xs sm:text-sm mb-1">{isWinner ? "Pot Won" : "Final Pot"}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-green-400">
               {parseFloat((Number(pot) / 1e18).toFixed(4))} ETH
             </p>
           </div>
@@ -149,20 +149,22 @@ export function Showdown({
 
         {/* Winning hand breakdown (from contract) */}
         {winnerRank !== null && (
-          <div className={`bg-slate-800/50 rounded-xl p-6 mb-6 border border-slate-600 transition-all duration-500 delay-250 ${animationStep >= 2 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}`}>
-            <h3 className="text-white text-lg font-semibold mb-3 text-center">Winning Hand</h3>
+          <div className={`bg-slate-800/50 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 border border-slate-600 transition-all duration-500 delay-250 ${animationStep >= 2 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}`}>
+            <h3 className="text-white text-base sm:text-lg font-semibold mb-3 text-center">Winning Hand</h3>
             <div className="text-center mb-4">
-              <p className="text-2xl font-bold text-yellow-300">
+              <p className="text-xl sm:text-2xl font-bold text-yellow-300">
                 {HandRankEmojis[winnerRank as keyof typeof HandRankEmojis]} {HandRankNames[winnerRank as keyof typeof HandRankNames]}
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
+              {/* Winner's Cards - Above */}
               <div>
                 <p className="text-slate-400 text-sm mb-2 text-center">Winner&apos;s Cards</p>
                 <div className="flex justify-center">
                   <CardHand cards={winnerCards || []} />
                 </div>
               </div>
+              {/* Community Cards - Below */}
               <div>
                 <p className="text-slate-400 text-sm mb-2 text-center">Community Cards</p>
                 <div className="flex justify-center">
@@ -176,7 +178,7 @@ export function Showdown({
         {/* Your cards (if decrypted) */}
         {myCards && myCards.length === 2 && (
           <div
-            className={`bg-slate-800/50 rounded-xl p-6 mb-6 border transition-all duration-500 delay-300 ${
+            className={`bg-slate-800/50 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 border transition-all duration-500 delay-300 ${
               detectedHand && detectedHand.rank >= 4 
                 ? "border-yellow-500 shadow-lg shadow-yellow-500/50 animate-pulse-border" 
                 : "border-slate-600"
@@ -184,14 +186,14 @@ export function Showdown({
               animationStep >= 2 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             }`}
           >
-            <h3 className="text-white text-lg font-semibold mb-3 text-center">
+            <h3 className="text-white text-base sm:text-lg font-semibold mb-3 text-center">
               Your Hand
             </h3>
             
             {/* Hand rank display */}
             {detectedHand && (
               <div className="mb-4 text-center">
-                <p className={`text-2xl font-bold ${
+                <p className={`text-xl sm:text-2xl font-bold ${
                   detectedHand.rank >= 7 ? "text-yellow-400" :
                   detectedHand.rank >= 4 ? "text-purple-400" :
                   detectedHand.rank >= 1 ? "text-blue-400" :
@@ -199,7 +201,7 @@ export function Showdown({
                 }`}>
                   {detectedHand.emoji} {detectedHand.name}
                 </p>
-                <p className="text-sm text-slate-400 mt-1">{detectedHand.description}</p>
+                <p className="text-xs sm:text-sm text-slate-400 mt-1">{detectedHand.description}</p>
               </div>
             )}
           </div>
@@ -207,11 +209,11 @@ export function Showdown({
 
         {/* Player standings */}
         <div
-          className={`bg-slate-800/30 rounded-xl p-6 mb-6 border border-slate-700 transition-all duration-500 delay-400 ${
+          className={`bg-slate-800/30 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 border border-slate-700 transition-all duration-500 delay-400 ${
             animationStep >= 2 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
           }`}
         >
-          <h3 className="text-white text-lg font-semibold mb-4">Final Standings</h3>
+          <h3 className="text-white text-base sm:text-lg font-semibold mb-3 sm:mb-4">Final Standings</h3>
           <div className="space-y-3">
             {allPlayers.map((player, idx) => {
               const isThisWinner = player.address.toLowerCase() === winner.toLowerCase();
