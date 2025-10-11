@@ -106,7 +106,7 @@ export function Showdown({
       )}
 
       <div
-        className={`bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 rounded-2xl shadow-2xl border-2 ${
+        className={`max-h-[90vh] overflow-y-auto scroll-hide bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900 rounded-2xl shadow-2xl border-2 ${
           isWinner ? "border-yellow-500/50" : "border-slate-700"
         } p-8 max-w-2xl w-full transform transition-all duration-500 ${
           animationStep >= 1 ? "scale-100 opacity-100" : "scale-95 opacity-0"
@@ -115,7 +115,7 @@ export function Showdown({
         {/* Winner announcement */}
         <div className="text-center mb-8">
           <h2
-            className={`text-4xl font-bold mb-4 transition-all duration-500 ${
+            className={`text-3xl font-bold mb-4 transition-all duration-500 ${
               animationStep >= 1 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             } ${
               isWinner
@@ -125,17 +125,11 @@ export function Showdown({
           >
             {isWinner ? "🎉 YOU WIN! 🎉" : "You Lose"}
           </h2>
-
-          {!isWinner && winnerData && (
-            <p className="text-slate-300 text-lg">
-              Winner: <span className="text-green-400 font-mono">{winner.slice(0, 6)}...{winner.slice(-4)}</span>
-            </p>
-          )}
         </div>
 
         {/* Pot amount */}
         <div
-          className={`bg-gradient-to-r from-green-900/30 to-emerald-900/30 rounded-xl p-6 mb-6 border border-green-500/30 transition-all duration-500 delay-200 ${
+          className={`bg-gradient-to-r from-green-900/30 to-emerald-900/30 rounded-xl p-4 mb-4 border border-green-500/30 transition-all duration-500 delay-200 ${
             animationStep >= 2 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
           }`}
         >
@@ -156,7 +150,7 @@ export function Showdown({
                 {HandRankEmojis[winnerRank as keyof typeof HandRankEmojis]} {HandRankNames[winnerRank as keyof typeof HandRankNames]}
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2">
               <div>
                 <p className="text-slate-400 text-sm mb-2 text-center">Winner&apos;s Cards</p>
                 <div className="flex justify-center">

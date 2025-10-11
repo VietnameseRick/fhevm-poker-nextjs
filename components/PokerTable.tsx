@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { PlayerSeat } from "./PlayerSeat";
 import { Card } from "./CardDisplay";
 
@@ -13,7 +14,6 @@ interface Player {
 }
 
 interface CommunityCards {
-  currentStreet: number; // 0=Preflop, 1=Flop, 2=Turn, 3=River, 4=Showdown
   flopCard1?: number;
   flopCard2?: number;
   flopCard3?: number;
@@ -30,6 +30,9 @@ interface PokerTableProps {
   showYourCards?: boolean;
   communityCards?: CommunityCards;
   currentStreet?: number;
+  isLoading?: boolean;
+  tableState?: { state?: number };
+  onStartGame?: () => Promise<void> | void;
 }
 
 export function PokerTable({
@@ -41,48 +44,49 @@ export function PokerTable({
   showYourCards = false,
   communityCards,
   currentStreet = 0,
+  isLoading = false,
+  tableState,
+  onStartGame,
 }: PokerTableProps) {
-  const formatEth = (wei: bigint) => {
-    const eth = Number(wei) / 1e18;
-    return eth.toFixed(4);
-  };
+  const [gameStarted, setGameStarted] = useState(false);
 
+  const formatEth = (wei: bigint) => (Number(wei) / 1e18).toFixed(4);
 
-  // Position players around the table (max 6 players for good UX)
+  // Xác định vị trí hiển thị của từng người chơi
   const getPlayerPosition = (index: number, total: number): "top" | "left" | "right" | "bottom" => {
-    // Find your position and make it bottom
     const yourIndex = players.findIndex(p => p.address.toLowerCase() === yourAddress?.toLowerCase());
     const relativeIndex = (index - yourIndex + total) % total;
-    
-    if (total <= 2) {
-      return relativeIndex === 0 ? "bottom" : "top";
-    } else if (total <= 4) {
+
+    if (total <= 2) return relativeIndex === 0 ? "bottom" : "top";
+    if (total <= 4) {
       const positions: Array<"top" | "left" | "right" | "bottom"> = ["bottom", "right", "top", "left"];
       return positions[relativeIndex] || "top";
-    } else {
-      const positions: Array<"top" | "left" | "right" | "bottom"> = ["bottom", "right", "top", "top", "left", "left"];
-      return positions[relativeIndex] || "top";
     }
+    const positions: Array<"top" | "left" | "right" | "bottom"> = [
+      "bottom", "right", "top", "top", "left", "left",
+    ];
+    return positions[relativeIndex] || "top";
   };
 
-  // Group players by position for layout
-  const playersByPosition = {
-    top: [] as Array<{ player: Player; index: number }>,
-    left: [] as Array<{ player: Player; index: number }>,
-    right: [] as Array<{ player: Player; index: number }>,
-    bottom: [] as Array<{ player: Player; index: number }>,
+  // Gom nhóm người chơi theo vị trí
+  const groupedPlayers = {
+    top: [] as any[],
+    left: [] as any[],
+    right: [] as any[],
+    bottom: [] as any[],
   };
 
   players.forEach((player, index) => {
-    const position = getPlayerPosition(index, players.length);
-    playersByPosition[position].push({ player, index });
+    const pos = getPlayerPosition(index, players.length);
+    groupedPlayers[pos].push({ player, index });
   });
 
+  // ================== GIAO DIỆN ==================
   return (
     <div className="relative w-full max-w-6xl mx-auto">
-      {/* Top Players */}
-      <div className="flex justify-center gap-4 mb-8">
-        {playersByPosition.top.map(({ player, index }) => (
+      {/* ===== TOP PLAYERS ===== */}
+      <div className="flex justify-center">
+        {groupedPlayers.top.map(({ player, index }) => (
           <PlayerSeat
             key={player.address}
             address={player.address}
@@ -95,139 +99,146 @@ export function PokerTable({
             hasFolded={player.hasFolded}
             isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
             cards={player.cards}
-            showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards}
+            showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards && gameStarted}
             position="top"
           />
         ))}
       </div>
 
-      {/* Middle Section: Left Players, Table, Right Players */}
-      <div className="flex items-center justify-between gap-4 mb-8">
-        {/* Left Players */}
-        <div className="flex flex-col gap-4">
-          {playersByPosition.left.map(({ player, index }) => (
+      {/* ===== MIDDLE SECTION ===== */}
+      <div className="flex justify-between items-center">
+        {/* LEFT PLAYERS */}
+        <div className="flex flex-col gap-6">
+          {groupedPlayers.left.map(({ player, index }) => (
             <PlayerSeat
               key={player.address}
               address={player.address}
               chips={player.chips}
               currentBet={player.currentBet}
               isDealer={index === dealerIndex}
-              isSmallBlind={players.length >= 2 && index === ((dealerIndex + 1) % players.length)}
-              isBigBlind={players.length >= 2 && index === ((dealerIndex + 2) % players.length)}
+              isSmallBlind={index === ((dealerIndex + 1) % players.length)}
+              isBigBlind={index === ((dealerIndex + 2) % players.length)}
               isCurrentTurn={player.isCurrentPlayer}
               hasFolded={player.hasFolded}
               isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
               cards={player.cards}
-              showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards}
+              showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards && gameStarted}
               position="left"
             />
           ))}
         </div>
 
-        {/* Poker Table (Center) */}
-        <div className="flex-1 min-w-[400px]">
-          <div className="relative bg-gradient-to-br from-green-700 via-green-800 to-green-900 rounded-full border-8 border-amber-900 shadow-2xl p-12 min-h-[300px] flex flex-col items-center justify-center">
-            {/* Table felt texture */}
-            <div className="absolute inset-0 rounded-full opacity-10 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent)]"></div>
-            
-            {/* Community Cards */}
-            {communityCards && currentStreet > 0 && (
-              <div className="relative z-10 mb-4">
-                <div className="flex gap-2 justify-center items-center">
-                  {/* Flop (3 cards) - shown from street 1 (Flop) onwards */}
-                  {currentStreet >= 1 && (
-                    <>
-                      <Card cardValue={communityCards.flopCard1} dealDelayMs={0} />
-                      <Card cardValue={communityCards.flopCard2} dealDelayMs={120} />
-                      <Card cardValue={communityCards.flopCard3} dealDelayMs={240} />
-                    </>
-                  )}
-                  {/* Turn (4th card) - shown from street 2 (Turn) onwards */}
-                  {currentStreet >= 2 && (
-                    <Card cardValue={communityCards.turnCard} dealDelayMs={360} />
-                  )}
-                  {/* River (5th card) - shown from street 3 (River) onwards */}
-                  {currentStreet >= 3 && (
-                    <Card cardValue={communityCards.riverCard} dealDelayMs={480} />
-                  )}
-                </div>
+        {/* ===== POKER TABLE CENTER ===== */}
+        <div className="relative flex-1 min-w-[400px] flex items-center justify-center">
+          <div
+            className="w-full relative p-12 min-h-[500px] flex flex-col items-center justify-center"
+            style={{
+              backgroundImage: "url('/bg-table.png')",
+              backgroundSize: "100% 100%",
+              backgroundRepeat: "no-repeat",
+            }}
+          >
+            {/* ========== START BUTTON / POT / CARDS ========== */}
+            {(tableState?.state === 1 || tableState?.state === 3) ? (
+              <div className="space-y-2 z-20 relative text-center">
+                <button
+                  onClick={onStartGame}
+                  disabled={isLoading}
+                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 
+                             hover:from-orange-600 hover:to-orange-700 
+                             disabled:from-gray-600 disabled:to-gray-700 
+                             text-white font-bold py-4 px-8 rounded-xl shadow-lg 
+                             hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed"
+                  style={{
+                    backgroundImage: `url(/bg-button.png)`,
+                    backgroundSize: "100% 100%",
+                    backgroundBlendMode: "overlay",
+                  }}
+                >
+                  {isLoading
+                    ? "Processing..."
+                    : tableState?.state === 1
+                    ? "🚀 Start Game"
+                    : "🔄 Start New Round"}
+                </button>
               </div>
-            )}
-            
-            {/* Pot display */}
-            <div className="relative z-10 text-center">
-              <div className="bg-black/40 backdrop-blur-sm rounded-2xl px-8 py-6 border-2 border-yellow-400 shadow-xl">
-                <div className="text-yellow-400 text-sm font-semibold mb-2 uppercase tracking-wider">
-                  Pot
+            ) : (
+              // ✅ Chỉ hiển thị pot / cards / bet khi không còn loading
+              <div className="relative z-20 flex flex-col items-center justify-center gap-4 transition-all duration-500">
+                {/* Pot */}
+                <div className="flex gap-2">
+                  <div className="text-blue-400 text-xl font-semibold uppercase tracking-wider">
+                    Pot: 
+                  </div>
+                  <div className="text-white text-xl font-bold">{formatEth(pot)} ETH</div>
                 </div>
-                <div className="text-white text-4xl font-bold mb-2">
-                  {formatEth(pot)} ETH
-                </div>
+
+                {/* Community Cards */}
+                {communityCards && currentStreet > 0 && (
+                  <div className="relative z-10 mb-4">
+                    <div className="flex gap-2 justify-center items-center">
+                      {currentStreet >= 1 && (
+                        <>
+                          <Card cardValue={communityCards.flopCard1} dealDelayMs={0} />
+                          <Card cardValue={communityCards.flopCard2} dealDelayMs={120} />
+                          <Card cardValue={communityCards.flopCard3} dealDelayMs={240} />
+                        </>
+                      )}
+                      {currentStreet >= 2 && <Card cardValue={communityCards.turnCard} dealDelayMs={360} />}
+                      {currentStreet >= 3 && <Card cardValue={communityCards.riverCard} dealDelayMs={480} />}
+                    </div>
+                  </div>
+                )}
+
+                {/* Current Bet */}
                 {currentBet > BigInt(0) && (
-                  <div className="text-yellow-300 text-sm">
+                  <div className="text-white text-xl mt-1">
                     Current Bet: {formatEth(currentBet)} ETH
                   </div>
                 )}
-                
-                {/* Chip stack animation */}
-                <div className="flex justify-center gap-1 mt-4">
-                  {[...Array(Math.min(5, Math.floor(Number(pot) / 1e17) + 1))].map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-600 border-2 border-yellow-700 shadow-lg"
-                      style={{
-                        transform: `translateY(${-i * 4}px)`,
-                        zIndex: i,
-                      }}
-                    />
-                  ))}
-                </div>
               </div>
-            </div>
-
-            {/* Table edge highlight */}
-            <div className="absolute inset-0 rounded-full ring-2 ring-inset ring-green-600/50"></div>
+            )}
           </div>
         </div>
 
-        {/* Right Players */}
-        <div className="flex flex-col gap-4">
-          {playersByPosition.right.map(({ player, index }) => (
+        {/* RIGHT PLAYERS */}
+        <div className="flex flex-col gap-6">
+          {groupedPlayers.right.map(({ player, index }) => (
             <PlayerSeat
               key={player.address}
               address={player.address}
               chips={player.chips}
               currentBet={player.currentBet}
               isDealer={index === dealerIndex}
-              isSmallBlind={players.length >= 2 && index === ((dealerIndex + 1) % players.length)}
-              isBigBlind={players.length >= 2 && index === ((dealerIndex + 2) % players.length)}
+              isSmallBlind={index === ((dealerIndex + 1) % players.length)}
+              isBigBlind={index === ((dealerIndex + 2) % players.length)}
               isCurrentTurn={player.isCurrentPlayer}
               hasFolded={player.hasFolded}
               isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
               cards={player.cards}
-              showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards}
+              showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards && gameStarted}
               position="right"
             />
           ))}
         </div>
       </div>
 
-      {/* Bottom Players (You) */}
-      <div className="flex justify-center gap-4">
-        {playersByPosition.bottom.map(({ player, index }) => (
+      {/* ===== BOTTOM PLAYERS ===== */}
+      <div className="flex justify-center gap-6">
+        {groupedPlayers.bottom.map(({ player, index }) => (
           <PlayerSeat
             key={player.address}
             address={player.address}
             chips={player.chips}
             currentBet={player.currentBet}
             isDealer={index === dealerIndex}
-            isSmallBlind={players.length >= 2 && index === ((dealerIndex + 1) % players.length)}
-            isBigBlind={players.length >= 2 && index === ((dealerIndex + 2) % players.length)}
+            isSmallBlind={index === ((dealerIndex + 1) % players.length)}
+            isBigBlind={index === ((dealerIndex + 2) % players.length)}
             isCurrentTurn={player.isCurrentPlayer}
             hasFolded={player.hasFolded}
             isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
             cards={player.cards}
-            showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards}
+            showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards && gameStarted}
             position="bottom"
           />
         ))}
@@ -235,4 +246,3 @@ export function PokerTable({
     </div>
   );
 }
-
