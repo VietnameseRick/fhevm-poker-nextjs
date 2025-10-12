@@ -13,7 +13,6 @@ interface Player {
 }
 
 interface CommunityCards {
-  currentStreet: number; // 0=Preflop, 1=Flop, 2=Turn, 3=River, 4=Showdown
   flopCard1?: number;
   flopCard2?: number;
   flopCard3?: number;
@@ -30,6 +29,9 @@ interface PokerTableProps {
   showYourCards?: boolean;
   communityCards?: CommunityCards;
   currentStreet?: number;
+  isLoading?: boolean;
+  tableState?: { state?: number };
+  onStartGame?: () => Promise<void> | void;
 }
 
 export function PokerTable({
@@ -41,215 +43,171 @@ export function PokerTable({
   showYourCards = false,
   communityCards,
   currentStreet = 0,
+  isLoading = false,
+  tableState,
+  onStartGame,
 }: PokerTableProps) {
-  const formatEth = (wei: bigint) => {
-    const eth = Number(wei) / 1e18;
-    return eth.toFixed(4);
-  };
 
+  const formatEth = (wei: bigint) => (Number(wei) / 1e18).toFixed(4);
 
-  // Position players around the table (max 6 players for good UX)
-  const getPlayerPosition = (index: number, total: number): "top" | "left" | "right" | "bottom" => {
-    // Find your position and make it bottom
-    const yourIndex = players.findIndex(p => p.address.toLowerCase() === yourAddress?.toLowerCase());
-    const relativeIndex = (index - yourIndex + total) % total;
-    
-    if (total <= 2) {
-      return relativeIndex === 0 ? "bottom" : "top";
-    } else if (total <= 4) {
-      const positions: Array<"top" | "left" | "right" | "bottom"> = ["bottom", "right", "top", "left"];
-      return positions[relativeIndex] || "top";
-    } else {
-      const positions: Array<"top" | "left" | "right" | "bottom"> = ["bottom", "right", "top", "top", "left", "left"];
-      return positions[relativeIndex] || "top";
-    }
-  };
+  // 9 vị trí cố định quanh bàn
+  const seatPositions = [
+    "bottom", // 0 - bạn
+    "bottom-right",
+    "right",
+    "top-right",
+    "top",
+    "top-left",
+    "left",
+    "bottom-left",
+    "bottom-center-left"
+  ] as const;
 
-  // Group players by position for layout
-  const playersByPosition = {
-    top: [] as Array<{ player: Player; index: number }>,
-    left: [] as Array<{ player: Player; index: number }>,
-    right: [] as Array<{ player: Player; index: number }>,
-    bottom: [] as Array<{ player: Player; index: number }>,
-  };
+  // Lấy index của bạn
+  const yourIndex = players.findIndex(
+    (p) => p.address.toLowerCase() === yourAddress?.toLowerCase()
+  );
 
-  players.forEach((player, index) => {
-    const position = getPlayerPosition(index, players.length);
-    playersByPosition[position].push({ player, index });
-  });
+  // Map player vào 9 vị trí, nếu thiếu thì thêm slot trống
+  const tableSeats = Array(9)
+    .fill(null)
+    .map((_, i) => players[i] || null);
 
   return (
-    <div className="relative w-full max-w-6xl mx-auto">
-      {/* Top Players */}
-      <div className="flex justify-center gap-4 mb-8">
-        {playersByPosition.top.map(({ player, index }) => (
-          <PlayerSeat
-            key={player.address}
-            address={player.address}
-            chips={player.chips}
-            currentBet={player.currentBet}
-            isDealer={index === dealerIndex}
-            isSmallBlind={players.length >= 2 && index === ((dealerIndex + 1) % players.length)}
-            isBigBlind={players.length >= 2 && index === ((dealerIndex + 2) % players.length)}
-            isCurrentTurn={player.isCurrentPlayer}
-            hasFolded={player.hasFolded}
-            isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
-            cards={player.cards}
-            showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards}
-            position="top"
-          />
-        ))}
-      </div>
-
-      {/* Middle Section: Left Players, Table, Right Players */}
-      <div className="flex items-center justify-between gap-4 mb-8">
-        {/* Left Players */}
-        <div className="flex flex-col gap-4">
-          {playersByPosition.left.map(({ player, index }) => (
-            <PlayerSeat
-              key={player.address}
-              address={player.address}
-              chips={player.chips}
-              currentBet={player.currentBet}
-              isDealer={index === dealerIndex}
-              isSmallBlind={players.length >= 2 && index === ((dealerIndex + 1) % players.length)}
-              isBigBlind={players.length >= 2 && index === ((dealerIndex + 2) % players.length)}
-              isCurrentTurn={player.isCurrentPlayer}
-              hasFolded={player.hasFolded}
-              isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
-              cards={player.cards}
-              showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards}
-              position="left"
-            />
-          ))}
-        </div>
-
-        {/* Poker Table (Center) */}
-        <div className="flex-1 min-w-[400px]">
-          <div className="relative bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-full border-4 border-cyan-500/50 shadow-2xl p-12 min-h-[300px] flex flex-col items-center justify-center overflow-hidden">
-            {/* Futuristic grid texture */}
-            <div className="absolute inset-0 rounded-full opacity-5">
-              <div className="absolute inset-0" style={{
-                backgroundImage: `
-                  linear-gradient(to right, cyan 1px, transparent 1px),
-                  linear-gradient(to bottom, cyan 1px, transparent 1px)
-                `,
-                backgroundSize: '30px 30px',
-              }}></div>
-            </div>
-
-            {/* Glow effect */}
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-500/10 via-purple-500/10 to-pink-500/10"></div>
-            
-            {/* Corner brackets */}
-            <div className="absolute top-4 left-4 w-16 h-16 border-t-2 border-l-2 border-cyan-500/50"></div>
-            <div className="absolute top-4 right-4 w-16 h-16 border-t-2 border-r-2 border-cyan-500/50"></div>
-            <div className="absolute bottom-4 left-4 w-16 h-16 border-b-2 border-l-2 border-purple-500/50"></div>
-            <div className="absolute bottom-4 right-4 w-16 h-16 border-b-2 border-r-2 border-purple-500/50"></div>
-            
-            {/* Community Cards */}
-            {communityCards && currentStreet > 0 && (
-              <div className="relative z-10 mb-4">
-                <div className="flex gap-2 justify-center items-center">
-                  {/* Flop (3 cards) - shown from street 1 (Flop) onwards */}
-                  {currentStreet >= 1 && (
-                    <>
-                      <Card cardValue={communityCards.flopCard1} dealDelayMs={0} />
-                      <Card cardValue={communityCards.flopCard2} dealDelayMs={120} />
-                      <Card cardValue={communityCards.flopCard3} dealDelayMs={240} />
-                    </>
-                  )}
-                  {/* Turn (4th card) - shown from street 2 (Turn) onwards */}
-                  {currentStreet >= 2 && (
-                    <Card cardValue={communityCards.turnCard} dealDelayMs={360} />
-                  )}
-                  {/* River (5th card) - shown from street 3 (River) onwards */}
-                  {currentStreet >= 3 && (
-                    <Card cardValue={communityCards.riverCard} dealDelayMs={480} />
-                  )}
-                </div>
+    <div className="relative w-full max-w-6xl mx-auto p-10">
+      <div className="relative w-full h-[500px] mb-16 mt-10">
+        <div
+          className="relative flex items-center justify-center mx-auto pointer-events-none"
+          style={{
+            backgroundImage: "url('/bg-table.png')",
+            backgroundSize: "100% 100%",
+            backgroundRepeat: "no-repeat",
+            minHeight: "500px",
+            width: "100%",
+          }}
+        >
+          {/* ✅ Trung tâm bàn: Pot, Cards, Current Bet */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            {(tableState?.state === 1 || tableState?.state === 3) ? (
+              <div className="space-y-2 z-20 relative text-center pointer-events-auto">
+                <button
+                  onClick={onStartGame}
+                  disabled={isLoading}
+                  className="w-full
+                           text-white font-bold py-4 px-8 rounded-xl
+                           hover:scale-105 transition-all duration-200"
+                  style={{
+                    backgroundImage: `url(/bg-button.png)`,
+                    backgroundSize: "100% 100%",
+                  }}
+                >
+                  {isLoading
+                    ? "Processing..."
+                    : tableState?.state === 1
+                      ? "🚀 Start Game"
+                      : "🔄 Start New Round"}
+                </button>
               </div>
-            )}
-            
-            {/* Pot display */}
-            <div className="relative z-10 text-center">
-              <div className="glass-card rounded-2xl px-8 py-6 border-2 border-cyan-500/50 shadow-xl box-glow">
-                <div className="text-cyan-400 text-sm font-bold mb-2 uppercase tracking-wider mono">
-                  Pot
+            ) : (
+              <div className="relative z-20 flex flex-col items-center justify-center gap-4 transition-all duration-500 pointer-events-auto">
+                {/* Pot */}
+                <div className="text-center">
+                  <div className="text-white text-2xl font-semibold uppercase tracking-wider">
+                    Pot: {formatEth(pot)} ETH
+                  </div>
                 </div>
-                <div className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 text-4xl font-bold mb-2 mono">
-                  {formatEth(pot)} ETH
-                </div>
+
+                {/* Community Cards */}
+                {communityCards && currentStreet > 0 && (
+                  <div className="relative z-10 mb-4">
+                    <div className="flex gap-2 justify-center items-center">
+                      {currentStreet >= 1 && (
+                        <>
+                          <Card cardValue={communityCards.flopCard1} dealDelayMs={0} />
+                          <Card cardValue={communityCards.flopCard2} dealDelayMs={120} />
+                          <Card cardValue={communityCards.flopCard3} dealDelayMs={240} />
+                        </>
+                      )}
+                      {currentStreet >= 2 && (
+                        <Card cardValue={communityCards.turnCard} dealDelayMs={360} />
+                      )}
+                      {currentStreet >= 3 && (
+                        <Card cardValue={communityCards.riverCard} dealDelayMs={480} />
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {currentBet > BigInt(0) && (
-                  <div className="text-purple-300 text-sm mono">
+                  <div className="text-white text-xl mt-1">
                     Current Bet: {formatEth(currentBet)} ETH
                   </div>
                 )}
-                
-                {/* Chip stack animation with futuristic glow */}
-                <div className="flex justify-center gap-1 mt-4">
-                  {[...Array(Math.min(5, Math.floor(Number(pot) / 1e17) + 1))].map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-6 h-6 rounded-full bg-gradient-to-br from-cyan-400 to-purple-600 border-2 border-cyan-500 shadow-lg shadow-cyan-500/50"
-                      style={{
-                        transform: `translateY(${-i * 4}px)`,
-                        zIndex: i,
-                      }}
-                    />
-                  ))}
-                </div>
               </div>
-            </div>
-
-            {/* Table edge highlight with neon effect */}
-            <div className="absolute inset-0 rounded-full ring-2 ring-inset ring-cyan-500/30 animate-pulse"></div>
+            )}
           </div>
-        </div>
 
-        {/* Right Players */}
-        <div className="flex flex-col gap-4">
-          {playersByPosition.right.map(({ player, index }) => (
-            <PlayerSeat
-              key={player.address}
-              address={player.address}
-              chips={player.chips}
-              currentBet={player.currentBet}
-              isDealer={index === dealerIndex}
-              isSmallBlind={players.length >= 2 && index === ((dealerIndex + 1) % players.length)}
-              isBigBlind={players.length >= 2 && index === ((dealerIndex + 2) % players.length)}
-              isCurrentTurn={player.isCurrentPlayer}
-              hasFolded={player.hasFolded}
-              isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
-              cards={player.cards}
-              showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards}
-              position="right"
-            />
-          ))}
-        </div>
-      </div>
+          {/* 🧍‍♂️ 9 vị trí quanh bàn (giãn đều, YOU luôn ở dưới giữa) */}
+          {tableSeats.map((player, index) => {
+            // Xác định tổng số ghế thực có
+            const totalSeats = tableSeats.length;
 
-      {/* Bottom Players (You) */}
-      <div className="flex justify-center gap-4">
-        {playersByPosition.bottom.map(({ player, index }) => (
-          <PlayerSeat
-            key={player.address}
-            address={player.address}
-            chips={player.chips}
-            currentBet={player.currentBet}
-            isDealer={index === dealerIndex}
-            isSmallBlind={players.length >= 2 && index === ((dealerIndex + 1) % players.length)}
-            isBigBlind={players.length >= 2 && index === ((dealerIndex + 2) % players.length)}
-            isCurrentTurn={player.isCurrentPlayer}
-            hasFolded={player.hasFolded}
-            isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
-            cards={player.cards}
-            showCards={player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards}
-            position="bottom"
-          />
-        ))}
+            // Player chính (YOU) luôn ở giữa dưới
+            const yourIndex = players.findIndex(
+              (p) => p.address.toLowerCase() === yourAddress?.toLowerCase()
+            );
+
+            // Tính góc đều cho các vị trí (YOU ở 270 độ - dưới)
+            const baseAngle = (index - yourIndex) * (360 / totalSeats);
+            const angleRad = (baseAngle * Math.PI) / 180;
+
+            // Bán kính elip (giãn hơn trước)
+            const radiusX = 390; // ngang
+            const radiusY = 270; // dọc
+
+            // Tọa độ tương đối (tâm bàn là 50%/50%)
+            const posX = Math.sin(angleRad) * radiusX;
+            const posY = Math.cos(angleRad) * radiusY;
+
+            return (
+              <div
+                key={index}
+                className="absolute transition-all duration-300"
+                style={{
+                  left: "50%",
+                  top: "50%",
+                  transform: `translate(${posX}px, ${posY}px) translate(-50%, -50%)`,
+                }}
+              >
+                {player ? (
+                  <PlayerSeat
+                    address={player.address}
+                    chips={player.chips}
+                    currentBet={player.currentBet}
+                    isDealer={index === dealerIndex}
+                    isSmallBlind={index === ((dealerIndex + 1) % players.length)}
+                    isBigBlind={index === ((dealerIndex + 2) % players.length)}
+                    isCurrentTurn={player.isCurrentPlayer}
+                    hasFolded={player.hasFolded}
+                    isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
+                    cards={player.cards}
+                    showCards={
+                      player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards
+                    }
+                    position="bottom"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-black/70 border-2 border-gray-700 flex items-center justify-center text-gray-500 text-sm">
+                    Empty
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+
+        </div>
       </div>
     </div>
   );
 }
-
