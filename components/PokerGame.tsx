@@ -817,15 +817,6 @@ export function PokerGame() {
                   </>
                 )}
               </div>
-
-              {/* Mobile TransactionFlow */}
-              <div className="lg:hidden">
-                <TransactionFlow
-                  currentAction={poker.currentAction}
-                  isLoading={poker.isLoading || poker.isDecrypting}
-                  message={poker.message}
-                />
-              </div>
             </div>
 
             {/* Right sidebar: Transaction flow */}

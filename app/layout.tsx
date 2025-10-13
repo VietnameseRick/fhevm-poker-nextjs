@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
-import Image from "next/image";
 
 // Remove edge runtime to support WalletConnect
 // export const runtime = 'edge';

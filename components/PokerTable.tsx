@@ -49,25 +49,7 @@ export function PokerTable({
 }: PokerTableProps) {
 
   const formatEth = (wei: bigint) => (Number(wei) / 1e18).toFixed(4);
-
-  // 9 vị trí cố định quanh bàn
-  const seatPositions = [
-    "bottom", // 0 - bạn
-    "bottom-right",
-    "right",
-    "top-right",
-    "top",
-    "top-left",
-    "left",
-    "bottom-left",
-    "bottom-center-left"
-  ] as const;
-
-  // Lấy index của bạn
-  const yourIndex = players.findIndex(
-    (p) => p.address.toLowerCase() === yourAddress?.toLowerCase()
-  );
-
+  
   // Map player vào 9 vị trí, nếu thiếu thì thêm slot trống
   const tableSeats = Array(9)
     .fill(null)
@@ -183,7 +165,6 @@ export function PokerTable({
                   <PlayerSeat
                     address={player.address}
                     chips={player.chips}
-                    currentBet={player.currentBet}
                     isDealer={index === dealerIndex}
                     isSmallBlind={index === ((dealerIndex + 1) % players.length)}
                     isBigBlind={index === ((dealerIndex + 2) % players.length)}

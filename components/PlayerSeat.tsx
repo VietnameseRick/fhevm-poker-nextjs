@@ -5,7 +5,6 @@ import { CardHand } from "./CardDisplay";
 interface PlayerSeatProps {
   address: string;
   chips: bigint;
-  currentBet: bigint;
   isDealer?: boolean;
   isSmallBlind?: boolean;
   isBigBlind?: boolean;
@@ -20,7 +19,6 @@ interface PlayerSeatProps {
 export function PlayerSeat({
   address,
   chips,
-  currentBet,
   isDealer = false,
   isSmallBlind = false,
   isBigBlind = false,
