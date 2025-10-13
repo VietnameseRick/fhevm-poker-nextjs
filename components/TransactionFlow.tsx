@@ -41,7 +41,7 @@ export function TransactionFlow({ currentAction, isLoading, message }: Transacti
         return updated;
       });
     }
-  }, [currentAction, isLoading, message]);
+  }, [currentAction, isLoading, message, steps.length]);
 
   const getStatusIcon = (status: TransactionStep["status"]) => {
     switch (status) {
