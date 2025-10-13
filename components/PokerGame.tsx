@@ -84,14 +84,6 @@ export function PokerGame() {
   const [showJoinTable, setShowJoinTable] = useState(false);
   const [currentView, setCurrentView] = useState<"lobby" | "game">("lobby");
 
-  // Auto-switch to game view if user is already seated at a table
-  useEffect(() => {
-    if (poker.currentTableId && poker.tableState?.isSeated && currentView === "lobby") {
-      console.log('User is already seated at table, switching to game view');
-      setCurrentView("game");
-    }
-  }, [poker.currentTableId, poker.tableState?.isSeated, currentView]);
-
   // Update balances periodically
   useEffect(() => {
     const updateBalances = async () => {
@@ -181,32 +173,52 @@ export function PokerGame() {
     };
   }, []);
 
-  // Auto-navigate to game view when game state changes
+  // Comprehensive auto-navigation - moves to game view when player is seated
   useEffect(() => {
-    if (poker.currentTableId === undefined || !poker.tableState || !yourAddress) return;
+    // Skip if not authenticated or no table/state data
+    if (!authenticated || !yourAddress || !poker.currentTableId || !poker.tableState) {
+      return;
+    }
 
-    // Check if user is actually in the players list (more reliable than isSeated)
-    const isInGame = poker.players.some(
+    // Skip if already in game view
+    if (currentView === "game") {
+      return;
+    }
+
+    // Check if user is in the players list
+    const isInPlayersList = poker.players.some(
       addr => addr.toLowerCase() === yourAddress.toLowerCase()
     );
 
-    if (isInGame && currentView === "lobby") {
-      // Auto-navigate to game view when:
-      // 1. Game is playing (state 2)
-      // 2. Game is in countdown (state 1) - so player can see the table
-      const gameState = poker.tableState?.state;
-      if (gameState === 2 || gameState === 1) {
-        setCurrentView("game");
-      }
+    // Check if user is marked as seated in table state
+    const isSeated = poker.tableState.isSeated;
+
+    // Auto-navigate if player is seated OR in players list
+    if (isSeated || isInPlayersList) {
+      console.log('🎮 Auto-navigating to game view:', {
+        tableId: poker.currentTableId.toString(),
+        isSeated,
+        isInPlayersList,
+        gameState: poker.tableState.state,
+      });
+      setCurrentView("game");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poker.currentTableId, poker.tableState?.state, poker.players, yourAddress, currentView]);
+  }, [
+    authenticated,
+    yourAddress,
+    poker.currentTableId,
+    poker.tableState,
+    poker.tableState?.state,
+    poker.tableState?.isSeated,
+    poker.players,
+    currentView,
+  ]);
 
   const handleCreateTable = async () => {
     // Create the table - this waits for the transaction and sets currentTableId
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
-    // WebSocket will automatically refresh when TableCreated event is detected
-    console.log('✅ Table created, WebSocket will handle state updates');
+    // Wagmi event listeners will automatically refresh when TableCreated event is detected
+    console.log('✅ Table created, Wagmi will handle state updates');
   };
 
   const handleJoinTable = async () => {
@@ -231,7 +243,7 @@ export function PokerGame() {
       await poker.joinTable(tableId, buyInAmountInput);
 
       // Transaction succeeded! Switch to game view immediately
-      // The WebSocket will refresh the table state automatically
+      // Wagmi event listeners will refresh the table state automatically
       console.log('✅ Join successful, switching to game view');
       setCurrentView("game");
     } catch (error) {
@@ -1199,18 +1211,34 @@ export function PokerGame() {
               minBuyIn={poker.tableState.minBuyIn}
               onLeaveTable={async () => {
                 if (poker.currentTableId) {
-                  await poker.leaveTable(poker.currentTableId);
-                  setShowChipsManagementModal(false);
+                  try {
+                    await poker.leaveTable(poker.currentTableId);
+                    setShowChipsManagementModal(false);
+                    setCurrentView("lobby"); // Navigate back to lobby
+                    console.log('✅ Left table successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to leave table:', error);
+                  }
                 }
               }}
               onWithdrawChips={async (amount: string) => {
                 if (poker.currentTableId) {
-                  await poker.withdrawChips(poker.currentTableId, amount);
+                  try {
+                    await poker.withdrawChips(poker.currentTableId, amount);
+                    console.log('✅ Chips withdrawn successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to withdraw chips:', error);
+                  }
                 }
               }}
               onAddChips={async (amount: string) => {
                 if (poker.currentTableId) {
-                  await poker.addChips(poker.currentTableId, amount);
+                  try {
+                    await poker.addChips(poker.currentTableId, amount);
+                    console.log('✅ Chips added successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to add chips:', error);
+                  }
                 }
               }}
               isLoading={poker.isLoading}

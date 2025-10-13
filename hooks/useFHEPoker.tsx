@@ -12,7 +12,7 @@ import {
 import { FHEPokerABI } from "@/abi/FHEPokerABI";
 import { FHEPokerAddresses } from "@/abi/FHEPokerAddresses";
 import { usePokerStore } from "@/stores/pokerStore";
-import { usePokerWebSocket } from "./usePokerWebSocket";
+import { usePokerWagmi } from "./usePokerWagmi";
 
 interface PokerTableInfo {
   abi: typeof FHEPokerABI.abi;
@@ -221,11 +221,12 @@ export const useFHEPoker = (parameters: {
     }
   }, [timeRemaining, pokerContract.address, pokerContract.abi, currentTableId, ethersSigner, refreshAll]);
 
-  // WebSocket listener - auto-refreshes store when events fire
-  usePokerWebSocket(
+  // Wagmi event listeners - auto-refreshes store when events fire
+  // This replaces the old WebSocket implementation with more reliable Wagmi event watching
+  usePokerWagmi(
     pokerContract.address,
-    provider,
-    currentTableId ?? null
+    currentTableId ?? null,
+    true // enabled
   );
 
   // Create a new poker table
@@ -358,7 +359,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, refreshAll]
+    [pokerContract, ethersSigner]
   );
 
   // Advance game (from countdown to playing)
@@ -631,7 +632,7 @@ export const useFHEPoker = (parameters: {
         setIsDecrypting(false);
       }
     },
-    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage]
+    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, smartAccountAddress]
   );
 
   // Decrypt community cards
@@ -761,7 +762,7 @@ export const useFHEPoker = (parameters: {
         setIsDecrypting(false);
       }
     },
-    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet]
+    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet, smartAccountAddress]
   );
 
   // Leave table and withdraw all chips
