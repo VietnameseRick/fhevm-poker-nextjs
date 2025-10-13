@@ -61,6 +61,7 @@ export const useFHEPoker = (parameters: {
   ethersReadonlyProvider: ethers.ContractRunner | undefined;
   sameChain: RefObject<(chainId: number | undefined) => boolean>;
   sameSigner: RefObject<(ethersSigner: ethers.JsonRpcSigner | undefined) => boolean>;
+  smartAccountAddress?: string; // For ERC-4337 smart accounts
 }) => {
   const {
     instance,
@@ -68,6 +69,7 @@ export const useFHEPoker = (parameters: {
     chainId,
     ethersSigner,
     ethersReadonlyProvider,
+    smartAccountAddress,
   } = parameters;
 
   // State - MUST be declared before any memoized values that use setState
@@ -81,6 +83,7 @@ export const useFHEPoker = (parameters: {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [userAddress, setUserAddress] = useState<string | undefined>(undefined);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   // Refs
   const pokerContractRef = useRef<PokerTableInfo | undefined>(undefined);
@@ -404,14 +407,17 @@ export const useFHEPoker = (parameters: {
         isLoadingRef.current = true;
         setIsLoading(true);
         setCurrentAction("Folding");
+        setPendingAction("fold"); // Optimistic update
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Folding...");
         const tx = await contract.fold(tableId);
         await tx.wait();
         setMessage("✅ Folded!");
+        setPendingAction(null);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to fold: ${errorMessage}`);
+        setPendingAction(null);
       } finally {
         isLoadingRef.current = false;
         setIsLoading(false);
@@ -428,14 +434,17 @@ export const useFHEPoker = (parameters: {
         isLoadingRef.current = true;
         setIsLoading(true);
         setCurrentAction("Checking");
+        setPendingAction("check"); // Optimistic update
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Checking...");
         const tx = await contract.check(tableId);
         await tx.wait();
         setMessage("✅ Checked!");
+        setPendingAction(null);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to check: ${errorMessage}`);
+        setPendingAction(null);
       } finally {
         isLoadingRef.current = false;
         setIsLoading(false);
@@ -452,6 +461,7 @@ export const useFHEPoker = (parameters: {
         isLoadingRef.current = true;
         setIsLoading(true);
         setCurrentAction("Calling");
+        setPendingAction("call"); // Optimistic update
         const address = pokerContract.address as string;
         const contract = new ethers.Contract(address, pokerContract.abi, ethersSigner);
 
@@ -466,6 +476,7 @@ export const useFHEPoker = (parameters: {
             const myCurrentBet: bigint = myState[1];
             if (myCurrentBet >= currentBetOnChain) {
               setMessage("⚠️ No bet to call. You are already matched.");
+              setPendingAction(null);
               return;
             }
           }
@@ -477,9 +488,11 @@ export const useFHEPoker = (parameters: {
         const tx = await contract.call(tableId);
         await tx.wait();
         setMessage("✅ Called!");
+        setPendingAction(null);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to call: ${errorMessage}`);
+        setPendingAction(null);
       } finally {
         isLoadingRef.current = false;
         setIsLoading(false);
@@ -496,14 +509,17 @@ export const useFHEPoker = (parameters: {
         isLoadingRef.current = true;
         setIsLoading(true);
         setCurrentAction("Raising");
+        setPendingAction("raise"); // Optimistic update
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Raising...");
         const tx = await contract.raise(tableId, ethers.parseEther(raiseAmount));
         await tx.wait();
         setMessage(`✅ Raised ${raiseAmount} ETH!`);
+        setPendingAction(null);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to raise: ${errorMessage}`);
+        setPendingAction(null);
       } finally {
         isLoadingRef.current = false;
         setIsLoading(false);
@@ -559,7 +575,9 @@ export const useFHEPoker = (parameters: {
           instance,
           [pokerContract.address as `0x${string}`],
           ethersSigner,
-          fhevmDecryptionSignatureStorage
+          fhevmDecryptionSignatureStorage,
+          undefined, // keyPair
+          smartAccountAddress // Use smart account address if available
         );
 
         if (!sig) {
@@ -691,7 +709,9 @@ export const useFHEPoker = (parameters: {
           instance,
           [pokerContract.address as `0x${string}`],
           ethersSigner,
-          fhevmDecryptionSignatureStorage
+          fhevmDecryptionSignatureStorage,
+          undefined, // keyPair
+          smartAccountAddress // Use smart account address if available
         );
 
         if (!sig) {
@@ -945,6 +965,7 @@ export const useFHEPoker = (parameters: {
     isDecrypting,
     isConnected,
     timeRemaining,
+    pendingAction,
     createTable,
     joinTable,
     leaveTable,

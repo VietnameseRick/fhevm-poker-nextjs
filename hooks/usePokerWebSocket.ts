@@ -21,6 +21,8 @@ export function usePokerWebSocket(
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
   const wsProviderRef = useRef<ethers.WebSocketProvider | ethers.JsonRpcProvider | null>(null);
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef<number>(0);
+  const eventCounterRef = useRef<number>(0);
   
   // Debounced refresh - prevents rapid-fire event spam
   const debouncedRefresh = useCallback((tableId: bigint) => {
@@ -82,8 +84,12 @@ export function usePokerWebSocket(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (eventProvider as any)._websocket?.on('close', () => {
             console.warn('⚠️ [WebSocket] Connection closed');
-            // Attempt reconnection after 5 seconds
+            // Attempt reconnection with exponential backoff
             if (mountedRef.current && !reconnectTimerRef.current) {
+              reconnectAttemptsRef.current += 1;
+              const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000); // Max 30s
+              console.log(`🔄 [WebSocket] Reconnecting in ${backoffDelay}ms (attempt ${reconnectAttemptsRef.current})`);
+              
               reconnectTimerRef.current = setTimeout(() => {
                 console.log('🔄 [WebSocket] Attempting to reconnect...');
                 reconnectTimerRef.current = null;
@@ -91,20 +97,23 @@ export function usePokerWebSocket(
                 if (mountedRef.current) {
                   setupListeners();
                 }
-              }, 5000);
+              }, backoffDelay);
             }
           });
+          
+          // Reset reconnect attempts on successful connection
+          reconnectAttemptsRef.current = 0;
         } catch (wsError) {
           console.warn('⚠️ [WebSocket] WebSocket connection failed, falling back to HTTP polling:', wsError);
           
-          // Fallback to HTTP polling - use 5s interval for better responsiveness
+          // Fallback to HTTP polling - use 2s interval for better responsiveness
           eventProvider = new ethers.JsonRpcProvider(config.rpcUrl, undefined, {
             polling: true,
-            // Use 5s polling interval - balance between responsiveness and rate limits
-            pollingInterval: 5000, // 5 seconds
+            // Use 2s polling interval - more responsive for game events
+            pollingInterval: 2000, // 2 seconds
           });
           
-          console.log(`✅ [WebSocket] Using HTTP polling with 5s interval`);
+          console.log(`✅ [WebSocket] Using HTTP polling with 2s interval`);
           wsProviderRef.current = eventProvider;
         }
         
@@ -137,27 +146,40 @@ export function usePokerWebSocket(
         const handleEvent = (...args: unknown[]) => {
           if (!mountedRef.current) return;
           
-          const event = args[args.length - 1] as { 
-            args?: { tableId?: bigint; player?: string; amount?: bigint }; 
-            fragment?: { name?: string } 
-          };
+          // Increment event counter
+          eventCounterRef.current += 1;
           
-          console.log(`🎰 [WebSocket] ⚡ Event received:`, {
-            event: event.fragment?.name,
-            tableId: event.args?.tableId?.toString(),
-            player: event.args?.player,
-            amount: event.args?.amount?.toString(),
-          });
-          
-          if (event.args?.tableId) {
-            const eventTableId = BigInt(event.args.tableId.toString());
-            if (eventTableId === currentTableId) {
-              console.log(`✅ [WebSocket] ${event.fragment?.name} is for OUR table ${currentTableId} - refreshing!`);
-              // Debounced refresh to prevent spam
-              debouncedRefresh(currentTableId);
+          try {
+            const event = args[args.length - 1] as { 
+              args?: { tableId?: bigint; player?: string; amount?: bigint }; 
+              fragment?: { name?: string } 
+            };
+            
+            const eventName = event.fragment?.name || 'Unknown';
+            const eventTableId = event.args?.tableId;
+            
+            console.log(`🎰 [WebSocket] ⚡ Event #${eventCounterRef.current} received:`, {
+              event: eventName,
+              tableId: eventTableId?.toString(),
+              player: event.args?.player,
+              amount: event.args?.amount?.toString(),
+              watchingTable: currentTableId?.toString(),
+            });
+            
+            if (eventTableId) {
+              const tableId = BigInt(eventTableId.toString());
+              if (tableId === currentTableId) {
+                console.log(`✅ [WebSocket] ${eventName} is for OUR table ${currentTableId} - refreshing!`);
+                // Debounced refresh to prevent spam
+                debouncedRefresh(currentTableId);
+              } else {
+                console.log(`⏭️ [WebSocket] ${eventName} is for table ${tableId}, we're watching ${currentTableId} - ignoring`);
+              }
             } else {
-              console.log(`⏭️ [WebSocket] ${event.fragment?.name} is for table ${eventTableId}, we're watching ${currentTableId} - ignoring`);
+              console.warn(`⚠️ [WebSocket] Event ${eventName} has no tableId`);
             }
+          } catch (error) {
+            console.error('❌ [WebSocket] Error handling event:', error);
           }
         };
         

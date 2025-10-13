@@ -76,6 +76,7 @@ export function PokerGame() {
     ethersReadonlyProvider: ethersProvider,
     sameChain,
     sameSigner,
+    smartAccountAddress, // Pass smart account address for FHEVM signature
   });
 
   // UI States
@@ -590,24 +591,41 @@ export function PokerGame() {
                 {/* Turn Indicator */}
                 {poker.bettingInfo && (
                   <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full shadow-lg border-2 ${poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
-                      ? 'bg-gradient-to-r from-green-600 to-green-700 border-green-400 animate-pulse'
+                      ? 'bg-gradient-to-r from-green-600 to-green-700 border-green-400 shadow-green-500/50 animate-pulse'
+                      : poker.pendingAction
+                      ? 'bg-gradient-to-r from-purple-600 to-purple-700 border-purple-400 shadow-purple-500/50'
                       : 'bg-gradient-to-r from-gray-600 to-gray-700 border-gray-400'
                     }`}>
                     <span className="text-2xl">
-                      {poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase() ? '👉' : '⏳'}
+                      {poker.pendingAction ? (
+                        <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase() ? '👉' : '⏳'}
                     </span>
                     <div className="text-white">
                       <div className="font-bold text-sm">
-                        {poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
+                        {poker.pendingAction
+                          ? `Processing ${poker.pendingAction}...`
+                          : poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
                           ? "YOUR TURN!"
-                          : "Waiting..."}
+                          : `Waiting for ${poker.bettingInfo.currentPlayer.substring(0, 6)}...${poker.bettingInfo.currentPlayer.substring(38)}`}
                       </div>
-                      <div className="text-xs opacity-90">
-                        {poker.bettingInfo.currentPlayer.substring(0, 10)}...
-                      </div>
+                      {!poker.pendingAction && (
+                        <div className="text-xs opacity-90">
+                          {poker.bettingInfo.currentPlayer.substring(0, 10)}...
+                        </div>
+                      )}
                     </div>
-                    {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 2 && (
-                      <div className="ml-2 flex items-center gap-1 bg-black/30 px-2 py-1 rounded-full border border-white/20">
+                    {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 2 && !poker.pendingAction && (
+                      <div className={`ml-2 flex items-center gap-1 px-2 py-1 rounded-full border ${
+                        poker.timeRemaining <= 10 
+                          ? 'bg-red-500/40 border-red-400 animate-pulse' 
+                          : poker.timeRemaining <= 30
+                          ? 'bg-yellow-500/40 border-yellow-400'
+                          : 'bg-black/30 border-white/20'
+                      }`}>
                         <span className="text-xs">⏱️</span>
                         <span className="text-xs text-white font-semibold">
                           {Math.floor((poker.timeRemaining || 0) / 60)}:{String(((poker.timeRemaining || 0) % 60)).padStart(2, '0')}
@@ -642,6 +660,7 @@ export function PokerGame() {
                 tableState={poker.tableState}
                 isLoading={poker.isLoading}
                 onStartGame={handleAdvanceGame}
+                pendingAction={poker.pendingAction}
               />
 
               {/* Controls */}
@@ -740,6 +759,8 @@ export function PokerGame() {
                         }
                       }}
                       isLoading={poker.isLoading}
+                      currentPlayerAddress={poker.bettingInfo?.currentPlayer}
+                      pendingAction={poker.pendingAction}
                     />
                   </>
                 )}

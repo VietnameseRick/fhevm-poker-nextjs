@@ -14,6 +14,7 @@ interface PlayerSeatProps {
   cards?: Array<number | undefined>;
   showCards?: boolean;
   position: "top" | "left" | "right" | "bottom";
+  pendingAction?: boolean;
 }
 
 export function PlayerSeat({
@@ -28,6 +29,7 @@ export function PlayerSeat({
   cards,
   showCards = false,
   position,
+  pendingAction = false,
 }: PlayerSeatProps) {
   const formatEth = (wei: bigint) => {
     const eth = Number(wei) / 1e18;
@@ -49,7 +51,15 @@ export function PlayerSeat({
       {/* Avatar + Cards */}
       <div className="relative flex flex-col items-center">
         {/* 🔵 Avatar */}
-        <div className="relative w-24 h-24 rounded-full overflow-visible border-4 border-green-500 flex items-center justify-center bg-black">
+        <div className={`relative w-24 h-24 rounded-full overflow-visible border-4 flex items-center justify-center bg-black ${
+          pendingAction 
+            ? 'border-purple-400 shadow-lg shadow-purple-500/50 animate-pulse'
+            : isCurrentTurn 
+            ? 'border-yellow-400 shadow-lg shadow-yellow-500/50 animate-pulse' 
+            : hasFolded
+            ? 'border-gray-500 opacity-50'
+            : 'border-green-500'
+        }`}>
           <img
             src="/avatar.png"
             alt="player"
@@ -91,11 +101,22 @@ export function PlayerSeat({
         </div>
       </div>
 
-      {/* Current turn indicator */}
-      {isCurrentTurn && (
+      {/* Current turn / pending action indicator */}
+      {pendingAction && (
+        <div className="absolute min-w-[100px] text-center -top-4 left-1/2 transform -translate-x-1/2">
+          <div className="bg-purple-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1 justify-center">
+            <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            PROCESSING
+          </div>
+        </div>
+      )}
+      {!pendingAction && isCurrentTurn && (
         <div className="absolute min-w-[100px] text-center -top-4 left-1/2 transform -translate-x-1/2">
           <div className="bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-full shadow-lg animate-pulse">
-            YOUR TURN
+            {isYou ? "YOUR TURN" : "ACTING"}
           </div>
         </div>
       )}

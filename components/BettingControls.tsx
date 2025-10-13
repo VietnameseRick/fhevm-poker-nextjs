@@ -13,6 +13,8 @@ interface BettingControlsProps {
   onCall: () => void;
   onRaise: (amount: string) => void;
   isLoading: boolean;
+  currentPlayerAddress?: string;
+  pendingAction?: string | null;
 }
 
 export function BettingControls({
@@ -26,6 +28,8 @@ export function BettingControls({
   onCall,
   onRaise,
   isLoading,
+  currentPlayerAddress,
+  pendingAction,
 }: BettingControlsProps) {
   const [raiseAmount, setRaiseAmount] = useState<string>("");
   const [showRaiseInput, setShowRaiseInput] = useState(false);
@@ -56,9 +60,27 @@ export function BettingControls({
   };
 
   if (!canAct) {
+    const formatAddress = (addr: string) =>
+      `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+    
     return (
       <div className="glass-card rounded-xl p-6 text-center border border-cyan-500/30">
-        <p className="text-cyan-400 font-semibold mono">Waiting for your turn...</p>
+        {pendingAction ? (
+          <div className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-5 w-5 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="text-cyan-400 font-semibold mono">Processing your {pendingAction}...</p>
+          </div>
+        ) : currentPlayerAddress ? (
+          <div>
+            <p className="text-cyan-400 font-semibold mono mb-1">Waiting for player</p>
+            <p className="text-cyan-300 text-sm mono">{formatAddress(currentPlayerAddress)}</p>
+          </div>
+        ) : (
+          <p className="text-cyan-400 font-semibold mono">Waiting for your turn...</p>
+        )}
       </div>
     );
   }
