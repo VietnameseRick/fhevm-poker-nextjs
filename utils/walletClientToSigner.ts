@@ -1,6 +1,5 @@
 import { BrowserProvider, JsonRpcSigner } from 'ethers';
 import type { WalletClient } from 'viem';
-import { providers } from 'ethers';
 
 /**
  * Converts a viem WalletClient to an ethers JsonRpcSigner
