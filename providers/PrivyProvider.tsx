@@ -49,12 +49,13 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        // Reduce automatic refetching to save RPC calls
+        // Disable aggressive caching for poker game state - always fetch fresh
         refetchOnWindowFocus: false, // Don't refetch when window regains focus
         refetchOnReconnect: false, // Don't refetch on reconnect
-        staleTime: 3000, // Consider data fresh for 3 seconds
-        gcTime: 5 * 60 * 1000, // Keep unused data in cache for 5 minutes
+        staleTime: 0, // Always consider data stale (fetch fresh on mount)
+        gcTime: 30 * 1000, // Keep unused data in cache for only 30 seconds
         retry: 1, // Only retry once on failure (instead of 3)
+        refetchOnMount: true, // Always refetch on component mount
       },
     },
   }));

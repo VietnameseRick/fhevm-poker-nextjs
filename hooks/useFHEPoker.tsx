@@ -313,6 +313,10 @@ export const useFHEPoker = (parameters: {
         setIsLoading(true);
         setCurrentAction("Joining");
 
+        // ⚡ CRITICAL: Set tableId BEFORE transaction to start event listeners early
+        console.log('🎯 Setting currentTableId BEFORE transaction to start event listeners');
+        setCurrentTableId(tableId);
+
         const contract = new ethers.Contract(
           pokerContract.address,
           pokerContract.abi,
@@ -329,37 +333,46 @@ export const useFHEPoker = (parameters: {
         
         try {
           await tx.wait();
+          console.log('✅ Join transaction confirmed');
         } catch (waitError) {
           console.warn('Transaction wait error (non-critical):', waitError);
           // Continue even if wait fails - the transaction might still be successful
         }
 
-        console.log('Setting currentTableId to:', tableId.toString());
-        setCurrentTableId(tableId);
         setMessage(`✅ Successfully joined table ${tableId.toString()}!`);
         
-        // Let WebSocket handle the refresh automatically when PlayerJoined event is detected
-        console.log('🎰 Waiting for PlayerJoined event to trigger WebSocket refresh...');
+        // ⚡ CRITICAL: Force immediate refresh to get latest state
+        console.log('🔄 Force refreshing table state after join');
+        await refreshAll(tableId);
+        
+        console.log('🎰 Event listeners now active and state refreshed');
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
         // Check for specific error messages
-        if (errorMessage.includes("ALREADY_SEATED")) {
-          setMessage("⚠️ You are already seated at this table!");
+        if (errorMessage.includes("ALREADY_SEATED") || errorMessage.includes("GAME_IN_PROGRESS")) {
+          console.log('⚠️ Player already seated at table, setting ID and refreshing state');
           setCurrentTableId(tableId); // Set it anyway so they can see the table
+          setMessage("⚠️ You are already seated at this table!");
+          
+          // ⚡ CRITICAL: Refresh state to show current game
+          await refreshAll(tableId);
         } else if (errorMessage.includes("TABLE_FULL")) {
           setMessage("❌ This table is full. Try another table.");
+          setCurrentTableId(undefined); // Clear since we're not joining
         } else if (errorMessage.includes("INSUFFICIENT_BUY_IN")) {
           setMessage("❌ Buy-in amount is too low for this table.");
+          setCurrentTableId(undefined); // Clear since we're not joining
         } else {
           setMessage(`❌ Failed to join table: ${errorMessage}`);
+          setCurrentTableId(undefined); // Clear on unknown error
         }
       } finally {
         isLoadingRef.current = false;
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner]
+    [pokerContract, ethersSigner, refreshAll]
   );
 
   // Advance game (from countdown to playing)
@@ -415,6 +428,9 @@ export const useFHEPoker = (parameters: {
         await tx.wait();
         setMessage("✅ Folded!");
         setPendingAction(null);
+        
+        // ⚡ Force immediate refresh after action
+        await refreshAll(tableId);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to fold: ${errorMessage}`);
@@ -424,7 +440,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner]
+    [pokerContract, ethersSigner, refreshAll]
   );
 
   const check = useCallback(
@@ -442,6 +458,9 @@ export const useFHEPoker = (parameters: {
         await tx.wait();
         setMessage("✅ Checked!");
         setPendingAction(null);
+        
+        // ⚡ Force immediate refresh after action
+        await refreshAll(tableId);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to check: ${errorMessage}`);
@@ -451,7 +470,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner]
+    [pokerContract, ethersSigner, refreshAll]
   );
 
   const call = useCallback(
@@ -490,6 +509,9 @@ export const useFHEPoker = (parameters: {
         await tx.wait();
         setMessage("✅ Called!");
         setPendingAction(null);
+        
+        // ⚡ Force immediate refresh after action
+        await refreshAll(tableId);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to call: ${errorMessage}`);
@@ -499,7 +521,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, userAddress]
+    [pokerContract, ethersSigner, userAddress, refreshAll]
   );
 
   const raise = useCallback(
@@ -517,6 +539,9 @@ export const useFHEPoker = (parameters: {
         await tx.wait();
         setMessage(`✅ Raised ${raiseAmount} ETH!`);
         setPendingAction(null);
+        
+        // ⚡ Force immediate refresh after action
+        await refreshAll(tableId);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to raise: ${errorMessage}`);
@@ -526,7 +551,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner]
+    [pokerContract, ethersSigner, refreshAll]
   );
 
   // Refresh table state
