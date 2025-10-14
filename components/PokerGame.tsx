@@ -7,7 +7,6 @@ import { useFHEPoker } from "@/hooks/useFHEPoker";
 import { PokerTable } from "./PokerTable";
 import { BettingControls } from "./BettingControls";
 import { Showdown } from "./Showdown";
-import { TransactionFlow } from "./TransactionFlow";
 import { TableBrowser } from "./TableBrowser";
 import { WalletHeader } from "./WalletHeader";
 import { FundingRequiredModal } from "./FundingRequiredModal";
@@ -287,8 +286,7 @@ export function PokerGame() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
         <div className="text-center">
           <div className="mb-8">
-            <h1 className="text-6xl font-bold text-white mb-4">🎰</h1>
-            <h1 className="text-5xl font-bold text-white mb-2">FHE Poker</h1>
+            <Image src={'/logo.png'} height={240} width={240} alt="logo" className="mx-auto" />
             {isDeployingSmartAccount ? (
               <>
                 <div className="flex items-center justify-center gap-3 mt-6">
@@ -312,8 +310,7 @@ export function PokerGame() {
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
           <div className="text-center">
             <div className="mb-8">
-              <h1 className="text-6xl font-bold text-white mb-4">🎰</h1>
-              <h1 className="text-5xl font-bold text-white mb-2">FHE Poker</h1>
+              <Image src={'/logo.png'} height={240} width={240} alt="logo" className="mx-auto" />
               <p className="text-xl text-gray-300">Fully Homomorphic Encrypted Poker</p>
               {!isCorrectChain && address && (
                 <p className="text-sm text-yellow-400 mt-2">⚠️ Please switch to Sepolia network</p>
@@ -564,29 +561,6 @@ export function PokerGame() {
             </div>
           </div>
 
-          {/* Message Display */}
-          {poker.message && (
-            <div className="max-w-7xl mx-auto mb-6">
-              <div className={`border-l-4 rounded-lg p-4 backdrop-blur-sm ${poker.message.includes("✅") || poker.message.includes("Success") || poker.message.includes("advanced")
-                  ? "bg-green-500/20 border-green-500"
-                  : poker.message.includes("⚠️") || poker.message.includes("already")
-                    ? "bg-yellow-500/20 border-yellow-500"
-                    : poker.message.includes("❌") || poker.message.includes("Failed")
-                      ? "bg-red-500/20 border-red-500"
-                      : "bg-blue-500/20 border-blue-500"
-                }`}>
-                <p className={`text-sm font-semibold ${poker.message.includes("✅") || poker.message.includes("Success") || poker.message.includes("advanced")
-                    ? "text-green-200"
-                    : poker.message.includes("⚠️") || poker.message.includes("already")
-                      ? "text-yellow-200"
-                      : poker.message.includes("❌") || poker.message.includes("Failed")
-                        ? "text-red-200"
-                        : "text-blue-200"
-                  }`}>{poker.message}</p>
-              </div>
-            </div>
-          )}
-
           {/* Main Game Area with right sidebar */}
           <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Column: Indicators + Table + Controls + Debug */}
@@ -603,8 +577,8 @@ export function PokerGame() {
                 {/* Turn Indicator */}
                 {poker.bettingInfo && (
                   <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full shadow-lg border-2 ${poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
-                      ? 'bg-gradient-to-r from-green-600 to-green-700 border-green-400 shadow-green-500/50 animate-pulse'
-                      : poker.pendingAction
+                    ? 'bg-gradient-to-r from-green-600 to-green-700 border-green-400 shadow-green-500/50 animate-pulse'
+                    : poker.pendingAction
                       ? 'bg-gradient-to-r from-purple-600 to-purple-700 border-purple-400 shadow-purple-500/50'
                       : 'bg-gradient-to-r from-gray-600 to-gray-700 border-gray-400'
                     }`}>
@@ -621,8 +595,8 @@ export function PokerGame() {
                         {poker.pendingAction
                           ? `Processing ${poker.pendingAction}...`
                           : poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
-                          ? "YOUR TURN!"
-                          : `Waiting for ${poker.bettingInfo.currentPlayer.substring(0, 6)}...${poker.bettingInfo.currentPlayer.substring(38)}`}
+                            ? "YOUR TURN!"
+                            : `Waiting for ${poker.bettingInfo.currentPlayer.substring(0, 6)}...${poker.bettingInfo.currentPlayer.substring(38)}`}
                       </div>
                       {!poker.pendingAction && (
                         <div className="text-xs opacity-90">
@@ -631,13 +605,12 @@ export function PokerGame() {
                       )}
                     </div>
                     {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 2 && !poker.pendingAction && (
-                      <div className={`ml-2 flex items-center gap-1 px-2 py-1 rounded-full border ${
-                        poker.timeRemaining <= 10 
-                          ? 'bg-red-500/40 border-red-400 animate-pulse' 
+                      <div className={`ml-2 flex items-center gap-1 px-2 py-1 rounded-full border ${poker.timeRemaining <= 10
+                          ? 'bg-red-500/40 border-red-400 animate-pulse'
                           : poker.timeRemaining <= 30
-                          ? 'bg-yellow-500/40 border-yellow-400'
-                          : 'bg-black/30 border-white/20'
-                      }`}>
+                            ? 'bg-yellow-500/40 border-yellow-400'
+                            : 'bg-black/30 border-white/20'
+                        }`}>
                         <span className="text-xs">⏱️</span>
                         <span className="text-xs text-white font-semibold">
                           {Math.floor((poker.timeRemaining || 0) / 60)}:{String(((poker.timeRemaining || 0) % 60)).padStart(2, '0')}
@@ -673,71 +646,19 @@ export function PokerGame() {
                 isLoading={poker.isLoading}
                 onStartGame={handleAdvanceGame}
                 pendingAction={poker.pendingAction}
+                isPlaying={isPlaying}
+                decryptedCommunityCards={poker.decryptedCommunityCards}
+                isDecrypting={poker.isDecrypting}
+                handleDecryptCommunityCards={handleDecryptCommunityCards}
+                isSeated={poker.tableState.isSeated}
+                playerState={poker.playerState}
+                clear={poker.cards[0]?.clear}
+                handleDecryptCards={handleDecryptCards}
+                timeLeft={poker.timeRemaining}
               />
 
               {/* Controls */}
               <div className="space-y-4">
-                {isPlaying && (poker.tableState.isSeated || poker.playerState) && !poker.cards[0]?.clear && (
-                  <button
-                    onClick={handleDecryptCards}
-                    disabled={poker.isDecrypting || poker.isLoading}
-                    className="w-full bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg shadow-cyan-500/30 hover:shadow-purple-500/50 transition-all duration-200 disabled:cursor-not-allowed relative overflow-hidden border border-cyan-500/30"
-                  >
-                    {poker.isDecrypting ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Decrypting Your Cards...
-                      </span>
-                    ) : (
-                      "🔓 Decrypt Your Cards"
-                    )}
-                    {poker.isDecrypting && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
-                    )}
-                  </button>
-                )}
-
-                {isPlaying && poker.communityCards && poker.communityCards.currentStreet >= 1 && (
-                  (() => {
-                    const currentStreet = poker.communityCards.currentStreet;
-                    const expectedCards = currentStreet >= 3 ? 5 : currentStreet >= 2 ? 4 : currentStreet >= 1 ? 3 : 0;
-                    const decryptedCount = poker.decryptedCommunityCards.filter(c => c !== 0).length;
-                    const needsDecryption = decryptedCount < expectedCards;
-
-                    if (!needsDecryption) return null;
-
-                    const streetName = currentStreet === 1 ? "Flop" : currentStreet === 2 ? "Turn" : currentStreet === 3 ? "River" : "Cards";
-
-                    return (
-                      <button
-                        onClick={handleDecryptCommunityCards}
-                        disabled={poker.isDecrypting || poker.isLoading}
-                        className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed relative overflow-hidden"
-                      >
-                        {poker.isDecrypting ? (
-                          <span className="flex items-center justify-center gap-2">
-                            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Decrypting {streetName}...
-                          </span>
-                        ) : (
-                          <span className="flex items-center justify-center gap-2">
-                            🔓 Decrypt {streetName} ({expectedCards - decryptedCount} new card{expectedCards - decryptedCount > 1 ? 's' : ''})
-                          </span>
-                        )}
-                        {poker.isDecrypting && (
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
-                        )}
-                      </button>
-                    );
-                  })()
-                )}
-
                 {isPlaying && (poker.tableState.isSeated || poker.playerState) && poker.playerState && (
                   <>
                     <BettingControls
@@ -771,8 +692,6 @@ export function PokerGame() {
                         }
                       }}
                       isLoading={poker.isLoading}
-                      currentPlayerAddress={poker.bettingInfo?.currentPlayer}
-                      pendingAction={poker.pendingAction}
                     />
                   </>
                 )}
@@ -850,15 +769,6 @@ export function PokerGame() {
                   </>
                 )}
               </div>
-            </div>
-
-            {/* Right sidebar: Transaction flow */}
-            <div className="lg:col-span-4 hidden lg:block">
-              <TransactionFlow
-                currentAction={poker.currentAction}
-                isLoading={poker.isLoading || poker.isDecrypting}
-                message={poker.message}
-              />
             </div>
           </div>
 
@@ -954,8 +864,8 @@ export function PokerGame() {
             <button
               onClick={() => { setShowCreateTable(true); setShowJoinTable(false); }}
               className={`px-6 py-2 bg-black/60 border border-green-500 rounded-3xl text-2xl font-bold transition-all duration-200 ${showCreateTable
-                  ? " text-white shadow-lg scale-105"
-                  : " text-gray-700 hover:bg-green-600"
+                ? " text-white shadow-lg scale-105"
+                : " text-gray-700 hover:bg-green-600"
                 }`}
             >
               Create Table
@@ -963,8 +873,8 @@ export function PokerGame() {
             <button
               onClick={() => { setShowCreateTable(false); setShowJoinTable(true); }}
               className={`px-6 py-2 bg-black/60 border border-green-500 rounded-3xl text-2xl font-bold transition-all duration-200 ${showJoinTable
-                  ? " text-white shadow-lg scale-105"
-                  : "text-gray-500 hover:bg-green-600"
+                ? " text-white shadow-lg scale-105"
+                : "text-gray-500 hover:bg-green-600"
                 }`}
             >
               Join Table
@@ -1038,7 +948,7 @@ export function PokerGame() {
                   onClick={handleCreateTable}
                   disabled={poker.isLoading || !poker.isDeployed}
                   className="w-1/2 block mx-auto hover:scale-105 text-black font-bold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed text-3xl"
-                  style={{backgroundImage: `url(/bg-button.png)`, backgroundSize: '100% 100%'}}>
+                  style={{ backgroundImage: `url(/bg-button.png)`, backgroundSize: '100% 100%' }}>
                   {poker.isLoading ? "CREATE TABLE..." : "CREATE TABLE"}
                 </button>
               </div>
@@ -1077,8 +987,8 @@ export function PokerGame() {
                 <button
                   onClick={handleJoinTable}
                   disabled={poker.isLoading || !poker.isDeployed}
-                  className="w-1/2 block mx-auto hover:scale-105 text-black font-bold py-2 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed text-3xl"
-                  style={{backgroundImage: `url(/bg-button.png)`, backgroundSize: '100% 100%'}}>
+                  className="w-1/2 block mx-auto hover:scale-105 text-black font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed text-3xl"
+                  style={{ backgroundImage: `url(/bg-button.png)`, backgroundSize: '100% 100%' }}>
                   {poker.isLoading ? "JOINING TABLE..." : "JOIN TABLE"}
                 </button>
               </div>
@@ -1089,20 +999,20 @@ export function PokerGame() {
           {poker.message && (
             <div className="mt-8 max-w-2xl mx-auto">
               <div className={`border-l-4 rounded-lg p-4 backdrop-blur-sm ${poker.message.includes("✅") || poker.message.includes("Success")
-                  ? "bg-green-500/20 border-green-500"
-                  : poker.message.includes("⚠️") || poker.message.includes("already")
-                    ? "bg-yellow-500/20 border-yellow-500"
-                    : poker.message.includes("❌") || poker.message.includes("Failed")
-                      ? "bg-red-500/20 border-red-500"
-                      : "bg-blue-500/20 border-blue-500"
+                ? "bg-green-500/20 border-green-500"
+                : poker.message.includes("⚠️") || poker.message.includes("already")
+                  ? "bg-yellow-500/20 border-yellow-500"
+                  : poker.message.includes("❌") || poker.message.includes("Failed")
+                    ? "bg-red-500/20 border-red-500"
+                    : "bg-blue-500/20 border-blue-500"
                 }`}>
                 <p className={`font-semibold text-xl ${poker.message.includes("✅") || poker.message.includes("Success")
-                    ? "text-green-200"
-                    : poker.message.includes("⚠️") || poker.message.includes("already")
-                      ? "text-yellow-200"
-                      : poker.message.includes("❌") || poker.message.includes("Failed")
-                        ? "text-red-200"
-                        : "text-blue-200"
+                  ? "text-green-200"
+                  : poker.message.includes("⚠️") || poker.message.includes("already")
+                    ? "text-yellow-200"
+                    : poker.message.includes("❌") || poker.message.includes("Failed")
+                      ? "text-red-200"
+                      : "text-blue-200"
                   }`}>{poker.message}</p>
               </div>
             </div>

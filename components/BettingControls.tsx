@@ -13,8 +13,6 @@ interface BettingControlsProps {
   onCall: () => void;
   onRaise: (amount: string) => void;
   isLoading: boolean;
-  currentPlayerAddress?: string;
-  pendingAction?: string | null;
 }
 
 export function BettingControls({
@@ -28,8 +26,6 @@ export function BettingControls({
   onCall,
   onRaise,
   isLoading,
-  currentPlayerAddress,
-  pendingAction,
 }: BettingControlsProps) {
   const [raiseAmount, setRaiseAmount] = useState<string>("");
   const [showRaiseInput, setShowRaiseInput] = useState(false);
@@ -59,113 +55,89 @@ export function BettingControls({
     }
   };
 
-  if (!canAct) {
-    const formatAddress = (addr: string) =>
-      `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-    
-    return (
-      <div className="glass-card rounded-xl p-6 text-center border border-cyan-500/30">
-        {pendingAction ? (
-          <div className="flex items-center justify-center gap-2">
-            <svg className="animate-spin h-5 w-5 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p className="text-cyan-400 font-semibold mono">Processing your {pendingAction}...</p>
-          </div>
-        ) : currentPlayerAddress ? (
-          <div>
-            <p className="text-cyan-400 font-semibold mono mb-1">Waiting for player</p>
-            <p className="text-cyan-300 text-sm mono">{formatAddress(currentPlayerAddress)}</p>
-          </div>
-        ) : (
-          <p className="text-cyan-400 font-semibold mono">Waiting for your turn...</p>
-        )}
-      </div>
-    );
-  }
+  if (!canAct) return null;
 
   return (
-    <div className="glass-card rounded-xl p-6 shadow-lg shadow-cyan-500/20 border-2 border-cyan-500/30">
-      <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
-        <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 rounded-lg p-3 border border-cyan-500/30">
-          <p className="text-gray-400 mb-1 mono text-xs">Your Chips</p>
-          <p className="text-xl font-bold text-cyan-400 mono">{formatEth(playerChips)} ETH</p>
-        </div>
-        <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 rounded-lg p-3 border border-purple-500/30">
-          <p className="text-gray-400 mb-1 mono text-xs">To Call</p>
-          <p className="text-xl font-bold text-purple-400 mono">
-            {amountToCall > 0n ? `${formatEth(amountToCall)} ETH` : "0 ETH"}
-          </p>
-        </div>
+    <div className="p-6 flex flex-col items-end">
+      <div className="bg-black/30 w-1/4 text-center rounded-3xl px-4 py-2 mb-2">
+        <p className="text-gray-400 text-xl">To Call: {amountToCall > 0n ? `${formatEth(amountToCall)} ETH` : "0 ETH"}</p>
       </div>
 
       {!showRaiseInput ? (
         <>
           {/* Main Actions */}
-          <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="grid grid-cols-3 gap-3 mb-3 w-2/3">
             <button
               onClick={onFold}
               disabled={isLoading}
-              className="bg-gradient-to-br from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-red-500/30 hover:shadow-red-500/50 transition-all duration-200 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 border border-red-500/50"
-            >
-              <span className="text-lg">Fold</span>
+              className="text-white font-bold 
+              py-2 transition-all duration-200 
+              disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"
+              style={{backgroundImage: `url(/bg-betting.png)`, backgroundSize: '100% 100%'}}>
+              <span className="text-2xl">Fold</span>
             </button>
 
             {canCheck ? (
               <button
                 onClick={onCheck}
                 disabled={isLoading}
-                className="bg-gradient-to-br from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 transition-all duration-200 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 border border-cyan-500/50"
-              >
-                <span className="text-lg">Check</span>
+                className="text-white font-bold 
+                py-2 transition-all duration-200 
+                disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"
+                style={{backgroundImage: `url(/bg-betting.png)`, backgroundSize: '100% 100%'}}>
+                <span className="text-2xl">Check</span>
               </button>
             ) : (
               <button
                 onClick={onCall}
                 disabled={isLoading || !canCall}
-                className="bg-gradient-to-br from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-green-500/30 hover:shadow-green-500/50 transition-all duration-200 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 border border-green-500/50"
-              >
-                <div className="flex flex-col items-center">
-                  <span className="text-lg">Call</span>
-                  {amountToCall > 0n && (
-                    <span className="text-xs opacity-90 mono">{formatEth(amountToCall)}</span>
-                  )}
-                </div>
+                className="text-white font-bold 
+                py-2 transition-all duration-200 
+                disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"
+                style={{backgroundImage: `url(/bg-betting.png)`, backgroundSize: '100% 100%'}}>
+                <span className="text-2xl">Call</span>
               </button>
             )}
 
             <button
               onClick={() => setShowRaiseInput(true)}
               disabled={isLoading || !canRaise}
-              className="bg-gradient-to-br from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all duration-200 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 border border-purple-500/50"
-            >
-              <span className="text-lg">Raise</span>
+              className="text-white font-bold 
+              py-2 transition-all duration-200 
+              disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"
+              style={{backgroundImage: `url(/bg-betting.png)`, backgroundSize: '100% 100%'}}>
+              <span className="text-2xl">Raise</span>
             </button>
           </div>
 
           {/* Quick Raise Buttons */}
           {canRaise && (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-2 w-2/3">
               <button
                 onClick={() => handleQuickRaise(2)}
                 disabled={isLoading}
-                className="bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 hover:from-cyan-500/30 hover:to-cyan-600/30 border border-cyan-500/50 text-cyan-300 font-semibold py-2 px-2 rounded-lg text-sm transition-all duration-200 hover:scale-105 mono"
-              >
+                className="text-white text-xl font-bold 
+                transition-all duration-200 
+                disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"              
+                style={{backgroundImage: `url(/bg-betting-2.png)`, backgroundSize: '100% 100%'}}>
                 2x
               </button>
               <button
                 onClick={() => handleQuickRaise(3)}
                 disabled={isLoading}
-                className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 hover:from-purple-500/30 hover:to-purple-600/30 border border-purple-500/50 text-purple-300 font-semibold py-2 px-2 rounded-lg text-sm transition-all duration-200 hover:scale-105 mono"
-              >
+                className="text-white text-xl font-bold 
+                transition-all duration-200 
+                disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"              
+                style={{backgroundImage: `url(/bg-betting-2.png)`, backgroundSize: '100% 100%'}}>
                 3x
               </button>
               <button
                 onClick={() => handleQuickRaise(5)}
                 disabled={isLoading}
-                className="bg-gradient-to-br from-pink-500/20 to-pink-600/20 hover:from-pink-500/30 hover:to-pink-600/30 border border-pink-500/50 text-pink-300 font-semibold py-2 px-2 rounded-lg text-sm transition-all duration-200 hover:scale-105 mono"
-              >
+                className="text-white text-xl font-bold 
+                transition-all duration-200 
+                disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"              
+                style={{backgroundImage: `url(/bg-betting-2.png)`, backgroundSize: '100% 100%'}}>
                 5x
               </button>
               <button
@@ -174,8 +146,10 @@ export function BettingControls({
                   setShowRaiseInput(true);
                 }}
                 disabled={isLoading}
-                className="bg-gradient-to-br from-red-500/20 to-red-600/20 hover:from-red-500/30 hover:to-red-600/30 border border-red-500/50 text-red-300 font-semibold py-2 px-2 rounded-lg text-sm transition-all duration-200 hover:scale-105 mono"
-              >
+                className="text-white text-xl font-bold 
+                transition-all duration-200 
+                disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"              
+                style={{backgroundImage: `url(/bg-betting-2.png)`, backgroundSize: '100% 100%'}}>
                 All In
               </button>
             </div>
