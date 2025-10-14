@@ -113,17 +113,18 @@ export function usePokerWagmi(
       clearTimeout(debounceTimerRef.current);
     }
 
-    // Debounce: wait 500ms before refreshing
+    // Reduced debounce delay for faster UI updates: 200ms
     debounceTimerRef.current = setTimeout(() => {
       const now = Date.now();
-      // Prevent refreshing more than once per second
-      if (now - lastRefreshRef.current >= 1000) {
+      // Reduced rate limit: allow refresh every 500ms (was 1000ms)
+      if (now - lastRefreshRef.current >= 500) {
+        console.log(`⚡ [Event ${eventName}] Triggering refresh for table ${currentTableId}`);
         currentRefreshAll(currentTableId);
         lastRefreshRef.current = now;
       } else {
         console.log(`⏭️ [Event ${eventName}] Skipped (debounced - too soon)`);
       }
-    }, 500);
+    }, 200);
   }, [isEventForCurrentTable]); // Only depends on helper function
 
   // Cleanup debounce timer on unmount

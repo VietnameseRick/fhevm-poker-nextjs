@@ -128,6 +128,7 @@ export const useFHEPoker = (parameters: {
   const allPlayersBettingState = usePokerStore(state => state.allPlayersBettingState);
   const communityCards = usePokerStore(state => state.communityCards);
   const lastPot = usePokerStore(state => state.lastPot);
+  const lastUpdate = usePokerStore(state => state.lastUpdate); // Subscribe to force re-renders
   const refreshAll = usePokerStore(state => state.refreshAll);
   const clearTable = usePokerStore(state => state.clearTable);
   const setStoreTableId = usePokerStore(state => state.setCurrentTableId);
@@ -135,6 +136,15 @@ export const useFHEPoker = (parameters: {
   
   // Derived state
   const playerState = userAddress && allPlayersBettingState[userAddress.toLowerCase()];
+  
+  // Log state updates for debugging
+  useEffect(() => {
+    console.log('🔄 Store updated at:', new Date(lastUpdate).toLocaleTimeString(), {
+      tableState: tableState?.state,
+      playersCount: players.length,
+      bettingStreet: communityCards?.currentStreet,
+    });
+  }, [lastUpdate, tableState?.state, players.length, communityCards?.currentStreet]);
 
   // Setup contract info in store
   useEffect(() => {
