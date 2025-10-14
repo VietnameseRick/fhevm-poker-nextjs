@@ -122,7 +122,7 @@ export function PokerGame() {
   // Form states
   const [tableIdInput, setTableIdInput] = useState<string>("");
   const [minBuyInInput, setMinBuyInInput] = useState<string>("0.2");
-  const [maxPlayersInput, setMaxPlayersInput] = useState<string>("6");
+  const [maxPlayersInput, setMaxPlayersInput] = useState<string>("9");
   const [smallBlindInput, setSmallBlindInput] = useState<string>("0.005");
   const [bigBlindInput, setBigBlindInput] = useState<string>("0.01");
   const [buyInAmountInput, setBuyInAmountInput] = useState<string>("0.2");
@@ -931,8 +931,8 @@ export function PokerGame() {
           <div className="text-center mb-12">
             <Image src={'/logo.png'} height={240} width={240} alt="logo" className="mx-auto" />
             <div className="mt-4 inline-block items-center gap-2 bg-black/60 backdrop-blur-sm px-6 py-4 rounded-3xl border border-gray-700">
-              <p className="text-2xl text-gray-300 mb-2">Fully Homomorphic Encrypted Poker</p>
-              <p className="text-gray-400">Your cards stay private, even on the blockchain</p>
+              <p className="text-4xl text-gray-300 mb-2">Fully Homomorphic Encrypted Poker</p>
+              <p className="text-2xl text-gray-400">Your cards stay private, even on the blockchain</p>
             </div>
 
             {/* Network badge — cố định góc phải */}
@@ -941,7 +941,7 @@ export function PokerGame() {
                 className={`w-2 h-2 rounded-full ${chainId === 31337 ? "bg-green-400" : "bg-yellow-400"
                   } animate-pulse`}
               ></div>
-              <span className="text-sm text-gray-300">
+              <span className="text-xl text-gray-300">
                 {chainId === 31337
                   ? "Connected to Hardhat Local"
                   : `Connected to Chain ${chainId}`}
@@ -953,7 +953,7 @@ export function PokerGame() {
           <div className="flex justify-center gap-4 mb-8 flex-wrap">
             <button
               onClick={() => { setShowCreateTable(true); setShowJoinTable(false); }}
-              className={`px-8 py-3 bg-black/60 border border-green-500 rounded-xl font-bold transition-all duration-200 ${showCreateTable
+              className={`px-6 py-2 bg-black/60 border border-green-500 rounded-3xl text-2xl font-bold transition-all duration-200 ${showCreateTable
                   ? " text-white shadow-lg scale-105"
                   : " text-gray-700 hover:bg-green-600"
                 }`}
@@ -962,16 +962,16 @@ export function PokerGame() {
             </button>
             <button
               onClick={() => { setShowCreateTable(false); setShowJoinTable(true); }}
-              className={`px-8 py-3 bg-black/60 border border-green-500 rounded-xl font-bold transition-all duration-200 ${showJoinTable
+              className={`px-6 py-2 bg-black/60 border border-green-500 rounded-3xl text-2xl font-bold transition-all duration-200 ${showJoinTable
                   ? " text-white shadow-lg scale-105"
-                  : "text-gray-700 hover:bg-green-600"
+                  : "text-gray-500 hover:bg-green-600"
                 }`}
             >
               Join Table
             </button>
             <button
               onClick={() => setIsTableBrowserOpen(true)}
-              className="px-8 py-3 rounded-xl font-bold transition-all duration-200 bg-gradient-to-r from-green-500 to-green-700 text-white shadow-lg hover:scale-105"
+              className="px-6 py-2 rounded-3xl text-2xl font-bold transition-all duration-200 bg-gradient-to-r from-green-500 to-green-700 text-white shadow-lg hover:scale-105"
             >
               Browse Tables
             </button>
@@ -983,53 +983,53 @@ export function PokerGame() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xl font-semibold text-white mb-2">
+                    <label className="block text-3xl font-semibold text-white mb-2">
                       Min Buy-In (ETH)
                     </label>
                     <input
                       type="text"
                       value={minBuyInInput}
                       onChange={(e) => setMinBuyInInput(e.target.value)}
-                      className="w-full px-4 py-3 bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-white font-semibold"
+                      className="w-full px-4 py-3 text-xl bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-white font-semibold"
                       placeholder="0.2"
                     />
-                    <p className="text-sm text-gray-400 mt-1">Must be ≥ 20× Big Blind</p>
+                    <p className="text-md text-gray-400 mt-1">Must be ≥ 20× Big Blind</p>
                   </div>
                   <div>
-                    <label className="block text-xl font-semibold text-white mb-2">
+                    <label className="block text-3xl font-semibold text-white mb-2">
                       Max Players
                     </label>
                     <input
                       type="number"
                       value={maxPlayersInput}
                       onChange={(e) => setMaxPlayersInput(e.target.value)}
-                      className="w-full px-4 py-3 bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-white font-semibold"
-                      placeholder="6"
+                      className="w-full px-4 py-3 text-xl bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-white font-semibold"
+                      placeholder="9"
                       min="2"
                       max="10"
                     />
                   </div>
                   <div>
-                    <label className="block text-xl font-semibold text-white mb-2">
+                    <label className="block text-3xl font-semibold text-white mb-2">
                       Small Blind (ETH)
                     </label>
                     <input
                       type="text"
                       value={smallBlindInput}
                       onChange={(e) => setSmallBlindInput(e.target.value)}
-                      className="w-full px-4 py-3 bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-white font-semibold"
+                      className="w-full px-4 py-3 text-xl bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-white font-semibold"
                       placeholder="0.005"
                     />
                   </div>
                   <div>
-                    <label className="block text-xl font-semibold text-white mb-2">
+                    <label className="block text-3xl font-semibold text-white mb-2">
                       Big Blind (ETH)
                     </label>
                     <input
                       type="text"
                       value={bigBlindInput}
                       onChange={(e) => setBigBlindInput(e.target.value)}
-                      className="w-full px-4 py-3 bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-white font-semibold"
+                      className="w-full px-4 py-3 text-xl bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-white font-semibold"
                       placeholder="0.01"
                     />
                   </div>
@@ -1037,9 +1037,9 @@ export function PokerGame() {
                 <button
                   onClick={handleCreateTable}
                   disabled={poker.isLoading || !poker.isDeployed}
-                  className="w-1/2 block mx-auto hover:scale-105 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed text-lg"
+                  className="w-1/2 block mx-auto hover:scale-105 text-black font-bold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed text-3xl"
                   style={{backgroundImage: `url(/bg-button.png)`, backgroundSize: '100% 100%'}}>
-                  {poker.isLoading ? "Creating Table..." : "🎲 Create Table"}
+                  {poker.isLoading ? "CREATE TABLE..." : "CREATE TABLE"}
                 </button>
               </div>
             </div>
@@ -1050,36 +1050,36 @@ export function PokerGame() {
             <div className="bg-black/70 rounded-2xl p-8 shadow-2xl border border-gray-700 max-w-2xl mx-auto">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xl font-semibold text-white mb-2">
+                  <label className="block text-3xl font-semibold text-white mb-2">
                     Table ID
                   </label>
                   <input
                     type="text"
                     value={tableIdInput}
                     onChange={(e) => setTableIdInput(e.target.value)}
-                    className="w-full px-4 py-3 bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-semibold"
+                    className="w-full px-4 py-3 text-xl bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-semibold"
                     placeholder={poker.currentTableId?.toString() || "Enter table ID"}
                   />
                 </div>
                 <div>
-                  <label className="block text-xl font-semibold text-white mb-2">
+                  <label className="block text-3xl font-semibold text-white mb-2">
                     Buy-In Amount (ETH)
                   </label>
                   <input
                     type="text"
                     value={buyInAmountInput}
                     onChange={(e) => setBuyInAmountInput(e.target.value)}
-                    className="w-full px-4 py-3 bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-semibold"
+                    className="w-full px-4 py-3 text-xl bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-semibold"
                     placeholder="0.2"
                   />
-                  <p className="text-sm text-gray-400 mt-1">Must match or exceed table minimum</p>
+                  <p className="text-md text-gray-400 mt-1">Must match or exceed table minimum</p>
                 </div>
                 <button
                   onClick={handleJoinTable}
                   disabled={poker.isLoading || !poker.isDeployed}
-                  className="w-1/2 block mx-auto hover:scale-105 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed text-lg"
+                  className="w-1/2 block mx-auto hover:scale-105 text-black font-bold py-2 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed text-3xl"
                   style={{backgroundImage: `url(/bg-button.png)`, backgroundSize: '100% 100%'}}>
-                  {poker.isLoading ? "Joining Table..." : "🚪 Join Table"}
+                  {poker.isLoading ? "JOINING TABLE..." : "JOIN TABLE"}
                 </button>
               </div>
             </div>
@@ -1096,7 +1096,7 @@ export function PokerGame() {
                       ? "bg-red-500/20 border-red-500"
                       : "bg-blue-500/20 border-blue-500"
                 }`}>
-                <p className={`font-semibold ${poker.message.includes("✅") || poker.message.includes("Success")
+                <p className={`font-semibold text-xl ${poker.message.includes("✅") || poker.message.includes("Success")
                     ? "text-green-200"
                     : poker.message.includes("⚠️") || poker.message.includes("already")
                       ? "text-yellow-200"
