@@ -24,6 +24,8 @@ export const wagmiConfig = config.isLocal
         }),
       },
       pollingInterval: 5000, // Poll every 5 seconds (reduced RPC load)
+      // Disable caching for real-time poker game
+      cacheTime: 0,
     })
   : createConfig({
       chains: [sepolia],
@@ -35,6 +37,8 @@ export const wagmiConfig = config.isLocal
                 attempts: 10,
                 delay: 1000,
               },
+              // Disable response caching
+              retryCount: 0,
             })
           : http(config.rpcUrl, {
               batch: {
@@ -43,6 +47,8 @@ export const wagmiConfig = config.isLocal
             }),
       },
       pollingInterval: config.wsRpcUrl ? undefined : 5000, // No polling with WebSocket
+      // Disable caching for real-time poker game
+      cacheTime: 0,
     });
 
 export function PrivyProvider({ children }: { children: ReactNode }) {

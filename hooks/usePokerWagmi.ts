@@ -120,11 +120,14 @@ export function usePokerWagmi(
           console.warn('Failed to clear table data:', err);
         }
         
-        // Small delay to ensure React picks up the cleared state
+        // Delay to ensure:
+        // 1. React picks up the cleared state
+        // 2. Provider cache is busted (new event loop tick)
+        // 3. Any pending promises are resolved
         setTimeout(() => {
-          console.log(`  📥 Fetching fresh data for table ${currentTableId}`);
+          console.log(`  📥 Fetching FRESH data for table ${currentTableId} (cache busted)`);
           currentRefreshAll(currentTableId);
-        }, 50);
+        }, 100); // Increased from 50ms to 100ms for better cache busting
         
         lastRefreshRef.current = now;
       } else {

@@ -368,6 +368,21 @@ export const usePokerStore = create<PokerStore>()(
         const startTime = Date.now();
         
         try {
+          const { provider } = get();
+          
+          // CRITICAL: Get latest block number to ensure fresh data
+          // This forces the provider to query the blockchain instead of using cache
+          let latestBlock;
+          try {
+            // Replace lines 377-380 with:
+            if (provider && 'getBlockNumber' in provider) {
+              latestBlock = await (provider as ethers.Provider).getBlockNumber();
+              console.log(`  🔢 Latest block number: ${latestBlock} (cache busted)`);
+            }
+          } catch (err) {
+            console.warn('Failed to get block number:', err);
+          }
+          
           // Fetch table state first to ensure it exists
           await get().fetchTableState(tableId);
           console.log(`  ✅ Table state fetched (${Date.now() - startTime}ms)`);
@@ -390,6 +405,7 @@ export const usePokerStore = create<PokerStore>()(
             playersCount: finalState.players.length,
             tableState: finalState.tableState?.state,
             bettingStreet: finalState.communityCards?.currentStreet,
+            latestBlock,
             lastUpdate: new Date(finalState.lastUpdate).toLocaleTimeString(),
           });
         } catch (error) {
