@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { ethers } from 'ethers';
 import type { Eip1193Provider } from 'ethers';
-import { createPublicClient, createWalletClient, custom, type Account, type Chain, type Transport, type WalletClient, http } from 'viem';
+import { createPublicClient, createWalletClient, custom, type Account, type Chain, type Transport, type WalletClient, http, webSocket } from 'viem';
 import { sepolia, hardhat } from 'viem/chains';
 import { createKernelAccount, createKernelAccountClient } from '@zerodev/sdk';
 import { getEntryPoint } from "@zerodev/sdk/constants"; 
@@ -513,13 +513,26 @@ export function useSmartAccount() {
         console.log('✅ Created viem wallet client');
 
         // Create public client for reading blockchain data
-        // Use RPC from config (supports event filtering: eth_newFilter, etc.)
+        // Use WebSocket for real-time events, fallback to HTTP
         const publicClient = createPublicClient({
           chain,
-          transport: http(config.rpcUrl),
+          transport: config.wsRpcUrl && config.enableWebSocket
+            ? webSocket(config.wsRpcUrl, {
+                reconnect: {
+                  attempts: 10,
+                  delay: 1000,
+                },
+                keepAlive: true,
+                timeout: 60000, // 60 second timeout
+              })
+            : http(config.rpcUrl),
         });
 
-        console.log('✅ Created public client with event filtering support:', config.rpcUrl);
+        console.log('✅ Created public client with', 
+          config.wsRpcUrl && config.enableWebSocket ? 'WebSocket' : 'HTTP', 
+          'transport:', 
+          config.wsRpcUrl && config.enableWebSocket ? config.wsRpcUrl : config.rpcUrl
+        );
         
         // Create ECDSA validator from the EOA signer
         const ecdsaValidator = await signerToEcdsaValidator(publicClient, {
