@@ -32,6 +32,7 @@ interface PokerTableProps {
   isLoading?: boolean;
   tableState?: { state?: number };
   onStartGame?: () => Promise<void> | void;
+  pendingAction?: string | null;
 }
 
 export function PokerTable({
@@ -46,6 +47,7 @@ export function PokerTable({
   isLoading = false,
   tableState,
   onStartGame,
+  pendingAction,
 }: PokerTableProps) {
 
   const formatEth = (wei: bigint) => (Number(wei) / 1e18).toFixed(4);
@@ -176,6 +178,9 @@ export function PokerTable({
                       player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards
                     }
                     position="bottom"
+                    pendingAction={
+                      player.address.toLowerCase() === yourAddress?.toLowerCase() && !!pendingAction
+                    }
                   />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-black/70 border-2 border-gray-700 flex items-center justify-center text-gray-500 text-sm">

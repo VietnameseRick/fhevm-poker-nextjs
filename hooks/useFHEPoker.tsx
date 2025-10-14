@@ -12,7 +12,7 @@ import {
 import { FHEPokerABI } from "@/abi/FHEPokerABI";
 import { FHEPokerAddresses } from "@/abi/FHEPokerAddresses";
 import { usePokerStore } from "@/stores/pokerStore";
-import { usePokerWebSocket } from "./usePokerWebSocket";
+import { usePokerWagmi } from "./usePokerWagmi";
 
 interface PokerTableInfo {
   abi: typeof FHEPokerABI.abi;
@@ -61,6 +61,7 @@ export const useFHEPoker = (parameters: {
   ethersReadonlyProvider: ethers.ContractRunner | undefined;
   sameChain: RefObject<(chainId: number | undefined) => boolean>;
   sameSigner: RefObject<(ethersSigner: ethers.JsonRpcSigner | undefined) => boolean>;
+  smartAccountAddress?: string; // For ERC-4337 smart accounts
 }) => {
   const {
     instance,
@@ -68,6 +69,7 @@ export const useFHEPoker = (parameters: {
     chainId,
     ethersSigner,
     ethersReadonlyProvider,
+    smartAccountAddress,
   } = parameters;
 
   // State - MUST be declared before any memoized values that use setState
@@ -81,6 +83,7 @@ export const useFHEPoker = (parameters: {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [userAddress, setUserAddress] = useState<string | undefined>(undefined);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   // Refs
   const pokerContractRef = useRef<PokerTableInfo | undefined>(undefined);
@@ -125,12 +128,23 @@ export const useFHEPoker = (parameters: {
   const allPlayersBettingState = usePokerStore(state => state.allPlayersBettingState);
   const communityCards = usePokerStore(state => state.communityCards);
   const lastPot = usePokerStore(state => state.lastPot);
+  const lastUpdate = usePokerStore(state => state.lastUpdate); // Subscribe to force re-renders
   const refreshAll = usePokerStore(state => state.refreshAll);
+  const clearTable = usePokerStore(state => state.clearTable);
   const setStoreTableId = usePokerStore(state => state.setCurrentTableId);
   const setContractInfo = usePokerStore(state => state.setContractInfo);
   
   // Derived state
   const playerState = userAddress && allPlayersBettingState[userAddress.toLowerCase()];
+  
+  // Log state updates for debugging
+  useEffect(() => {
+    console.log('🔄 Store updated at:', new Date(lastUpdate).toLocaleTimeString(), {
+      tableState: tableState?.state,
+      playersCount: players.length,
+      bettingStreet: communityCards?.currentStreet,
+    });
+  }, [lastUpdate, tableState?.state, players.length, communityCards?.currentStreet]);
 
   // Setup contract info in store
   useEffect(() => {
@@ -143,6 +157,38 @@ export const useFHEPoker = (parameters: {
   useEffect(() => {
     setStoreTableId(currentTableId ?? null);
   }, [currentTableId, setStoreTableId]);
+
+  // Persist currentTableId to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (currentTableId !== undefined) {
+        window.localStorage.setItem('poker:lastTableId', currentTableId.toString());
+      } else {
+        window.localStorage.removeItem('poker:lastTableId');
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [currentTableId]);
+
+  // Hydrate currentTableId on client boot for seated users after refresh
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (currentTableId !== undefined) return; // already set
+    try {
+      const last = window.localStorage.getItem('poker:lastTableId');
+      if (last) {
+        const hydratedId = BigInt(last);
+        setCurrentTableId(hydratedId);
+        // Trigger immediate refresh to sync UI and start listeners
+        refreshAll(hydratedId);
+      }
+    } catch {
+      // ignore parse/storage errors
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Reset local decrypted data when switching tables
   useEffect(() => {
@@ -218,11 +264,12 @@ export const useFHEPoker = (parameters: {
     }
   }, [timeRemaining, pokerContract.address, pokerContract.abi, currentTableId, ethersSigner, refreshAll]);
 
-  // WebSocket listener - auto-refreshes store when events fire
-  usePokerWebSocket(
+  // Wagmi event listeners - auto-refreshes store when events fire
+  // This replaces the old WebSocket implementation with more reliable Wagmi event watching
+  usePokerWagmi(
     pokerContract.address,
-    provider,
-    currentTableId ?? null
+    currentTableId ?? null,
+    true // enabled
   );
 
   // Create a new poker table
@@ -309,6 +356,10 @@ export const useFHEPoker = (parameters: {
         setIsLoading(true);
         setCurrentAction("Joining");
 
+        // ⚡ CRITICAL: Set tableId BEFORE transaction to start event listeners early
+        console.log('🎯 Setting currentTableId BEFORE transaction to start event listeners');
+        setCurrentTableId(tableId);
+
         const contract = new ethers.Contract(
           pokerContract.address,
           pokerContract.abi,
@@ -325,37 +376,48 @@ export const useFHEPoker = (parameters: {
         
         try {
           await tx.wait();
+          console.log('✅ Join transaction confirmed');
         } catch (waitError) {
           console.warn('Transaction wait error (non-critical):', waitError);
           // Continue even if wait fails - the transaction might still be successful
         }
 
-        console.log('Setting currentTableId to:', tableId.toString());
-        setCurrentTableId(tableId);
         setMessage(`✅ Successfully joined table ${tableId.toString()}!`);
+
+        // ⚡ Hard refresh: clear store then force immediate refresh to get latest state
+        try { clearTable(); } catch {}
+        console.log('🔄 Force refreshing table state after join');
+        await refreshAll(tableId);
         
-        // Let WebSocket handle the refresh automatically when PlayerJoined event is detected
-        console.log('🎰 Waiting for PlayerJoined event to trigger WebSocket refresh...');
+        console.log('🎰 Event listeners now active and state refreshed');
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
         // Check for specific error messages
-        if (errorMessage.includes("ALREADY_SEATED")) {
-          setMessage("⚠️ You are already seated at this table!");
+        if (errorMessage.includes("ALREADY_SEATED") || errorMessage.includes("GAME_IN_PROGRESS")) {
+          console.log('⚠️ Player already seated at table, setting ID and refreshing state');
           setCurrentTableId(tableId); // Set it anyway so they can see the table
+          setMessage("⚠️ You are already seated at this table!");
+
+          // ⚡ Hard refresh: clear store then refresh state to show current game
+          try { clearTable(); } catch {}
+          await refreshAll(tableId);
         } else if (errorMessage.includes("TABLE_FULL")) {
           setMessage("❌ This table is full. Try another table.");
+          setCurrentTableId(undefined); // Clear since we're not joining
         } else if (errorMessage.includes("INSUFFICIENT_BUY_IN")) {
           setMessage("❌ Buy-in amount is too low for this table.");
+          setCurrentTableId(undefined); // Clear since we're not joining
         } else {
           setMessage(`❌ Failed to join table: ${errorMessage}`);
+          setCurrentTableId(undefined); // Clear on unknown error
         }
       } finally {
         isLoadingRef.current = false;
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, refreshAll]
+    [pokerContract, ethersSigner, refreshAll, clearTable]
   );
 
   // Advance game (from countdown to playing)
@@ -404,20 +466,26 @@ export const useFHEPoker = (parameters: {
         isLoadingRef.current = true;
         setIsLoading(true);
         setCurrentAction("Folding");
+        setPendingAction("fold"); // Optimistic update
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Folding...");
         const tx = await contract.fold(tableId);
         await tx.wait();
         setMessage("✅ Folded!");
+        setPendingAction(null);
+        
+        // ⚡ Force immediate refresh after action
+        await refreshAll(tableId);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to fold: ${errorMessage}`);
+        setPendingAction(null);
       } finally {
         isLoadingRef.current = false;
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner]
+    [pokerContract, ethersSigner, refreshAll]
   );
 
   const check = useCallback(
@@ -428,20 +496,26 @@ export const useFHEPoker = (parameters: {
         isLoadingRef.current = true;
         setIsLoading(true);
         setCurrentAction("Checking");
+        setPendingAction("check"); // Optimistic update
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Checking...");
         const tx = await contract.check(tableId);
         await tx.wait();
         setMessage("✅ Checked!");
+        setPendingAction(null);
+        
+        // ⚡ Force immediate refresh after action
+        await refreshAll(tableId);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to check: ${errorMessage}`);
+        setPendingAction(null);
       } finally {
         isLoadingRef.current = false;
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner]
+    [pokerContract, ethersSigner, refreshAll]
   );
 
   const call = useCallback(
@@ -452,6 +526,7 @@ export const useFHEPoker = (parameters: {
         isLoadingRef.current = true;
         setIsLoading(true);
         setCurrentAction("Calling");
+        setPendingAction("call"); // Optimistic update
         const address = pokerContract.address as string;
         const contract = new ethers.Contract(address, pokerContract.abi, ethersSigner);
 
@@ -466,6 +541,7 @@ export const useFHEPoker = (parameters: {
             const myCurrentBet: bigint = myState[1];
             if (myCurrentBet >= currentBetOnChain) {
               setMessage("⚠️ No bet to call. You are already matched.");
+              setPendingAction(null);
               return;
             }
           }
@@ -477,15 +553,20 @@ export const useFHEPoker = (parameters: {
         const tx = await contract.call(tableId);
         await tx.wait();
         setMessage("✅ Called!");
+        setPendingAction(null);
+        
+        // ⚡ Force immediate refresh after action
+        await refreshAll(tableId);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to call: ${errorMessage}`);
+        setPendingAction(null);
       } finally {
         isLoadingRef.current = false;
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, userAddress]
+    [pokerContract, ethersSigner, userAddress, refreshAll]
   );
 
   const raise = useCallback(
@@ -496,20 +577,26 @@ export const useFHEPoker = (parameters: {
         isLoadingRef.current = true;
         setIsLoading(true);
         setCurrentAction("Raising");
+        setPendingAction("raise"); // Optimistic update
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Raising...");
         const tx = await contract.raise(tableId, ethers.parseEther(raiseAmount));
         await tx.wait();
         setMessage(`✅ Raised ${raiseAmount} ETH!`);
+        setPendingAction(null);
+        
+        // ⚡ Force immediate refresh after action
+        await refreshAll(tableId);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to raise: ${errorMessage}`);
+        setPendingAction(null);
       } finally {
         isLoadingRef.current = false;
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner]
+    [pokerContract, ethersSigner, refreshAll]
   );
 
   // Refresh table state
@@ -559,7 +646,9 @@ export const useFHEPoker = (parameters: {
           instance,
           [pokerContract.address as `0x${string}`],
           ethersSigner,
-          fhevmDecryptionSignatureStorage
+          fhevmDecryptionSignatureStorage,
+          undefined, // keyPair
+          smartAccountAddress // Use smart account address if available
         );
 
         if (!sig) {
@@ -613,7 +702,7 @@ export const useFHEPoker = (parameters: {
         setIsDecrypting(false);
       }
     },
-    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage]
+    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, smartAccountAddress]
   );
 
   // Decrypt community cards
@@ -691,7 +780,9 @@ export const useFHEPoker = (parameters: {
           instance,
           [pokerContract.address as `0x${string}`],
           ethersSigner,
-          fhevmDecryptionSignatureStorage
+          fhevmDecryptionSignatureStorage,
+          undefined, // keyPair
+          smartAccountAddress // Use smart account address if available
         );
 
         if (!sig) {
@@ -741,7 +832,7 @@ export const useFHEPoker = (parameters: {
         setIsDecrypting(false);
       }
     },
-    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet]
+    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet, smartAccountAddress]
   );
 
   // Leave table and withdraw all chips
@@ -945,6 +1036,7 @@ export const useFHEPoker = (parameters: {
     isDecrypting,
     isConnected,
     timeRemaining,
+    pendingAction,
     createTable,
     joinTable,
     leaveTable,

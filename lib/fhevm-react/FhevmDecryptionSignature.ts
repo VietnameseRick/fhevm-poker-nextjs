@@ -285,10 +285,19 @@ export class FhevmDecryptionSignature {
     contractAddresses: string[],
     publicKey: string,
     privateKey: string,
-    signer: ethers.Signer
+    signer: ethers.Signer,
+    userAddressOverride?: string
   ): Promise<FhevmDecryptionSignature | null> {
     try {
-      const userAddress = (await signer.getAddress()) as `0x${string}`;
+      // Use override address if provided (for smart accounts), otherwise use signer's address
+      const userAddress = (userAddressOverride || (await signer.getAddress())) as `0x${string}`;
+      
+      console.log('🔐 Creating FHEVM signature:', {
+        signerAddress: await signer.getAddress(),
+        userAddress,
+        isSmartAccount: !!userAddressOverride,
+      });
+      
       const startTimestamp = _timestampNow();
       const durationDays = 365;
       const eip712 = instance.createEIP712(
@@ -312,7 +321,8 @@ export class FhevmDecryptionSignature {
         eip712: eip712 as EIP712Type,
         userAddress,
       });
-    } catch {
+    } catch (error) {
+      console.error('❌ Failed to create FHEVM signature:', error);
       return null;
     }
   }
@@ -322,9 +332,11 @@ export class FhevmDecryptionSignature {
     contractAddresses: string[],
     signer: ethers.Signer,
     storage: GenericStringStorage,
-    keyPair?: { publicKey: string; privateKey: string }
+    keyPair?: { publicKey: string; privateKey: string },
+    userAddressOverride?: string
   ): Promise<FhevmDecryptionSignature | null> {
-    const userAddress = (await signer.getAddress()) as `0x${string}`;
+    // Use override address if provided (for smart accounts), otherwise use signer's address
+    const userAddress = (userAddressOverride || (await signer.getAddress())) as `0x${string}`;
 
     const cached: FhevmDecryptionSignature | null =
       await FhevmDecryptionSignature.loadFromGenericStringStorage(
@@ -336,6 +348,7 @@ export class FhevmDecryptionSignature {
       );
 
     if (cached) {
+      console.log('✅ Using cached FHEVM signature for', userAddress);
       return cached;
     }
 
@@ -346,7 +359,8 @@ export class FhevmDecryptionSignature {
       contractAddresses,
       publicKey,
       privateKey,
-      signer
+      signer,
+      userAddressOverride
     );
 
     if (!sig) {

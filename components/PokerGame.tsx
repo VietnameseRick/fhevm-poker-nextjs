@@ -76,20 +76,13 @@ export function PokerGame() {
     ethersReadonlyProvider: ethersProvider,
     sameChain,
     sameSigner,
+    smartAccountAddress, // Pass smart account address for FHEVM signature
   });
 
   // UI States
   const [showCreateTable, setShowCreateTable] = useState(true);
   const [showJoinTable, setShowJoinTable] = useState(false);
   const [currentView, setCurrentView] = useState<"lobby" | "game">("lobby");
-
-  // Auto-switch to game view if user is already seated at a table
-  useEffect(() => {
-    if (poker.currentTableId && poker.tableState?.isSeated && currentView === "lobby") {
-      console.log('User is already seated at table, switching to game view');
-      setCurrentView("game");
-    }
-  }, [poker.currentTableId, poker.tableState?.isSeated, currentView]);
 
   // Update balances periodically
   useEffect(() => {
@@ -180,32 +173,52 @@ export function PokerGame() {
     };
   }, []);
 
-  // Auto-navigate to game view when game state changes
+  // Comprehensive auto-navigation - moves to game view when player is seated
   useEffect(() => {
-    if (poker.currentTableId === undefined || !poker.tableState || !yourAddress) return;
+    // Skip if not authenticated or no table/state data
+    if (!authenticated || !yourAddress || !poker.currentTableId || !poker.tableState) {
+      return;
+    }
 
-    // Check if user is actually in the players list (more reliable than isSeated)
-    const isInGame = poker.players.some(
+    // Skip if already in game view
+    if (currentView === "game") {
+      return;
+    }
+
+    // Check if user is in the players list
+    const isInPlayersList = poker.players.some(
       addr => addr.toLowerCase() === yourAddress.toLowerCase()
     );
 
-    if (isInGame && currentView === "lobby") {
-      // Auto-navigate to game view when:
-      // 1. Game is playing (state 2)
-      // 2. Game is in countdown (state 1) - so player can see the table
-      const gameState = poker.tableState?.state;
-      if (gameState === 2 || gameState === 1) {
-        setCurrentView("game");
-      }
+    // Check if user is marked as seated in table state
+    const isSeated = poker.tableState.isSeated;
+
+    // Auto-navigate if player is seated OR in players list
+    if (isSeated || isInPlayersList) {
+      console.log('🎮 Auto-navigating to game view:', {
+        tableId: poker.currentTableId.toString(),
+        isSeated,
+        isInPlayersList,
+        gameState: poker.tableState.state,
+      });
+      setCurrentView("game");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poker.currentTableId, poker.tableState?.state, poker.players, yourAddress, currentView]);
+  }, [
+    authenticated,
+    yourAddress,
+    poker.currentTableId,
+    poker.tableState,
+    poker.tableState?.state,
+    poker.tableState?.isSeated,
+    poker.players,
+    currentView,
+  ]);
 
   const handleCreateTable = async () => {
     // Create the table - this waits for the transaction and sets currentTableId
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
-    // WebSocket will automatically refresh when TableCreated event is detected
-    console.log('✅ Table created, WebSocket will handle state updates');
+    // Wagmi event listeners will automatically refresh when TableCreated event is detected
+    console.log('✅ Table created, Wagmi will handle state updates');
   };
 
   const handleJoinTable = async () => {
@@ -230,7 +243,7 @@ export function PokerGame() {
       await poker.joinTable(tableId, buyInAmountInput);
 
       // Transaction succeeded! Switch to game view immediately
-      // The WebSocket will refresh the table state automatically
+      // Wagmi event listeners will refresh the table state automatically
       console.log('✅ Join successful, switching to game view');
       setCurrentView("game");
     } catch (error) {
@@ -590,24 +603,41 @@ export function PokerGame() {
                 {/* Turn Indicator */}
                 {poker.bettingInfo && (
                   <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full shadow-lg border-2 ${poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
-                      ? 'bg-gradient-to-r from-green-600 to-green-700 border-green-400 animate-pulse'
+                      ? 'bg-gradient-to-r from-green-600 to-green-700 border-green-400 shadow-green-500/50 animate-pulse'
+                      : poker.pendingAction
+                      ? 'bg-gradient-to-r from-purple-600 to-purple-700 border-purple-400 shadow-purple-500/50'
                       : 'bg-gradient-to-r from-gray-600 to-gray-700 border-gray-400'
                     }`}>
                     <span className="text-2xl">
-                      {poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase() ? '👉' : '⏳'}
+                      {poker.pendingAction ? (
+                        <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase() ? '👉' : '⏳'}
                     </span>
                     <div className="text-white">
                       <div className="font-bold text-sm">
-                        {poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
+                        {poker.pendingAction
+                          ? `Processing ${poker.pendingAction}...`
+                          : poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
                           ? "YOUR TURN!"
-                          : "Waiting..."}
+                          : `Waiting for ${poker.bettingInfo.currentPlayer.substring(0, 6)}...${poker.bettingInfo.currentPlayer.substring(38)}`}
                       </div>
-                      <div className="text-xs opacity-90">
-                        {poker.bettingInfo.currentPlayer.substring(0, 10)}...
-                      </div>
+                      {!poker.pendingAction && (
+                        <div className="text-xs opacity-90">
+                          {poker.bettingInfo.currentPlayer.substring(0, 10)}...
+                        </div>
+                      )}
                     </div>
-                    {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 2 && (
-                      <div className="ml-2 flex items-center gap-1 bg-black/30 px-2 py-1 rounded-full border border-white/20">
+                    {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 2 && !poker.pendingAction && (
+                      <div className={`ml-2 flex items-center gap-1 px-2 py-1 rounded-full border ${
+                        poker.timeRemaining <= 10 
+                          ? 'bg-red-500/40 border-red-400 animate-pulse' 
+                          : poker.timeRemaining <= 30
+                          ? 'bg-yellow-500/40 border-yellow-400'
+                          : 'bg-black/30 border-white/20'
+                      }`}>
                         <span className="text-xs">⏱️</span>
                         <span className="text-xs text-white font-semibold">
                           {Math.floor((poker.timeRemaining || 0) / 60)}:{String(((poker.timeRemaining || 0) % 60)).padStart(2, '0')}
@@ -642,6 +672,7 @@ export function PokerGame() {
                 tableState={poker.tableState}
                 isLoading={poker.isLoading}
                 onStartGame={handleAdvanceGame}
+                pendingAction={poker.pendingAction}
               />
 
               {/* Controls */}
@@ -740,6 +771,8 @@ export function PokerGame() {
                         }
                       }}
                       isLoading={poker.isLoading}
+                      currentPlayerAddress={poker.bettingInfo?.currentPlayer}
+                      pendingAction={poker.pendingAction}
                     />
                   </>
                 )}
@@ -1178,18 +1211,34 @@ export function PokerGame() {
               minBuyIn={poker.tableState.minBuyIn}
               onLeaveTable={async () => {
                 if (poker.currentTableId) {
-                  await poker.leaveTable(poker.currentTableId);
-                  setShowChipsManagementModal(false);
+                  try {
+                    await poker.leaveTable(poker.currentTableId);
+                    setShowChipsManagementModal(false);
+                    setCurrentView("lobby"); // Navigate back to lobby
+                    console.log('✅ Left table successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to leave table:', error);
+                  }
                 }
               }}
               onWithdrawChips={async (amount: string) => {
                 if (poker.currentTableId) {
-                  await poker.withdrawChips(poker.currentTableId, amount);
+                  try {
+                    await poker.withdrawChips(poker.currentTableId, amount);
+                    console.log('✅ Chips withdrawn successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to withdraw chips:', error);
+                  }
                 }
               }}
               onAddChips={async (amount: string) => {
                 if (poker.currentTableId) {
-                  await poker.addChips(poker.currentTableId, amount);
+                  try {
+                    await poker.addChips(poker.currentTableId, amount);
+                    console.log('✅ Chips added successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to add chips:', error);
+                  }
                 }
               }}
               isLoading={poker.isLoading}
