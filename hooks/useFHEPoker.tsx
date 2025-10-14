@@ -134,8 +134,20 @@ export const useFHEPoker = (parameters: {
   const setStoreTableId = usePokerStore(state => state.setCurrentTableId);
   const setContractInfo = usePokerStore(state => state.setContractInfo);
   
-  // Derived state
-  const playerState = userAddress && allPlayersBettingState[userAddress.toLowerCase()];
+  // Derived state - use useMemo to ensure recalculation on store updates
+  const playerState = useMemo(() => {
+    const state = userAddress ? allPlayersBettingState[userAddress.toLowerCase()] : undefined;
+    if (state) {
+      console.log('🎮 PlayerState updated:', {
+        isCurrentPlayer: state.isCurrentPlayer,
+        currentPlayer: bettingInfo?.currentPlayer,
+        chips: state.chips.toString(),
+        hasFolded: state.hasFolded,
+      });
+    }
+    return state;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userAddress, allPlayersBettingState, bettingInfo, lastUpdate]); // lastUpdate intentionally included to force recalc
   
   // Log state updates for debugging
   useEffect(() => {
@@ -143,8 +155,10 @@ export const useFHEPoker = (parameters: {
       tableState: tableState?.state,
       playersCount: players.length,
       bettingStreet: communityCards?.currentStreet,
+      hasPlayerState: !!playerState,
+      isYourTurn: playerState?.isCurrentPlayer,
     });
-  }, [lastUpdate, tableState?.state, players.length, communityCards?.currentStreet]);
+  }, [lastUpdate, tableState?.state, players.length, communityCards?.currentStreet, playerState]);
 
   // Setup contract info in store
   useEffect(() => {
