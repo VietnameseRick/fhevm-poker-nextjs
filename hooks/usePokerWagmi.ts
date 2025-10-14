@@ -66,12 +66,34 @@ export function usePokerWagmi(
   // Debounced refresh with table filtering - prevents stale closures
   const debouncedRefresh = useCallback((eventName: string, logs: unknown[]) => {
     // Get latest values from refs (never stale!)
-    const currentTableId = tableIdRef.current;
+    let currentTableId = tableIdRef.current;
     const currentRefreshAll = refreshAllRef.current;
     
     if (!currentTableId) {
-      console.log(`⏭️ [Event ${eventName}] No tableId, skipping`);
-      return;
+      // Try to derive tableId from event logs (self-heal for seated users after refresh)
+      try {
+        const withArgs = (logs as Array<{ args?: { tableId?: bigint } }>);
+        const firstWithTable = withArgs.find(l => l?.args?.tableId !== undefined);
+        const derived = firstWithTable?.args?.tableId;
+        if (derived) {
+          currentTableId = BigInt(derived.toString());
+          // Persist and update store so future events have tableId
+          try {
+            if (typeof window !== 'undefined') {
+              window.localStorage.setItem('poker:lastTableId', currentTableId.toString());
+            }
+          } catch {}
+          try {
+            // Update Zustand store currentTableId
+            usePokerStore.getState().setCurrentTableId(currentTableId);
+          } catch {}
+          console.log(`🧭 [Event ${eventName}] Derived tableId from event logs: ${currentTableId.toString()}`);
+        }
+      } catch {}
+      if (!currentTableId) {
+        console.log(`⏭️ [Event ${eventName}] No tableId available and none derivable, skipping`);
+        return;
+      }
     }
     
     // Filter: Only process events for current table
@@ -249,6 +271,70 @@ export function usePokerWagmi(
     enabled: !!contractAddress && enabled,
     pollingInterval: POLLING_INTERVAL,
     onLogs: (logs) => debouncedRefresh('StreetAdvanced', logs),
+  });
+
+  // Additional events to ensure full coverage of table updates
+  useWatchContractEvent({
+    address: contractAddress,
+    abi: FHEPokerABI.abi,
+    eventName: 'PlayerLeft',
+    enabled: !!contractAddress && enabled,
+    pollingInterval: POLLING_INTERVAL,
+    onLogs: (logs) => debouncedRefresh('PlayerLeft', logs),
+  });
+
+  useWatchContractEvent({
+    address: contractAddress,
+    abi: FHEPokerABI.abi,
+    eventName: 'PlayerKicked',
+    enabled: !!contractAddress && enabled,
+    pollingInterval: POLLING_INTERVAL,
+    onLogs: (logs) => debouncedRefresh('PlayerKicked', logs),
+  });
+
+  useWatchContractEvent({
+    address: contractAddress,
+    abi: FHEPokerABI.abi,
+    eventName: 'PlayerAllIn',
+    enabled: !!contractAddress && enabled,
+    pollingInterval: POLLING_INTERVAL,
+    onLogs: (logs) => debouncedRefresh('PlayerAllIn', logs),
+  });
+
+  useWatchContractEvent({
+    address: contractAddress,
+    abi: FHEPokerABI.abi,
+    eventName: 'PlayerTimedOut',
+    enabled: !!contractAddress && enabled,
+    pollingInterval: POLLING_INTERVAL,
+    onLogs: (logs) => debouncedRefresh('PlayerTimedOut', logs),
+  });
+
+  useWatchContractEvent({
+    address: contractAddress,
+    abi: FHEPokerABI.abi,
+    eventName: 'PlayerToppedUp',
+    enabled: !!contractAddress && enabled,
+    pollingInterval: POLLING_INTERVAL,
+    onLogs: (logs) => debouncedRefresh('PlayerToppedUp', logs),
+  });
+
+  useWatchContractEvent({
+    address: contractAddress,
+    abi: FHEPokerABI.abi,
+    eventName: 'PlayerWithdrew',
+    enabled: !!contractAddress && enabled,
+    pollingInterval: POLLING_INTERVAL,
+    onLogs: (logs) => debouncedRefresh('PlayerWithdrew', logs),
+  });
+
+  useWatchContractEvent({
+    address: contractAddress,
+    abi: FHEPokerABI.abi,
+    eventName: 'TableCreated',
+    enabled: !!contractAddress && enabled,
+    pollingInterval: POLLING_INTERVAL,
+    onLogs: (logs) => debouncedRefresh('TableCreated', logs),
   });
 }
 

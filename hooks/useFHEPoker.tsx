@@ -147,6 +147,38 @@ export const useFHEPoker = (parameters: {
     setStoreTableId(currentTableId ?? null);
   }, [currentTableId, setStoreTableId]);
 
+  // Persist currentTableId to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (currentTableId !== undefined) {
+        window.localStorage.setItem('poker:lastTableId', currentTableId.toString());
+      } else {
+        window.localStorage.removeItem('poker:lastTableId');
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [currentTableId]);
+
+  // Hydrate currentTableId on client boot for seated users after refresh
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (currentTableId !== undefined) return; // already set
+    try {
+      const last = window.localStorage.getItem('poker:lastTableId');
+      if (last) {
+        const hydratedId = BigInt(last);
+        setCurrentTableId(hydratedId);
+        // Trigger immediate refresh to sync UI and start listeners
+        refreshAll(hydratedId);
+      }
+    } catch {
+      // ignore parse/storage errors
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Reset local decrypted data when switching tables
   useEffect(() => {
     // Clear decrypted state when table changes
