@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Markazi+Text:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
@@ -5,7 +6,7 @@
 @tailwind utilities;
 
 :root {
-  font-family: 'Space Grotesk', 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Markazi Text', 'Space Grotesk', 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   
@@ -65,6 +66,10 @@ html {
 
 /* Gradient text utility */
 @layer utilities {
+  .font-markazi {
+    font-family: 'Markazi Text', serif !important;
+  }
+  
   .gradient-text {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400;
   }

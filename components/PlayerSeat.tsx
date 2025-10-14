@@ -95,7 +95,7 @@ export function PlayerSeat({
       {isCurrentTurn && (
         <div className="absolute min-w-[100px] text-center -top-4 left-1/2 transform -translate-x-1/2">
           <div className="bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-full shadow-lg animate-pulse">
-            YOUR TURN
+            PLAY TURN
           </div>
         </div>
       )}
