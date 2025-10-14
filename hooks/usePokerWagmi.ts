@@ -119,7 +119,23 @@ export function usePokerWagmi(
       // Reduced rate limit: allow refresh every 500ms (was 1000ms)
       if (now - lastRefreshRef.current >= 500) {
         console.log(`⚡ [Event ${eventName}] Triggering refresh for table ${currentTableId}`);
-        currentRefreshAll(currentTableId);
+        
+        // KEY FIX: Clear store data before refresh to force React re-renders
+        // This is what makes "rejoin" work - it clears then refreshes
+        // Using clearTableData (not clearTable) to preserve currentTableId
+        try {
+          usePokerStore.getState().clearTableData();
+          console.log(`  🧹 Store data cleared (keeping tableId)`);
+        } catch (err) {
+          console.warn('Failed to clear table data:', err);
+        }
+        
+        // Small delay to ensure React picks up the cleared state before new data
+        setTimeout(() => {
+          console.log(`  📥 Fetching fresh data for table ${currentTableId}`);
+          currentRefreshAll(currentTableId);
+        }, 50);
+        
         lastRefreshRef.current = now;
       } else {
         console.log(`⏭️ [Event ${eventName}] Skipped (debounced - too soon)`);

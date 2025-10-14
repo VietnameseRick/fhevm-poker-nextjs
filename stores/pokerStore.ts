@@ -83,6 +83,7 @@ interface PokerStore {
   
   // Clear state
   clearTable: () => void;
+  clearTableData: () => void; // Clear data but keep currentTableId
 }
 
 export const usePokerStore = create<PokerStore>()(
@@ -393,7 +394,7 @@ export const usePokerStore = create<PokerStore>()(
         }
       },
       
-      // Clear table state
+      // Clear table state completely (including currentTableId)
       clearTable: () => set({
         currentTableId: null,
         tableState: null,
@@ -401,6 +402,16 @@ export const usePokerStore = create<PokerStore>()(
         players: [],
         allPlayersBettingState: {},
         communityCards: null,
+      }),
+      
+      // Clear table data but keep currentTableId (for event refreshes)
+      clearTableData: () => set({
+        tableState: null,
+        bettingInfo: null,
+        players: [],
+        allPlayersBettingState: {},
+        communityCards: null,
+        lastUpdate: Date.now(), // Force re-render
       }),
     }),
     { name: 'poker-store' }
