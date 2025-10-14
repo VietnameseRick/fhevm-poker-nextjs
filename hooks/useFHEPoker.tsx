@@ -129,6 +129,7 @@ export const useFHEPoker = (parameters: {
   const communityCards = usePokerStore(state => state.communityCards);
   const lastPot = usePokerStore(state => state.lastPot);
   const refreshAll = usePokerStore(state => state.refreshAll);
+  const clearTable = usePokerStore(state => state.clearTable);
   const setStoreTableId = usePokerStore(state => state.setCurrentTableId);
   const setContractInfo = usePokerStore(state => state.setContractInfo);
   
@@ -372,8 +373,9 @@ export const useFHEPoker = (parameters: {
         }
 
         setMessage(`✅ Successfully joined table ${tableId.toString()}!`);
-        
-        // ⚡ CRITICAL: Force immediate refresh to get latest state
+
+        // ⚡ Hard refresh: clear store then force immediate refresh to get latest state
+        try { clearTable(); } catch {}
         console.log('🔄 Force refreshing table state after join');
         await refreshAll(tableId);
         
@@ -386,8 +388,9 @@ export const useFHEPoker = (parameters: {
           console.log('⚠️ Player already seated at table, setting ID and refreshing state');
           setCurrentTableId(tableId); // Set it anyway so they can see the table
           setMessage("⚠️ You are already seated at this table!");
-          
-          // ⚡ CRITICAL: Refresh state to show current game
+
+          // ⚡ Hard refresh: clear store then refresh state to show current game
+          try { clearTable(); } catch {}
           await refreshAll(tableId);
         } else if (errorMessage.includes("TABLE_FULL")) {
           setMessage("❌ This table is full. Try another table.");
@@ -404,7 +407,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, refreshAll]
+    [pokerContract, ethersSigner, refreshAll, clearTable]
   );
 
   // Advance game (from countdown to playing)
