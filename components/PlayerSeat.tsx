@@ -1,5 +1,7 @@
 "use client";
 
+import { memo } from "react";
+import Image from "next/image";
 import { CardHand } from "./CardDisplay";
 import { PlayerBettingState } from "@/stores/pokerStore";
 import { evaluateBestHand, getHandRankDisplay } from "@/utils/handEvaluator";
@@ -28,7 +30,7 @@ interface PlayerSeatProps {
   decryptedCommunityCards?: number[]; // New: for hand evaluation
 }
 
-export function PlayerSeat({
+export const PlayerSeat = memo(function PlayerSeat({
   address,
   chips,
   isDealer = false,
@@ -124,10 +126,13 @@ export function PlayerSeat({
               : "border-green-500"
           }`}
         >
-          <img
+          <Image
             src="/avatar.png"
             alt="player"
+            width={96}
+            height={96}
             className="object-cover w-full h-full rounded-full"
+            priority
           />
 
           {/* 🎯 Badge D / SB / BB */}
@@ -304,4 +309,4 @@ export function PlayerSeat({
       )}
     </div>
   );
-}
+});

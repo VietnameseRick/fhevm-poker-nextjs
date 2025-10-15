@@ -59,7 +59,7 @@ export function TransactionConfirmModal({ isOpen, action, onClose }: Transaction
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       {/* Backdrop with animated gradient */}
       <div 
-        className="absolute inset-0 bg-black/90 backdrop-blur-md animate-pulse-slow"
+        className="absolute inset-0 bg-black/90 backdrop-blur-md animate-pulse-slow gpu-opacity"
         onClick={onClose}
         style={{
           background: "radial-gradient(circle at center, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.98) 100%)",
@@ -67,12 +67,12 @@ export function TransactionConfirmModal({ isOpen, action, onClose }: Transaction
       />
 
       {/* Modal content */}
-      <div className="relative z-10 max-w-md w-full">
+      <div className="relative z-10 max-w-md w-full gpu-transform-opacity">
         {/* Corner brackets */}
-        <div className="absolute -top-4 -left-4 w-8 h-8 border-l-4 border-t-4 border-green-500 animate-pulse" />
-        <div className="absolute -top-4 -right-4 w-8 h-8 border-r-4 border-t-4 border-green-500 animate-pulse" />
-        <div className="absolute -bottom-4 -left-4 w-8 h-8 border-l-4 border-b-4 border-green-500 animate-pulse" />
-        <div className="absolute -bottom-4 -right-4 w-8 h-8 border-r-4 border-b-4 border-green-500 animate-pulse" />
+        <div className="absolute -top-4 -left-4 w-8 h-8 border-l-4 border-t-4 border-green-500 animate-optimized-pulse" />
+        <div className="absolute -top-4 -right-4 w-8 h-8 border-r-4 border-t-4 border-green-500 animate-optimized-pulse" />
+        <div className="absolute -bottom-4 -left-4 w-8 h-8 border-l-4 border-b-4 border-green-500 animate-optimized-pulse" />
+        <div className="absolute -bottom-4 -right-4 w-8 h-8 border-r-4 border-b-4 border-green-500 animate-optimized-pulse" />
 
         {/* Main card */}
         <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-2 border-green-500/50 rounded-xl p-8 shadow-2xl shadow-green-500/20">
@@ -92,20 +92,20 @@ export function TransactionConfirmModal({ isOpen, action, onClose }: Transaction
           <div className="relative flex justify-center mb-6">
             <div className="relative">
               {/* Pulse rings */}
-              <div className="absolute inset-0 -m-4">
+              <div className="absolute inset-0 -m-4 gpu-accelerate">
                 <div className="absolute inset-0 rounded-full border-2 border-green-400 animate-ping opacity-20" />
                 <div className="absolute inset-0 rounded-full border-2 border-green-400 animate-ping opacity-20" style={{ animationDelay: "1s" }} />
               </div>
               
               {/* Wallet icon */}
-              <div className="relative w-20 h-20 bg-gradient-to-br from-green-900 to-green-700 rounded-full flex items-center justify-center border-4 border-green-500 shadow-lg shadow-green-500/50">
+              <div className="relative w-20 h-20 bg-gradient-to-br from-green-900 to-green-700 rounded-full flex items-center justify-center border-4 border-green-500 shadow-lg shadow-green-500/50 gpu-accelerate">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   viewBox="0 0 24 24"
                   strokeWidth={2}
                   stroke="currentColor"
-                  className="w-10 h-10 text-green-300 animate-pulse"
+                  className="w-10 h-10 text-green-300 animate-optimized-pulse"
                 >
                   <path
                     strokeLinecap="round"

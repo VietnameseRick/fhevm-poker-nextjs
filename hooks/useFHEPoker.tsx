@@ -974,14 +974,19 @@ export const useFHEPoker = (parameters: {
         
         if (errorMessage.includes("NOT_SEATED")) {
           setMessage("⚠️ You are not seated at this table.");
+          throw new Error("You are not seated at this table");
         } else if (errorMessage.includes("CANNOT_LEAVE_DURING_GAME")) {
           setMessage("❌ Cannot leave table during an active game. Wait for the game to finish.");
+          throw new Error("Cannot leave table during an active game");
         } else if (errorMessage.includes("NO_CHIPS_TO_WITHDRAW")) {
           setMessage("❌ No chips to withdraw.");
+          throw new Error("No chips to withdraw");
         } else if (errorMessage.includes("user rejected")) {
           setMessage("❌ Transaction rejected by user.");
+          throw new Error("Transaction rejected by user");
         } else {
           setMessage(`❌ Failed to leave table: ${errorMessage}`);
+          throw error;
         }
       } finally {
         isLoadingRef.current = false;
@@ -1032,14 +1037,19 @@ export const useFHEPoker = (parameters: {
         
         if (errorMessage.includes("NOT_SEATED")) {
           setMessage("⚠️ You are not seated at this table.");
+          throw new Error("You are not seated at this table");
         } else if (errorMessage.includes("CANNOT_WITHDRAW_DURING_GAME")) {
           setMessage("❌ Cannot withdraw chips during an active game. Wait for the game to finish.");
+          throw new Error("Cannot withdraw chips during an active game");
         } else if (errorMessage.includes("INSUFFICIENT_CHIPS")) {
           setMessage("❌ You don't have enough chips to withdraw that amount.");
+          throw new Error("Insufficient chips");
         } else if (errorMessage.includes("MUST_LEAVE_MIN_BUYIN_OR_WITHDRAW_ALL")) {
           setMessage("❌ You must leave at least the minimum buy-in amount or withdraw all chips.");
+          throw new Error("Must leave minimum buy-in or withdraw all");
         } else {
           setMessage(`❌ Failed to withdraw chips: ${errorMessage}`);
+          throw error;
         }
       } finally {
         isLoadingRef.current = false;
@@ -1092,12 +1102,16 @@ export const useFHEPoker = (parameters: {
         
         if (errorMessage.includes("NOT_SEATED")) {
           setMessage("⚠️ You are not seated at this table.");
+          throw new Error("You are not seated at this table");
         } else if (errorMessage.includes("CANNOT_ADD_CHIPS_DURING_GAME")) {
           setMessage("❌ Cannot add chips during an active game. Wait for the game to finish.");
+          throw new Error("Cannot add chips during an active game");
         } else if (errorMessage.includes("MUST_SEND_ETH")) {
           setMessage("❌ You must send ETH to add chips.");
+          throw new Error("Must send ETH to add chips");
         } else {
           setMessage(`❌ Failed to add chips: ${errorMessage}`);
+          throw error;
         }
       } finally {
         isLoadingRef.current = false;

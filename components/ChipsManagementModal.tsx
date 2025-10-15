@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ethers } from "ethers";
+import toast, { Toaster } from 'react-hot-toast';
 
 interface ChipsManagementModalProps {
   isOpen: boolean;
@@ -37,40 +38,117 @@ export function ChipsManagementModal({
   const canManageChips = gameState === 0 || gameState === 3; // WaitingForPlayers or Finished
 
   const handleWithdraw = async () => {
-    if (!withdrawAmount || isLoading) return;
-    await onWithdrawChips(withdrawAmount);
-    setWithdrawAmount("");
+    if (isLoading) {
+      toast.error('Please wait for the current operation to complete');
+      return;
+    }
+    if (!canManageChips) {
+      const phase = gameState === 1 ? 'countdown' : 'active game';
+      toast.error(`Cannot withdraw chips during ${phase}. Wait for the game to finish.`, {
+        duration: 4000,
+        icon: '⏳',
+      });
+      return;
+    }
+    if (!withdrawAmount) {
+      toast.error('Please enter an amount to withdraw');
+      return;
+    }
+    
+    try {
+      await onWithdrawChips(withdrawAmount);
+      toast.success(`Successfully withdrew ${withdrawAmount} ETH!`);
+      setWithdrawAmount("");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to withdraw: ${errorMessage}`);
+    }
   };
 
   const handleAdd = async () => {
-    if (!addAmount || isLoading) return;
-    await onAddChips(addAmount);
-    setAddAmount("");
+    if (isLoading) {
+      toast.error('Please wait for the current operation to complete');
+      return;
+    }
+    if (!canManageChips) {
+      const phase = gameState === 1 ? 'countdown' : 'active game';
+      toast.error(`Cannot add chips during ${phase}. Wait for the game to finish.`, {
+        duration: 4000,
+        icon: '⏳',
+      });
+      return;
+    }
+    if (!addAmount) {
+      toast.error('Please enter an amount to add');
+      return;
+    }
+    
+    try {
+      await onAddChips(addAmount);
+      toast.success(`Successfully added ${addAmount} ETH to your stack!`);
+      setAddAmount("");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to add chips: ${errorMessage}`);
+    }
   };
 
   const handleLeave = async () => {
     console.log('🔘 Leave button clicked', { isLoading, canManageChips, gameState });
     if (isLoading) {
       console.log('⏳ Already loading, ignoring click');
+      toast.error('Please wait for the current operation to complete');
       return;
     }
     if (!canManageChips) {
       console.log('⚠️ Cannot manage chips in current game state:', gameState);
+      const phase = gameState === 1 ? 'countdown' : 'active game';
+      toast.error(`Cannot leave table during ${phase}. Wait for the game to finish.`, {
+        duration: 4000,
+        icon: '⏳',
+      });
       return;
     }
     console.log('✅ Calling onLeaveTable...');
     try {
       await onLeaveTable();
       console.log('✅ onLeaveTable completed successfully');
+      toast.success('Successfully left the table!');
       onClose();
     } catch (error) {
       console.error('❌ Error in handleLeave:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to leave table: ${errorMessage}`);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-70 backdrop-blur-sm">
-      <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700">
+    <>
+      <Toaster 
+        position="top-center"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#1f2937',
+            color: '#fff',
+            border: '1px solid #374151',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-70 backdrop-blur-sm">
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
@@ -183,7 +261,7 @@ export function ChipsManagementModal({
                 </div>
                 <button
                   onClick={handleAdd}
-                  disabled={!addAmount || !canManageChips || isLoading}
+                  disabled={isLoading}
                   className="w-full py-3 px-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold rounded-lg transition-all duration-200 shadow-lg disabled:cursor-not-allowed"
                 >
                   {isLoading ? "Processing..." : `Add ${addAmount || "0"} ETH`}
@@ -226,7 +304,7 @@ export function ChipsManagementModal({
                 </div>
                 <button
                   onClick={handleWithdraw}
-                  disabled={!withdrawAmount || !canManageChips || isLoading}
+                  disabled={isLoading}
                   className="w-full py-3 px-6 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold rounded-lg transition-all duration-200 shadow-lg disabled:cursor-not-allowed"
                 >
                   {isLoading ? "Processing..." : `Withdraw ${withdrawAmount || "0"} ETH`}
@@ -272,7 +350,7 @@ export function ChipsManagementModal({
                   )}
                   <button
                     onClick={handleLeave}
-                    disabled={!canManageChips || isLoading}
+                    disabled={isLoading}
                     className="w-full py-3 px-6 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold rounded-lg transition-all duration-200 shadow-lg disabled:cursor-not-allowed"
                   >
                     {isLoading ? "Processing..." : `Leave Table & Withdraw ${currentChipsEth} ETH`}
@@ -294,6 +372,7 @@ export function ChipsManagementModal({
         </div>
       </div>
     </div>
+    </>
   );
 }
 

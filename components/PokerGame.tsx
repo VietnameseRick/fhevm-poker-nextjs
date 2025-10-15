@@ -1,22 +1,24 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { ethers } from "ethers";
 import { useFhevm } from "@fhevm/react";
 import { useFHEPoker } from "@/hooks/useFHEPoker";
 import { PokerTable } from "./PokerTable";
 import { BettingControls } from "./BettingControls";
-import { Showdown } from "./Showdown";
-import { TableBrowser } from "./TableBrowser";
 import { WalletHeader } from "./WalletHeader";
-import { FundingRequiredModal } from "./FundingRequiredModal";
-import { ChipsManagementModal } from "./ChipsManagementModal";
 import { CyberpunkLoader } from "./CyberpunkLoader";
 import { TransactionConfirmModal } from "./TransactionConfirmModal";
 import { useInMemoryStorage } from "../hooks/useInMemoryStorage";
 import { useSmartAccount } from "../hooks/useSmartAccount";
 import { usePokerStore } from "@/stores/pokerStore";
 import Image from "next/image";
+
+// Dynamic imports for heavy components (better code splitting)
+const Showdown = lazy(() => import("./Showdown").then(mod => ({ default: mod.Showdown })));
+const TableBrowser = lazy(() => import("./TableBrowser").then(mod => ({ default: mod.TableBrowser })));
+const FundingRequiredModal = lazy(() => import("./FundingRequiredModal").then(mod => ({ default: mod.FundingRequiredModal })));
+const ChipsManagementModal = lazy(() => import("./ChipsManagementModal").then(mod => ({ default: mod.ChipsManagementModal })));
 
 const GAME_STATES = ["Waiting for Players", "Countdown", "Playing", "Finished"];
 const BETTING_STREETS = ["Pre-Flop", "Flop", "Turn", "River", "Showdown"];
@@ -442,6 +444,8 @@ export function PokerGame() {
         </>
       );
     }
+    
+    // Player data mapping with optimization
     const playerData = poker.players.map((address) => {
       // Get betting state for this specific player from allPlayersBettingState
       const playerBettingState = poker.allPlayersBettingState[address.toLowerCase()];
@@ -806,7 +810,8 @@ export function PokerGame() {
 
           {/* Showdown Overlay - Show when game is finished */}
           {poker.tableState.state === 3 && poker.tableState.winner && (
-            <Showdown
+            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
+              <Showdown
               winner={poker.tableState.winner}
               myAddress={yourAddress}
               myCards={
@@ -834,6 +839,7 @@ export function PokerGame() {
               contractAddress={poker.contractAddress}
               provider={ethersProvider}
             />
+            </Suspense>
           )}
         </div>
       </div>
@@ -1106,7 +1112,8 @@ export function PokerGame() {
             </div>
           )}
           {/* Table Browser Modal */}
-          <TableBrowser
+          <Suspense fallback={null}>
+            <TableBrowser
             isOpen={isTableBrowserOpen}
             onClose={() => setIsTableBrowserOpen(false)}
             onSelect={(id, minBuyIn) => {
@@ -1120,10 +1127,12 @@ export function PokerGame() {
             contractAddress={poker.contractAddress}
             provider={ethersProvider}
           />
+          </Suspense>
 
           {/* Funding Required Modal */}
           {isSmartAccount && smartAccountAddress && (
-            <FundingRequiredModal
+            <Suspense fallback={null}>
+              <FundingRequiredModal
               isOpen={showFundingModal}
               onClose={() => setShowFundingModal(false)}
               smartAccountAddress={smartAccountAddress}
@@ -1131,11 +1140,13 @@ export function PokerGame() {
               requiredAmount={requiredAmount}
               eoaAddress={eoaAddress}
             />
+            </Suspense>
           )}
 
           {/* Chips Management Modal */}
           {poker.currentTableId && poker.tableState && (
-            <ChipsManagementModal
+            <Suspense fallback={null}>
+              <ChipsManagementModal
               isOpen={showChipsManagementModal}
               onClose={() => setShowChipsManagementModal(false)}
               currentChips={typeof poker.playerState === 'object' && poker.playerState?.chips ? poker.playerState.chips : 0n}
@@ -1175,6 +1186,7 @@ export function PokerGame() {
               isLoading={poker.isLoading}
               gameState={poker.tableState.state}
             />
+            </Suspense>
           )}
         </div>
       </div>

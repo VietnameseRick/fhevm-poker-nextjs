@@ -164,4 +164,48 @@ html {
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
+
+  /* GPU Acceleration for better animation performance */
+  .gpu-accelerate {
+    transform: translate3d(0, 0, 0);
+    will-change: transform;
+  }
+
+  .gpu-opacity {
+    will-change: opacity;
+  }
+
+  .gpu-transform-opacity {
+    transform: translate3d(0, 0, 0);
+    will-change: transform, opacity;
+  }
+
+  /* Optimized animations */
+  .animate-optimized-pulse {
+    animation: optimized-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes optimized-pulse {
+    0%, 100% {
+      opacity: 1;
+      transform: scale3d(1, 1, 1);
+    }
+    50% {
+      opacity: 0.5;
+      transform: scale3d(1.05, 1.05, 1);
+    }
+  }
+
+  .animate-optimized-spin {
+    animation: optimized-spin 1s linear infinite;
+  }
+
+  @keyframes optimized-spin {
+    from {
+      transform: rotate3d(0, 0, 1, 0deg);
+    }
+    to {
+      transform: rotate3d(0, 0, 1, 360deg);
+    }
+  }
 }
