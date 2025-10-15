@@ -409,6 +409,38 @@ export const FHEPokerABI = {
           "internalType": "uint256",
           "name": "tableId",
           "type": "uint256"
+        }
+      ],
+      "name": "ShuffleCompleted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        }
+      ],
+      "name": "ShuffleRequested",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
         },
         {
           "indexed": false,
@@ -465,6 +497,19 @@ export const FHEPokerABI = {
       "type": "event"
     },
     {
+      "inputs": [],
+      "name": "DECRYPTION_ORACLE",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "uint256",
@@ -512,6 +557,29 @@ export const FHEPokerABI = {
         }
       ],
       "name": "call",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "decryptedSeed",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "signatures",
+          "type": "bytes"
+        }
+      ],
+      "name": "callbackShuffleSeed",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -1055,6 +1123,25 @@ export const FHEPokerABI = {
       "inputs": [
         {
           "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "shuffleRequestToTable",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
           "name": "tableId",
           "type": "uint256"
         }
@@ -1241,6 +1328,21 @@ export const FHEPokerABI = {
           "internalType": "uint256",
           "name": "turnStartTime",
           "type": "uint256"
+        },
+        {
+          "internalType": "euint32",
+          "name": "shuffleSeedEncrypted",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "shuffleRequestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "shuffleComplete",
+          "type": "bool"
         }
       ],
       "stateMutability": "view",
