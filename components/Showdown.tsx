@@ -5,6 +5,8 @@ import { CardHand } from "./CardDisplay";
 import { detectHand, HandRankEmojis, HandRankNames } from "@/utils/handDetection";
 import { ethers } from "ethers";
 import { FHEPokerABI } from "@/abi/FHEPokerABI";
+import { usePokerStore } from "@/stores/pokerStore";
+import { evaluateBestHand, getHandRankDisplay } from "@/utils/handEvaluator";
 
 interface ShowdownProps {
   winner: string;
@@ -40,15 +42,52 @@ export function Showdown({
   const [winnerRank, setWinnerRank] = useState<number | null>(null);
   const [winnerCards, setWinnerCards] = useState<number[] | null>(null);
 
+  // Get revealed cards and readonly provider from Zustand store
+  const revealedCards = usePokerStore(state => state.revealedCards);
+  const readonlyProvider = usePokerStore(state => state.readonlyProvider);
+
   const isWinner = winner.toLowerCase() === myAddress.toLowerCase();
   const winnerData = allPlayers.find(
     (p) => p.address.toLowerCase() === winner.toLowerCase()
   );
 
-  // Detect hand if we have cards
+  // Detect hand if we have cards (legacy system)
   const detectedHand = myCards && communityCards && communityCards.length > 0
     ? detectHand(myCards, communityCards)
     : null;
+
+  // Evaluate hands with card highlighting
+  // At showdown, we should have all 5 community cards
+  const myTotalCards = myCards && communityCards ? [...myCards, ...communityCards] : [];
+  const winnerTotalCards = winnerCards && communityCards ? [...winnerCards, ...communityCards] : [];
+  
+  const myHandEval = myTotalCards.length >= 5 && myTotalCards.length <= 7
+    ? evaluateBestHand(myTotalCards)
+    : null;
+
+  const winnerHandEval = winnerTotalCards.length >= 5 && winnerTotalCards.length <= 7
+    ? evaluateBestHand(winnerTotalCards)
+    : null;
+
+  // Map contributing card indices to display indices
+  // My cards: [hole1, hole2] + community
+  // Winner cards: [hole1, hole2] + community
+  const getMyCardHighlights = () => {
+    if (!myHandEval) return { holeHighlights: [], communityHighlights: [] };
+    const holeHighlights = myHandEval.contributingCardIndices.filter((i: number) => i < 2);
+    const communityHighlights = myHandEval.contributingCardIndices.filter((i: number) => i >= 2).map((i: number) => i - 2);
+    return { holeHighlights, communityHighlights };
+  };
+
+  const getWinnerCardHighlights = () => {
+    if (!winnerHandEval) return { holeHighlights: [], communityHighlights: [] };
+    const holeHighlights = winnerHandEval.contributingCardIndices.filter((i: number) => i < 2);
+    const communityHighlights = winnerHandEval.contributingCardIndices.filter((i: number) => i >= 2).map((i: number) => i - 2);
+    return { holeHighlights, communityHighlights };
+  };
+
+  const myHighlights = getMyCardHighlights();
+  const winnerHighlights = getWinnerCardHighlights();
 
   useEffect(() => {
     // Animation sequence
@@ -67,23 +106,46 @@ export function Showdown({
   useEffect(() => {
     const loadWinnerData = async () => {
       try {
-        if (!contractAddress || !provider || !tableId) return;
-        const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
-        // Evaluate winner's hand
-        const evalRes = await contract.evaluateHand(tableId, winner);
+        // 1. Check if we already have revealed cards from CardsRevealed event
+        const revealed = revealedCards[winner.toLowerCase()];
+        if (revealed) {
+          console.log('✅ Using revealed cards from store for winner:', winner);
+          setWinnerCards([revealed.card1, revealed.card2]);
+        }
+        
+        // 2. Fetch hand evaluation from contract using readonly provider
+        if (!contractAddress || tableId === undefined) return;
+        
+        // Use readonly provider (cache-bypassing) if available, fallback to passed provider
+        const providerToUse = readonlyProvider || provider;
+        if (!providerToUse) return;
+        
+        const contract = new ethers.Contract(
+          contractAddress, 
+          FHEPokerABI.abi, 
+          providerToUse
+        );
+        
+        // Evaluate winner's hand with explicit blockTag to avoid cache
+        const evalRes = await contract.evaluateHand(tableId, winner, { blockTag: "latest" });
         const rankNum: number = Number(evalRes[0]);
         setWinnerRank(rankNum);
-        // Fetch winner's hole cards
-        const cardsRes = await contract.getPlayerCards(tableId, winner);
-        const c1 = Number(cardsRes[0]);
-        const c2 = Number(cardsRes[1]);
-        setWinnerCards([c1, c2]);
-      } catch {
-        // Best effort only
+        console.log('✅ Winner hand rank from contract:', rankNum);
+        
+        // Fetch winner's hole cards if not already from event
+        if (!revealed) {
+          console.log('📥 Fetching winner cards from contract (no event data)');
+          const cardsRes = await contract.getPlayerCards(tableId, winner, { blockTag: "latest" });
+          const c1 = Number(cardsRes[0]);
+          const c2 = Number(cardsRes[1]);
+          setWinnerCards([c1, c2]);
+        }
+      } catch (err) {
+        console.error('❌ Failed to load winner data:', err);
       }
     };
     loadWinnerData();
-  }, [contractAddress, provider, tableId, winner]);
+  }, [contractAddress, provider, readonlyProvider, tableId, winner, revealedCards]);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
@@ -148,27 +210,41 @@ export function Showdown({
         </div>
 
         {/* Winning hand breakdown (from contract) */}
-        {winnerRank !== null && (
-          <div className={`bg-slate-800/50 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 border border-slate-600 transition-all duration-500 delay-250 ${animationStep >= 2 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}`}>
-            <h3 className="text-white text-base sm:text-lg font-semibold mb-3 text-center">Winning Hand</h3>
+        {winnerRank !== null && winnerCards && (
+          <div className={`bg-slate-800/50 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 border border-green-500/60 shadow-lg shadow-green-500/20 transition-all duration-500 delay-250 ${animationStep >= 2 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}`}>
+            <h3 className="text-white text-base sm:text-lg font-semibold mb-3 text-center">🏆 Winning Hand 🏆</h3>
             <div className="text-center mb-4">
-              <p className="text-xl sm:text-2xl font-bold text-yellow-300">
-                {HandRankEmojis[winnerRank as keyof typeof HandRankEmojis]} {HandRankNames[winnerRank as keyof typeof HandRankNames]}
+              <p className="text-xl sm:text-2xl font-bold text-green-300">
+                {winnerHandEval 
+                  ? `${getHandRankDisplay(winnerHandEval.rank).emoji} ${getHandRankDisplay(winnerHandEval.rank).name}`
+                  : `${HandRankEmojis[winnerRank as keyof typeof HandRankEmojis]} ${HandRankNames[winnerRank as keyof typeof HandRankNames]}`
+                }
               </p>
+              {winnerHandEval && (
+                <p className="text-xs sm:text-sm text-slate-400 mt-1">{winnerHandEval.description}</p>
+              )}
             </div>
             <div className="space-y-4">
-              {/* Winner's Cards - Above */}
+              {/* Winner's Hole Cards - Above with highlights */}
               <div>
                 <p className="text-slate-400 text-sm mb-2 text-center">Winner&apos;s Cards</p>
                 <div className="flex justify-center">
-                  <CardHand cards={winnerCards || []} />
+                  <CardHand 
+                    cards={winnerCards} 
+                    highlightedIndices={winnerHighlights.holeHighlights}
+                    highlightDelay={300}
+                  />
                 </div>
               </div>
-              {/* Community Cards - Below */}
+              {/* Community Cards - Below with highlights */}
               <div>
                 <p className="text-slate-400 text-sm mb-2 text-center">Community Cards</p>
                 <div className="flex justify-center">
-                  <CardHand cards={communityCards || []} />
+                  <CardHand 
+                    cards={communityCards || []} 
+                    highlightedIndices={winnerHighlights.communityHighlights}
+                    highlightDelay={500}
+                  />
                 </div>
               </div>
             </div>
@@ -176,11 +252,11 @@ export function Showdown({
         )}
 
         {/* Your cards (if decrypted) */}
-        {myCards && myCards.length === 2 && (
+        {myCards && myCards.length === 2 && communityCards && (
           <div
             className={`bg-slate-800/50 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 border transition-all duration-500 delay-300 ${
-              detectedHand && detectedHand.rank >= 4 
-                ? "border-yellow-500 shadow-lg shadow-yellow-500/50 animate-pulse-border" 
+              (myHandEval && myHandEval.rank >= 4) || (detectedHand && detectedHand.rank >= 4)
+                ? "border-green-500/60 shadow-lg shadow-green-500/30 animate-pulse-border" 
                 : "border-slate-600"
             } ${
               animationStep >= 2 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
@@ -191,19 +267,49 @@ export function Showdown({
             </h3>
             
             {/* Hand rank display */}
-            {detectedHand && (
+            {(myHandEval || detectedHand) && (
               <div className="mb-4 text-center">
                 <p className={`text-xl sm:text-2xl font-bold ${
-                  detectedHand.rank >= 7 ? "text-yellow-400" :
-                  detectedHand.rank >= 4 ? "text-purple-400" :
-                  detectedHand.rank >= 1 ? "text-blue-400" :
+                  (myHandEval?.rank || detectedHand?.rank || 0) >= 7 ? "text-green-300" :
+                  (myHandEval?.rank || detectedHand?.rank || 0) >= 4 ? "text-green-400" :
+                  (myHandEval?.rank || detectedHand?.rank || 0) >= 1 ? "text-emerald-400" :
                   "text-slate-400"
                 }`}>
-                  {detectedHand.emoji} {detectedHand.name}
+                  {myHandEval 
+                    ? `${getHandRankDisplay(myHandEval.rank).emoji} ${getHandRankDisplay(myHandEval.rank).name}`
+                    : `${detectedHand?.emoji} ${detectedHand?.name}`
+                  }
                 </p>
-                <p className="text-xs sm:text-sm text-slate-400 mt-1">{detectedHand.description}</p>
+                <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                  {myHandEval?.description || detectedHand?.description}
+                </p>
               </div>
             )}
+            
+            {/* Your hole cards with highlights */}
+            <div className="space-y-4">
+              <div>
+                <p className="text-slate-400 text-sm mb-2 text-center">Your Cards</p>
+                <div className="flex justify-center">
+                  <CardHand 
+                    cards={myCards} 
+                    highlightedIndices={myHighlights.holeHighlights}
+                    highlightDelay={300}
+                  />
+                </div>
+              </div>
+              {/* Community cards with highlights */}
+              <div>
+                <p className="text-slate-400 text-sm mb-2 text-center">Community Cards</p>
+                <div className="flex justify-center">
+                  <CardHand 
+                    cards={communityCards} 
+                    highlightedIndices={myHighlights.communityHighlights}
+                    highlightDelay={500}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

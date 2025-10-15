@@ -2,20 +2,17 @@ import { useWatchContractEvent } from 'wagmi';
 import { FHEPokerABI } from '@/abi/FHEPokerABI';
 import { usePokerStore } from '@/stores/pokerStore';
 import { useCallback, useRef, useEffect } from 'react';
-import { useWebSocketStatus } from './useWebSocketStatus';
-import config from '@/utils/config';
 
 /**
  * Wagmi-based hook for poker event watching
- * Uses WebSocket for real-time events, falls back to polling only if WebSocket fails
+ * Uses WebSocket transport configured in wagmi (from PrivyProvider)
+ * No polling - relies on WebSocket for real-time events
  */
 export function usePokerWagmi(
   contractAddress: `0x${string}` | undefined,
   tableId: bigint | null,
   enabled: boolean = true
 ) {
-  // Monitor WebSocket connection
-  const { isConnected: wsConnected } = useWebSocketStatus();
   
   // Get refreshAll from Zustand store
   const refreshAll = usePokerStore(state => state.refreshAll);
@@ -36,11 +33,6 @@ export function usePokerWagmi(
   useEffect(() => {
     refreshAllRef.current = refreshAll;
   }, [refreshAll]);
-
-  // Log WebSocket status
-  useEffect(() => {
-    console.log('🌐 WebSocket Status:', wsConnected ? '✅ Connected' : '⚠️ Disconnected');
-  }, [wsConnected]);
 
   // Helper: Check if event is for current table
   const isEventForCurrentTable = useCallback((log: unknown, currentTableId: bigint): boolean => {
@@ -145,39 +137,9 @@ export function usePokerWagmi(
     };
   }, []);
 
-  // CONDITIONAL Backup polling - ONLY when WebSocket is disconnected
-  useEffect(() => {
-    if (!tableId) return;
-    
-    // Skip polling if WebSocket is connected
-    if (wsConnected && config.enableWebSocket) {
-      console.log(`✅ WebSocket active - backup polling disabled for table ${tableId}`);
-      return;
-    }
-    
-    console.log(`🔄 [Backup] WebSocket disconnected - starting polling for table ${tableId}`);
-    
-    const interval = setInterval(() => {
-      console.log(`🔄 [Backup Poll] Refreshing table ${tableId} (no WebSocket)`);
-      refreshAll(tableId);
-    }, 10000); // 10 seconds
-    
-    return () => {
-      console.log(`🛑 [Backup] Stopping polling`);
-      clearInterval(interval);
-    };
-  }, [tableId, refreshAll, wsConnected]);
-
-  // Determine polling interval:
-  // - undefined (disabled) when WebSocket is connected
-  // - 5000ms when WebSocket is disconnected
-  const pollingInterval = wsConnected && config.enableWebSocket ? undefined : 5000;
-  
-  useEffect(() => {
-    console.log('📡 Event listener polling:', 
-      pollingInterval === undefined ? 'DISABLED (using WebSocket)' : `ENABLED (${pollingInterval}ms)`
-    );
-  }, [pollingInterval]);
+  // No polling interval - wagmi will use WebSocket transport from config
+  // The WebSocket transport is configured in PrivyProvider.tsx
+  const pollingInterval = undefined;
 
   // Event listeners - polling automatically disabled when WebSocket works
   useWatchContractEvent({
@@ -358,5 +320,36 @@ export function usePokerWagmi(
     enabled: !!contractAddress && enabled,
     pollingInterval,
     onLogs: (logs) => debouncedRefresh('TableCreated', logs),
+  });
+
+  useWatchContractEvent({
+    address: contractAddress,
+    abi: FHEPokerABI.abi,
+    eventName: 'CardsRevealed',
+    enabled: !!contractAddress && enabled,
+    pollingInterval,
+    onLogs: (logs) => {
+      // CardsRevealed events contain player cards revealed at showdown
+      // Fetch the revealed cards for each player
+      console.log(`🃏 [Event CardsRevealed] ${logs.length} player cards revealed`);
+      
+      logs.forEach((log) => {
+        try {
+          const logWithArgs = log as { args?: { tableId?: bigint; player?: string; card1?: number; card2?: number } };
+          const { player, card1, card2 } = logWithArgs.args || {};
+          
+          if (player && card1 !== undefined && card2 !== undefined) {
+            console.log(`  🃏 Player ${player} cards: ${card1}, ${card2}`);
+            // Store in Zustand
+            usePokerStore.getState().addRevealedCards(player, card1, card2);
+          }
+        } catch (error) {
+          console.warn('Failed to parse CardsRevealed event:', error);
+        }
+      });
+      
+      // Also trigger normal refresh
+      debouncedRefresh('CardsRevealed', logs);
+    },
   });
 }

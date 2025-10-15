@@ -2,6 +2,7 @@
 
 import { CardHand } from "./CardDisplay";
 import { PlayerBettingState } from "@/stores/pokerStore";
+import { evaluateBestHand, getHandRankDisplay } from "@/utils/handEvaluator";
 
 interface PlayerSeatProps {
   address: string;
@@ -24,6 +25,7 @@ interface PlayerSeatProps {
   isPlaying?: boolean;
   handleDecryptCards?: () => void;
   timeLeft: number | null;
+  decryptedCommunityCards?: number[]; // New: for hand evaluation
 }
 
 export function PlayerSeat({
@@ -47,10 +49,37 @@ export function PlayerSeat({
   isDecrypting,
   handleDecryptCards,
   timeLeft,
+  decryptedCommunityCards = [],
 }: PlayerSeatProps) {
   const formatEth = (wei: bigint) => (Number(wei) / 1e18).toFixed(4);
   const formatAddress = (addr: string) =>
     `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+
+  // Evaluate hand in real-time during gameplay
+  // Need at least 2 hole cards + 3 community (flop) = 5 total cards
+  const validCards = cards?.filter((c): c is number => c !== undefined) || [];
+  const validCommunity = decryptedCommunityCards.filter((c): c is number => c !== undefined && c !== 0);
+  const totalCards = [...validCards, ...validCommunity];
+  
+  const handEval = 
+    showCards && 
+    validCards.length === 2 && 
+    validCommunity.length >= 3 &&
+    totalCards.length >= 5
+      ? evaluateBestHand(totalCards)
+      : null;
+
+  // Map contributing card indices: [hole1, hole2, ...community]
+  const getCardHighlights = () => {
+    if (!handEval) return { holeHighlights: [], communityHighlights: [] };
+    const holeHighlights = handEval.contributingCardIndices.filter((i: number) => i < 2);
+    const communityHighlights = handEval.contributingCardIndices
+      .filter((i: number) => i >= 2)
+      .map((i: number) => i - 2);
+    return { holeHighlights, communityHighlights };
+  };
+
+  const cardHighlights = getCardHighlights();
 
   const positionClasses = {
     top: "items-center",
@@ -118,16 +147,32 @@ export function PlayerSeat({
           )}
         </div>
 
-        {/* 🂡 Player Cards + Decrypt Button */}
+        {/* 🂡 Player Cards + Decrypt Button + Hand Display */}
         {cards && cards.length > 0 && (
           <div className="absolute -top-6 right-[-120px] z-20">
-            <div className="relative flex items-center justify-center">
-              {/* 🃏 Bộ bài */}
+            <div className="relative flex flex-col items-center gap-2">
+              {/* 🃏 Bộ bài với highlights */}
               <CardHand
                 cards={cards}
                 hidden={!showCards || hasFolded}
                 className="pointer-events-none"
+                highlightedIndices={showCards ? cardHighlights.holeHighlights : []}
+                highlightDelay={300}
               />
+              
+              {/* 💎 Hand rank display during gameplay */}
+              {handEval && showCards && !hasFolded && (
+                <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap z-50">
+                  <div className={`px-3 py-1 rounded-lg text-xs font-bold backdrop-blur-sm border shadow-lg ${
+                    handEval.rank >= 7 ? "bg-green-900/90 border-green-400 text-green-200 shadow-green-500/50 animate-pulse" :
+                    handEval.rank >= 4 ? "bg-green-800/80 border-green-500 text-green-100 shadow-green-600/40" :
+                    handEval.rank >= 1 ? "bg-emerald-900/70 border-emerald-600 text-emerald-200" :
+                    "bg-slate-800/80 border-slate-600 text-slate-300"
+                  }`}>
+                    {getHandRankDisplay(handEval.rank).emoji} {getHandRankDisplay(handEval.rank).name}
+                  </div>
+                </div>
+              )}
 
               {/* 🔓 Nút Decrypt Cards (overlay mờ giống PokerTable) */}
               {shouldShowDecryptButton && (

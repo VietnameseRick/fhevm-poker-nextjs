@@ -78,7 +78,6 @@ export const useFHEPoker = (parameters: {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentAction, setCurrentAction] = useState<string | undefined>(undefined);
   const [cards, setCards] = useState<[Card | undefined, Card | undefined]>([undefined, undefined]);
-  const [decryptedCommunityCards, setDecryptedCommunityCards] = useState<number[]>([]);
   const [isDecrypting, setIsDecrypting] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [userAddress, setUserAddress] = useState<string | undefined>(undefined);
@@ -127,12 +126,15 @@ export const useFHEPoker = (parameters: {
   const players = usePokerStore(state => state.players);
   const allPlayersBettingState = usePokerStore(state => state.allPlayersBettingState);
   const communityCards = usePokerStore(state => state.communityCards);
+  const decryptedCommunityCards = usePokerStore(state => state.decryptedCommunityCards);
+  const revealedCards = usePokerStore(state => state.revealedCards);
   const lastPot = usePokerStore(state => state.lastPot);
   const lastUpdate = usePokerStore(state => state.lastUpdate); // Subscribe to force re-renders
   const refreshAll = usePokerStore(state => state.refreshAll);
   const clearTable = usePokerStore(state => state.clearTable);
   const setStoreTableId = usePokerStore(state => state.setCurrentTableId);
   const setContractInfo = usePokerStore(state => state.setContractInfo);
+  const setDecryptedCommunityCards = usePokerStore(state => state.setDecryptedCommunityCards);
   
   // Derived state - use useMemo to ensure recalculation on store updates
   const playerState = useMemo(() => {
@@ -209,7 +211,7 @@ export const useFHEPoker = (parameters: {
     // Clear decrypted state when table changes
     setCards([undefined, undefined]);
     setDecryptedCommunityCards([]);
-  }, [currentTableId]);
+  }, [currentTableId, setDecryptedCommunityCards]);
 
   // Reset local decrypted data at the start of a new round
   useEffect(() => {
@@ -226,7 +228,7 @@ export const useFHEPoker = (parameters: {
       }
       previousRoundRef.current = roundStr;
     }
-  }, [tableState?.currentRound]);
+  }, [tableState?.currentRound, setDecryptedCommunityCards]);
 
   // Client-side countdown using turnStartTime and playerActionTimeout
   useEffect(() => {
@@ -279,7 +281,7 @@ export const useFHEPoker = (parameters: {
   }, [timeRemaining, pokerContract.address, pokerContract.abi, currentTableId, ethersSigner, refreshAll]);
 
   // Wagmi event listeners - auto-refreshes store when events fire
-  // This replaces the old WebSocket implementation with more reliable Wagmi event watching
+  // Relies on WebSocket for real-time updates (with 10s backup polling when WS disconnected)
   usePokerWagmi(
     pokerContract.address,
     currentTableId ?? null,
@@ -296,7 +298,6 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setIsLoading(true);
         setCurrentAction("Creating");
 
         const contract = new ethers.Contract(
@@ -307,6 +308,9 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Creating poker table...");
 
+        // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
+        usePokerStore.getState().setPendingTransaction("Creating Table");
+        
         const tx = await contract.createTable(
           ethers.parseEther(minBuyIn),
           maxPlayers,
@@ -315,7 +319,12 @@ export const useFHEPoker = (parameters: {
         );
 
         setMessage(`Waiting for transaction: ${tx.hash}`);
+        
         const receipt = await tx.wait();
+        usePokerStore.getState().setPendingTransaction(null);
+        
+        // Now show loading state for processing
+        setIsLoading(true);
 
         // Parse the TableCreated event to get the table ID
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -335,6 +344,7 @@ export const useFHEPoker = (parameters: {
           setMessage(`Table created! ID: ${newTableId.toString()}`);
         }
       } catch (error) {
+        usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
         // Provide helpful error messages
@@ -367,7 +377,6 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setIsLoading(true);
         setCurrentAction("Joining");
 
         // ⚡ CRITICAL: Set tableId BEFORE transaction to start event listeners early
@@ -382,6 +391,9 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Joining table...");
 
+        // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
+        usePokerStore.getState().setPendingTransaction("Joining Table");
+        
         const tx = await contract.joinTable(tableId, {
           value: ethers.parseEther(buyInAmount),
         });
@@ -390,11 +402,16 @@ export const useFHEPoker = (parameters: {
         
         try {
           await tx.wait();
+          usePokerStore.getState().setPendingTransaction(null);
           console.log('✅ Join transaction confirmed');
         } catch (waitError) {
+          usePokerStore.getState().setPendingTransaction(null);
           console.warn('Transaction wait error (non-critical):', waitError);
           // Continue even if wait fails - the transaction might still be successful
         }
+        
+        // Now show loading state for data refresh
+        setIsLoading(true);
 
         setMessage(`✅ Successfully joined table ${tableId.toString()}!`);
 
@@ -405,6 +422,7 @@ export const useFHEPoker = (parameters: {
         
         console.log('🎰 Event listeners now active and state refreshed');
       } catch (error) {
+        usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
         // Check for specific error messages
@@ -443,7 +461,6 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setIsLoading(true);
         setCurrentAction("Advancing");
 
         const contract = new ethers.Contract(
@@ -454,13 +471,20 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Advancing game...");
 
+        // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
+        usePokerStore.getState().setPendingTransaction("Starting Game");
+        
         const tx = await contract.advanceGame(tableId);
 
         setMessage(`Waiting for transaction: ${tx.hash}`);
         await tx.wait();
-
+        usePokerStore.getState().setPendingTransaction(null);
+        
+        // Now show loading state for data refresh
+        setIsLoading(true);
         setMessage("✅ Game advanced! Loading table...");
       } catch (error) {
+        usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`Failed to advance game: ${errorMessage}`);
       } finally {
@@ -478,19 +502,26 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setIsLoading(true);
         setCurrentAction("Folding");
         setPendingAction("fold"); // Optimistic update
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Folding...");
+        
+        // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
+        usePokerStore.getState().setPendingTransaction("Folding");
         const tx = await contract.fold(tableId);
         await tx.wait();
+        usePokerStore.getState().setPendingTransaction(null);
+        
+        // Now show loading state for data refresh
+        setIsLoading(true);
         setMessage("✅ Folded!");
         setPendingAction(null);
         
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
+        usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to fold: ${errorMessage}`);
         setPendingAction(null);
@@ -508,19 +539,26 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setIsLoading(true);
         setCurrentAction("Checking");
         setPendingAction("check"); // Optimistic update
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Checking...");
+        
+        // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
+        usePokerStore.getState().setPendingTransaction("Checking");
         const tx = await contract.check(tableId);
         await tx.wait();
+        usePokerStore.getState().setPendingTransaction(null);
+        
+        // Now show loading state for data refresh
+        setIsLoading(true);
         setMessage("✅ Checked!");
         setPendingAction(null);
         
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
+        usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to check: ${errorMessage}`);
         setPendingAction(null);
@@ -538,7 +576,6 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setIsLoading(true);
         setCurrentAction("Calling");
         setPendingAction("call"); // Optimistic update
         const address = pokerContract.address as string;
@@ -564,14 +601,22 @@ export const useFHEPoker = (parameters: {
         }
 
         setMessage("Calling...");
+        
+        // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
+        usePokerStore.getState().setPendingTransaction("Calling");
         const tx = await contract.call(tableId);
         await tx.wait();
+        usePokerStore.getState().setPendingTransaction(null);
+        
+        // Now show loading state for data refresh
+        setIsLoading(true);
         setMessage("✅ Called!");
         setPendingAction(null);
         
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
+        usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to call: ${errorMessage}`);
         setPendingAction(null);
@@ -589,19 +634,26 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setIsLoading(true);
         setCurrentAction("Raising");
         setPendingAction("raise"); // Optimistic update
         const contract = new ethers.Contract(pokerContract.address, pokerContract.abi, ethersSigner);
         setMessage("Raising...");
+        
+        // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
+        usePokerStore.getState().setPendingTransaction(`Raising ${raiseAmount} ETH`);
         const tx = await contract.raise(tableId, ethers.parseEther(raiseAmount));
         await tx.wait();
+        usePokerStore.getState().setPendingTransaction(null);
+        
+        // Now show loading state for data refresh
+        setIsLoading(true);
         setMessage(`✅ Raised ${raiseAmount} ETH!`);
         setPendingAction(null);
         
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
+        usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to raise: ${errorMessage}`);
         setPendingAction(null);
@@ -656,6 +708,9 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Decrypting cards...");
 
+        // Show transaction confirmation modal for signature
+        usePokerStore.getState().setPendingTransaction("Decrypting Your Cards");
+
         const sig = await FhevmDecryptionSignature.loadOrSign(
           instance,
           [pokerContract.address as `0x${string}`],
@@ -666,6 +721,7 @@ export const useFHEPoker = (parameters: {
         );
 
         if (!sig) {
+          usePokerStore.getState().setPendingTransaction(null);
           setMessage("Unable to build FHEVM decryption signature");
           return;
         }
@@ -684,6 +740,8 @@ export const useFHEPoker = (parameters: {
           sig.durationDays
         );
 
+        usePokerStore.getState().setPendingTransaction(null);
+
         const card1Value = Number(res[card1Handle]);
         const card2Value = Number(res[card2Handle]);
 
@@ -694,6 +752,7 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Cards decrypted!");
       } catch (error) {
+        usePokerStore.getState().setPendingTransaction(null);
         console.error('❌ Decrypt cards error:', error);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
@@ -790,6 +849,9 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Decrypting community cards...");
 
+        // Show transaction confirmation modal for signature
+        usePokerStore.getState().setPendingTransaction(actionLabel);
+
         const sig = await FhevmDecryptionSignature.loadOrSign(
           instance,
           [pokerContract.address as `0x${string}`],
@@ -800,6 +862,7 @@ export const useFHEPoker = (parameters: {
         );
 
         if (!sig) {
+          usePokerStore.getState().setPendingTransaction(null);
           setMessage("Unable to build FHEVM decryption signature");
           return;
         }
@@ -820,6 +883,8 @@ export const useFHEPoker = (parameters: {
           sig.durationDays
         );
 
+        usePokerStore.getState().setPendingTransaction(null);
+
         // Build the full decrypted array (5 cards), filling in zeros for undealt cards
         const decryptedValues = [0, 0, 0, 0, 0];
         let validIndex = 0;
@@ -836,9 +901,11 @@ export const useFHEPoker = (parameters: {
           decryptedValues[4] = Number(res[validHandles[validIndex++]]);
         }
 
+        // Store decrypted community cards in Zustand (survives refreshes)
         setDecryptedCommunityCards(decryptedValues);
         setMessage("✅ Community cards decrypted!");
       } catch (error) {
+        usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         setMessage(`❌ Failed to decrypt community cards: ${errorMessage}`);
       } finally {
@@ -846,7 +913,7 @@ export const useFHEPoker = (parameters: {
         setIsDecrypting(false);
       }
     },
-    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet, smartAccountAddress]
+    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet, smartAccountAddress, setDecryptedCommunityCards]
   );
 
   // Leave table and withdraw all chips
@@ -863,7 +930,6 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setIsLoading(true);
         setCurrentAction("Leaving");
 
         const contract = new ethers.Contract(
@@ -875,6 +941,9 @@ export const useFHEPoker = (parameters: {
         console.log('📝 Calling contract.leaveTable...');
         setMessage("Leaving table...");
 
+        // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
+        usePokerStore.getState().setPendingTransaction("Leaving Table");
+        
         const tx = await contract.leaveTable(tableId);
         console.log('✅ Transaction sent:', tx.hash);
 
@@ -882,11 +951,16 @@ export const useFHEPoker = (parameters: {
         
         try {
           await tx.wait();
+          usePokerStore.getState().setPendingTransaction(null);
           console.log('✅ Transaction confirmed');
         } catch (waitError) {
+          usePokerStore.getState().setPendingTransaction(null);
           console.warn('Transaction wait error (non-critical):', waitError);
           // Continue even if wait fails - the transaction might still be successful
         }
+        
+        // Now show loading state for processing
+        setIsLoading(true);
 
         setMessage(`✅ Successfully left table ${tableId.toString()} and withdrew all chips!`);
         
@@ -927,7 +1001,6 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setIsLoading(true);
         setCurrentAction("Withdrawing");
 
         const contract = new ethers.Contract(
@@ -938,16 +1011,23 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Withdrawing chips...");
 
+        // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
+        usePokerStore.getState().setPendingTransaction(`Withdrawing ${amount} ETH`);
+        
         const tx = await contract.withdrawChips(tableId, ethers.parseEther(amount));
 
         setMessage(`Waiting for transaction: ${tx.hash}`);
         await tx.wait();
-
+        usePokerStore.getState().setPendingTransaction(null);
+        
+        // Now show loading state for data refresh
+        setIsLoading(true);
         setMessage(`✅ Successfully withdrew ${amount} ETH!`);
         
         // Refresh table state to show updated balance
         refreshAll(tableId);
       } catch (error) {
+        usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
         if (errorMessage.includes("NOT_SEATED")) {
@@ -979,7 +1059,6 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setIsLoading(true);
         setCurrentAction("Adding");
 
         const contract = new ethers.Contract(
@@ -990,18 +1069,25 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Adding chips to your stack...");
 
+        // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
+        usePokerStore.getState().setPendingTransaction(`Adding ${amount} ETH`);
+        
         const tx = await contract.addChips(tableId, {
           value: ethers.parseEther(amount),
         });
 
         setMessage(`Waiting for transaction: ${tx.hash}`);
         await tx.wait();
-
+        usePokerStore.getState().setPendingTransaction(null);
+        
+        // Now show loading state for data refresh
+        setIsLoading(true);
         setMessage(`✅ Successfully added ${amount} ETH to your stack!`);
         
         // Refresh table state to show updated balance
         refreshAll(tableId);
       } catch (error) {
+        usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
         if (errorMessage.includes("NOT_SEATED")) {
@@ -1042,7 +1128,8 @@ export const useFHEPoker = (parameters: {
     players,
     cards,
     communityCards,
-    decryptedCommunityCards,
+    decryptedCommunityCards, // From Zustand store (survives refreshes)
+    revealedCards, // Player revealed cards at showdown
     lastPot,
     message,
     isLoading,

@@ -11,8 +11,11 @@ import { TableBrowser } from "./TableBrowser";
 import { WalletHeader } from "./WalletHeader";
 import { FundingRequiredModal } from "./FundingRequiredModal";
 import { ChipsManagementModal } from "./ChipsManagementModal";
+import { CyberpunkLoader } from "./CyberpunkLoader";
+import { TransactionConfirmModal } from "./TransactionConfirmModal";
 import { useInMemoryStorage } from "../hooks/useInMemoryStorage";
 import { useSmartAccount } from "../hooks/useSmartAccount";
+import { usePokerStore } from "@/stores/pokerStore";
 import Image from "next/image";
 
 const GAME_STATES = ["Waiting for Players", "Countdown", "Playing", "Finished"];
@@ -77,6 +80,10 @@ export function PokerGame() {
     sameSigner,
     smartAccountAddress, // Pass smart account address for FHEVM signature
   });
+
+  // Get transaction state and loading from store
+  const pendingTransaction = usePokerStore(state => state.pendingTransaction);
+  const storeIsLoading = usePokerStore(state => state.isLoading);
 
   // UI States
   const [showCreateTable, setShowCreateTable] = useState(true);
@@ -414,19 +421,25 @@ export function PokerGame() {
 
     if (!poker.tableState) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
-            <p className="text-white text-xl mb-4">Loading table state...</p>
-            <p className="text-gray-400 text-sm mb-4">Table #{poker.currentTableId.toString()}</p>
-            <button
-              onClick={() => poker.refreshTableState(poker.currentTableId!)}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
-            >
-              🔄 Retry
-            </button>
+        <>
+          {/* Only show CyberpunkLoader when NOT waiting for transaction confirmation */}
+          <CyberpunkLoader isLoading={!pendingTransaction?.isWaiting} />
+          <TransactionConfirmModal 
+            isOpen={pendingTransaction?.isWaiting || false}
+            action={pendingTransaction?.action || ""}
+          />
+          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+            <div className="text-center">
+              <p className="text-gray-400 text-sm mb-4">Table #{poker.currentTableId.toString()}</p>
+              <button
+                onClick={() => poker.refreshTableState(poker.currentTableId!)}
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold border-2 border-green-500 shadow-lg shadow-green-500/50"
+              >
+                🔄 Retry
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       );
     }
     const playerData = poker.players.map((address) => {
@@ -452,6 +465,14 @@ export function PokerGame() {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        {/* Global Loaders and Modals */}
+        {/* Only show CyberpunkLoader when loading but NOT waiting for transaction confirmation */}
+        <CyberpunkLoader isLoading={storeIsLoading && !pendingTransaction?.isWaiting} />
+        <TransactionConfirmModal 
+          isOpen={pendingTransaction?.isWaiting || false}
+          action={pendingTransaction?.action || ""}
+        />
+        
         {/* Wallet Header */}
         <WalletHeader
           address={address}
