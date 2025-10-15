@@ -17,7 +17,7 @@ export function TransactionConfirmModal({ isOpen, action, onClose }: Transaction
     if (!isOpen) return;
     const interval = setInterval(() => {
       setDots((prev) => (prev.length >= 3 ? "" : prev + "."));
-    }, 500);
+    }, 200);
     return () => clearInterval(interval);
   }, [isOpen]);
 
@@ -26,19 +26,19 @@ export function TransactionConfirmModal({ isOpen, action, onClose }: Transaction
     if (!isOpen) return;
     const glitchChars = "!<>-_\\/[]{}—=+*^?#________";
     const interval = setInterval(() => {
-      if (Math.random() > 0.9) {
+      if (Math.random() > 0.4) {
         const glitched = action
           .split("")
           .map((char) =>
-            Math.random() > 0.85
+            Math.random() > 0.6
               ? glitchChars[Math.floor(Math.random() * glitchChars.length)]
               : char
           )
           .join("");
         setGlitchText(glitched);
-        setTimeout(() => setGlitchText(action), 100);
+        setTimeout(() => setGlitchText(action), 50);
       }
-    }, 200);
+    }, 100);
     return () => clearInterval(interval);
   }, [isOpen, action]);
 
@@ -59,7 +59,7 @@ export function TransactionConfirmModal({ isOpen, action, onClose }: Transaction
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       {/* Backdrop with animated gradient */}
       <div 
-        className="absolute inset-0 bg-black/90 backdrop-blur-md animate-pulse-slow gpu-opacity"
+        className="absolute inset-0 bg-black/90 backdrop-blur-md animate-pulse gpu-opacity"
         onClick={onClose}
         style={{
           background: "radial-gradient(circle at center, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.98) 100%)",
@@ -69,10 +69,10 @@ export function TransactionConfirmModal({ isOpen, action, onClose }: Transaction
       {/* Modal content */}
       <div className="relative z-10 max-w-md w-full gpu-transform-opacity">
         {/* Corner brackets */}
-        <div className="absolute -top-4 -left-4 w-8 h-8 border-l-4 border-t-4 border-green-500 animate-optimized-pulse" />
-        <div className="absolute -top-4 -right-4 w-8 h-8 border-r-4 border-t-4 border-green-500 animate-optimized-pulse" />
-        <div className="absolute -bottom-4 -left-4 w-8 h-8 border-l-4 border-b-4 border-green-500 animate-optimized-pulse" />
-        <div className="absolute -bottom-4 -right-4 w-8 h-8 border-r-4 border-b-4 border-green-500 animate-optimized-pulse" />
+        <div className="absolute -top-4 -left-4 w-8 h-8 border-l-4 border-t-4 border-green-500 animate-pulse" />
+        <div className="absolute -top-4 -right-4 w-8 h-8 border-r-4 border-t-4 border-green-500 animate-pulse" />
+        <div className="absolute -bottom-4 -left-4 w-8 h-8 border-l-4 border-b-4 border-green-500 animate-pulse" />
+        <div className="absolute -bottom-4 -right-4 w-8 h-8 border-r-4 border-b-4 border-green-500 animate-pulse" />
 
         {/* Main card */}
         <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-2 border-green-500/50 rounded-xl p-8 shadow-2xl shadow-green-500/20">
@@ -84,7 +84,7 @@ export function TransactionConfirmModal({ isOpen, action, onClose }: Transaction
                 linear-gradient(rgba(34,197,94,0.3) 1px, transparent 1px)
               `,
               backgroundSize: "20px 20px",
-              animation: "grid-scroll 20s linear infinite",
+              animation: "grid-scroll 8s linear infinite",
             }} />
           </div>
 
@@ -98,14 +98,14 @@ export function TransactionConfirmModal({ isOpen, action, onClose }: Transaction
               </div>
               
               {/* Wallet icon */}
-              <div className="relative w-20 h-20 bg-gradient-to-br from-green-900 to-green-700 rounded-full flex items-center justify-center border-4 border-green-500 shadow-lg shadow-green-500/50 gpu-accelerate">
+              <div className="relative w-20 h-20 bg-gradient-to-br from-green-900 to-green-700 rounded-full flex items-center justify-center border-4 border-green-500 shadow-lg shadow-green-500/50 gpu-accelerate animate-bounce">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   viewBox="0 0 24 24"
                   strokeWidth={2}
                   stroke="currentColor"
-                  className="w-10 h-10 text-green-300 animate-optimized-pulse"
+                  className="w-10 h-10 text-green-300 animate-pulse"
                 >
                   <path
                     strokeLinecap="round"
@@ -169,7 +169,7 @@ export function TransactionConfirmModal({ isOpen, action, onClose }: Transaction
               <div 
                 className="absolute inset-y-0 left-0 bg-gradient-to-r from-green-500 via-green-400 to-green-500 rounded-full animate-progress"
                 style={{
-                  animation: "progress 2s ease-in-out infinite",
+                  animation: "progress 1s ease-in-out infinite",
                 }}
               />
             </div>
@@ -213,15 +213,24 @@ export function TransactionConfirmModal({ isOpen, action, onClose }: Transaction
           }
         }
 
-        .animate-pulse-slow {
-          animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
         .glitch-text {
           text-shadow: 
             0.05em 0 0 rgba(34, 197, 94, 0.75),
             -0.025em -0.05em 0 rgba(34, 197, 94, 0.75),
             0.025em 0.05em 0 rgba(34, 197, 94, 0.75);
+          animation: glitch-shake 0.3s ease-in-out infinite;
+        }
+
+        @keyframes glitch-shake {
+          0%, 100% {
+            transform: translateX(0);
+          }
+          25% {
+            transform: translateX(-1px);
+          }
+          75% {
+            transform: translateX(1px);
+          }
         }
       `}</style>
     </div>
