@@ -190,6 +190,24 @@ export function usePokerWagmi(
   useWatchContractEvent({
     address: contractAddress,
     abi: FHEPokerABI.abi,
+    eventName: 'ShuffleRequested',
+    enabled: !!contractAddress && enabled,
+    pollingInterval,
+    onLogs: (logs) => debouncedRefresh('ShuffleRequested', logs),
+  });
+
+  useWatchContractEvent({
+    address: contractAddress,
+    abi: FHEPokerABI.abi,
+    eventName: 'ShuffleCompleted',
+    enabled: !!contractAddress && enabled,
+    pollingInterval,
+    onLogs: (logs) => debouncedRefresh('ShuffleCompleted', logs),
+  });
+
+  useWatchContractEvent({
+    address: contractAddress,
+    abi: FHEPokerABI.abi,
     eventName: 'GameStarted',
     enabled: !!contractAddress && enabled,
     pollingInterval,

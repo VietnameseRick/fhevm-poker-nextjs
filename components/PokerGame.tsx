@@ -19,8 +19,9 @@ const Showdown = lazy(() => import("./Showdown").then(mod => ({ default: mod.Sho
 const TableBrowser = lazy(() => import("./TableBrowser").then(mod => ({ default: mod.TableBrowser })));
 const FundingRequiredModal = lazy(() => import("./FundingRequiredModal").then(mod => ({ default: mod.FundingRequiredModal })));
 const ChipsManagementModal = lazy(() => import("./ChipsManagementModal").then(mod => ({ default: mod.ChipsManagementModal })));
+const ShuffleAnimation = lazy(() => import("./ShuffleAnimation").then(mod => ({ default: mod.ShuffleAnimation })));
 
-const GAME_STATES = ["Waiting for Players", "Countdown", "Playing", "Finished"];
+const GAME_STATES = ["Waiting for Players", "Countdown", "Shuffling Deck", "Playing", "Finished"];
 const BETTING_STREETS = ["Pre-Flop", "Flop", "Turn", "River", "Showdown"];
 
 export function PokerGame() {
@@ -465,7 +466,7 @@ export function PokerGame() {
     });
 
     const isYourTurn = (poker.playerState && typeof poker.playerState === 'object' && poker.playerState.isCurrentPlayer) || false;
-    const isPlaying = poker.tableState?.state === 2;
+    const isPlaying = poker.tableState?.state === 3; // Playing is now index 3
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -629,7 +630,7 @@ export function PokerGame() {
                         </div>
                       )}
                     </div>
-                    {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 2 && !poker.pendingAction && (
+                    {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 3 && !poker.pendingAction && (
                       <div className={`ml-2 flex items-center gap-1 px-2 py-1 rounded-full border ${poker.timeRemaining <= 10
                           ? 'bg-red-500/40 border-red-400 animate-pulse'
                           : poker.timeRemaining <= 30
@@ -743,7 +744,7 @@ export function PokerGame() {
                 </div>
                 <p>
                   <span className="text-gray-500">Game State:</span>{" "}
-                  <span className={poker.tableState.state === 2 ? "text-green-400 font-bold" : "text-yellow-400"}>
+                  <span className={poker.tableState.state === 3 ? "text-green-400 font-bold" : "text-yellow-400"}>
                     {poker.tableState.state} ({GAME_STATES[poker.tableState.state]})
                   </span>
                 </p>
@@ -808,8 +809,15 @@ export function PokerGame() {
             </div>
           )}
 
+          {/* Shuffle Animation - Show when waiting for shuffle */}
+          {poker.tableState.state === 2 && (
+            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
+              <ShuffleAnimation />
+            </Suspense>
+          )}
+
           {/* Showdown Overlay - Show when game is finished */}
-          {poker.tableState.state === 3 && poker.tableState.winner && (
+          {poker.tableState.state === 4 && poker.tableState.winner && (
             <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
               <Showdown
               winner={poker.tableState.winner}
@@ -1061,7 +1069,7 @@ export function PokerGame() {
                       </span>
                       <span className="ml-2 text-xs text-gray-400">(Live: {poker.players.length})</span>
                     </p>
-                    {poker.tableState.state === 1 && (
+                    {poker.tableState.state === 1 && ( // Countdown state
                       <div className="mt-3 pt-3 border-t border-purple-500/30">
                         <p className="text-yellow-300 text-sm font-semibold">⏱️ Countdown in progress...</p>
                         <p className="text-gray-400 text-xs mt-1">Game will start automatically or you can advance it manually</p>
@@ -1074,7 +1082,7 @@ export function PokerGame() {
               {/* Action Buttons */}
               <div className="mt-4 space-y-2">
                 {/* Advance Game Button in Lobby */}
-                {poker.tableState && (poker.tableState.state === 1 || poker.tableState.state === 3) && (
+                {poker.tableState && (poker.tableState.state === 1 || poker.tableState.state === 4) && ( // Countdown or Finished
                   <div className="space-y-2">
                     <button
                       onClick={handleAdvanceGame}
@@ -1099,8 +1107,9 @@ export function PokerGame() {
                       <span className="text-2xl">🎮</span>
                       <div className="text-left">
                         <div className="font-bold">
-                          {poker.tableState?.state === 2 ? "Join Table (Game In Progress!)" :
+                          {poker.tableState?.state === 3 ? "Join Table (Game In Progress!)" :
                             poker.tableState?.state === 1 ? "View Table (Countdown)" :
+                            poker.tableState?.state === 2 ? "View Table (Shuffling...)" :
                               "Go to Table"}
                         </div>
                         <div className="text-xs opacity-90">Click if stuck in lobby</div>
