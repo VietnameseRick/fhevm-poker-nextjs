@@ -3,29 +3,20 @@ import { FHEPokerABI } from '@/abi/FHEPokerABI';
 import { usePokerStore } from '@/stores/pokerStore';
 import { useCallback, useRef, useEffect } from 'react';
 
-/**
- * Wagmi-based hook for poker event watching
- * Uses WebSocket transport configured in wagmi (from PrivyProvider)
- * No polling - relies on WebSocket for real-time events
- */
 export function usePokerWagmi(
   contractAddress: `0x${string}` | undefined,
   tableId: bigint | null,
   enabled: boolean = true
 ) {
   
-  // Get refreshAll from Zustand store
   const refreshAll = usePokerStore(state => state.refreshAll);
   
-  // Refs to prevent stale closures
   const tableIdRef = useRef<bigint | null>(tableId);
   const refreshAllRef = useRef(refreshAll);
   
-  // Debounce timer ref
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastRefreshRef = useRef<number>(0);
 
-  // Update refs when values change
   useEffect(() => {
     tableIdRef.current = tableId;
   }, [tableId]);
@@ -34,7 +25,6 @@ export function usePokerWagmi(
     refreshAllRef.current = refreshAll;
   }, [refreshAll]);
 
-  // Helper: Check if event is for current table
   const isEventForCurrentTable = useCallback((log: unknown, currentTableId: bigint): boolean => {
     try {
       const logWithArgs = log as { args?: { tableId?: bigint } };
@@ -190,24 +180,6 @@ export function usePokerWagmi(
   useWatchContractEvent({
     address: contractAddress,
     abi: FHEPokerABI.abi,
-    eventName: 'ShuffleRequested',
-    enabled: !!contractAddress && enabled,
-    pollingInterval,
-    onLogs: (logs) => debouncedRefresh('ShuffleRequested', logs),
-  });
-
-  useWatchContractEvent({
-    address: contractAddress,
-    abi: FHEPokerABI.abi,
-    eventName: 'ShuffleCompleted',
-    enabled: !!contractAddress && enabled,
-    pollingInterval,
-    onLogs: (logs) => debouncedRefresh('ShuffleCompleted', logs),
-  });
-
-  useWatchContractEvent({
-    address: contractAddress,
-    abi: FHEPokerABI.abi,
     eventName: 'GameStarted',
     enabled: !!contractAddress && enabled,
     pollingInterval,
@@ -257,15 +229,6 @@ export function usePokerWagmi(
     enabled: !!contractAddress && enabled,
     pollingInterval,
     onLogs: (logs) => debouncedRefresh('RiverDealt', logs),
-  });
-
-  useWatchContractEvent({
-    address: contractAddress,
-    abi: FHEPokerABI.abi,
-    eventName: 'CountdownStarted',
-    enabled: !!contractAddress && enabled,
-    pollingInterval,
-    onLogs: (logs) => debouncedRefresh('CountdownStarted', logs),
   });
 
   useWatchContractEvent({

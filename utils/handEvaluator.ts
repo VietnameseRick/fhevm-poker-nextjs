@@ -1,8 +1,3 @@
-/**
- * Hand Evaluator Utility
- * Identifies which cards from a 7-card set contribute to the best 5-card poker hand
- */
-
 export enum HandRank {
   HighCard = 0,
   OnePair = 1,
@@ -19,15 +14,15 @@ export enum HandRank {
 export interface HandValue {
   rank: HandRank;
   tiebreakers: number[];
-  contributingCards: number[]; // Indices of the 5 cards that make this hand (0-6)
+  contributingCards: number[];
 }
 
 export interface EvaluatedHand {
   rank: HandRank;
   rankName: string;
   description: string;
-  contributingCardIndices: number[]; // Which of the 7 cards contribute (indices 0-6)
-  contributingCards: number[]; // The actual card values that contribute
+  contributingCardIndices: number[];
+  contributingCards: number[];
 }
 
 const RANK_NAMES: Record<number, string> = {
@@ -46,34 +41,22 @@ const RANK_NAMES: Record<number, string> = {
 const CARD_NAMES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 const SUIT_NAMES = ['♥', '♦', '♣', '♠'];
 
-/**
- * Convert card index (0-51) to rank and suit
- */
 function cardToRankSuit(card: number): { rank: number; suit: number } {
   return {
-    rank: Math.floor(card / 4), // 0=2, 1=3, ..., 12=A
-    suit: card % 4, // 0=Hearts, 1=Diamonds, 2=Clubs, 3=Spades
+    rank: Math.floor(card / 4),
+    suit: card % 4,
   };
 }
 
-/**
- * Get card display name
- */
 export function getCardName(card: number): string {
   const { rank, suit } = cardToRankSuit(card);
   return `${CARD_NAMES[rank]}${SUIT_NAMES[suit]}`;
 }
 
-/**
- * Get rank display name
- */
 export function getRankDisplayName(rank: number): string {
   return CARD_NAMES[rank];
 }
 
-/**
- * Evaluate best 5-card hand from 5-7 cards (handles flop, turn, river)
- */
 export function evaluateBestHand(cards: number[]): EvaluatedHand {
   if (cards.length < 5 || cards.length > 7) {
     throw new Error('Must provide 5-7 cards (flop, turn, or river)');

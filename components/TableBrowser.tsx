@@ -22,7 +22,7 @@ type TableRow = {
   minBuyIn: bigint;
 };
 
-const GAME_STATES = ["Waiting for Players", "Countdown", "Playing", "Finished"] as const;
+const GAME_STATES = ["Waiting for Players", "Playing", "Finished"] as const;
 
 export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provider }: TableBrowserProps) {
   const [isLoading, setIsLoading] = useState(false);
