@@ -82,16 +82,12 @@ export function PokerGame() {
     smartAccountAddress, // Pass smart account address for FHEVM signature
   });
 
-  // Get transaction state and loading from store
   const pendingTransaction = usePokerStore(state => state.pendingTransaction);
   const storeIsLoading = usePokerStore(state => state.isLoading);
 
-  // UI States
   const [showCreateTable, setShowCreateTable] = useState(true);
   const [showJoinTable, setShowJoinTable] = useState(false);
   const [currentView, setCurrentView] = useState<"lobby" | "game">("lobby");
-
-  // Update balances periodically
   useEffect(() => {
     const updateBalances = async () => {
       if (smartAccountAddress && checkBalance) {
@@ -118,39 +114,29 @@ export function PokerGame() {
     return () => clearInterval(interval);
   }, [smartAccountAddress, eoaAddress, checkBalance, ethersProvider]);
 
-  // Deposit function
   const handleDepositToSmartAccount = () => {
     setShowFundingModal(true);
   };
+  
   const [isTableBrowserOpen, setIsTableBrowserOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isPortrait, setIsPortrait] = useState(false);
-
-  // Form states
   const [tableIdInput, setTableIdInput] = useState<string>("");
   const [minBuyInInput, setMinBuyInInput] = useState<string>("0.2");
   const [maxPlayersInput, setMaxPlayersInput] = useState<string>("9");
   const [smallBlindInput, setSmallBlindInput] = useState<string>("0.005");
   const [bigBlindInput, setBigBlindInput] = useState<string>("0.01");
   const [buyInAmountInput, setBuyInAmountInput] = useState<string>("0.2");
-
-  // Funding modal states
   const [showFundingModal, setShowFundingModal] = useState(false);
   const [currentBalance, setCurrentBalance] = useState<bigint>(0n);
   const [requiredAmount, setRequiredAmount] = useState<bigint>(0n);
-
-  // Balance states
   const [smartAccountBalance, setSmartAccountBalance] = useState<bigint>(0n);
   const [eoaBalance, setEoaBalance] = useState<bigint>(0n);
-
-  // Chips management modal state
   const [showChipsManagementModal, setShowChipsManagementModal] = useState(false);
   const [chipsModalInitialTab, setChipsModalInitialTab] = useState<"withdraw" | "add" | "leave">("add");
 
-  // Use Privy address directly
   const yourAddress = address || "";
 
-  // Debug: Log addresses
   useEffect(() => {
     if (yourAddress) {
       console.log('🔍 Address Debug:', {
@@ -163,8 +149,6 @@ export function PokerGame() {
       });
     }
   }, [yourAddress, smartAccountAddress, eoaAddress, isSmartAccount, poker.players]);
-
-  // Responsive detection (mobile + orientation)
   useEffect(() => {
     const updateViewport = () => {
       if (typeof window === "undefined") return;
@@ -181,27 +165,20 @@ export function PokerGame() {
     };
   }, []);
 
-  // Comprehensive auto-navigation - moves to game view when player is seated
   useEffect(() => {
-    // Skip if not authenticated or no table/state data
     if (!authenticated || !yourAddress || !poker.currentTableId || !poker.tableState) {
       return;
     }
 
-    // Skip if already in game view
     if (currentView === "game") {
       return;
     }
 
-    // Check if user is in the players list
     const isInPlayersList = poker.players.some(
       addr => addr.toLowerCase() === yourAddress.toLowerCase()
     );
 
-    // Check if user is marked as seated in table state
-    const isSeated = poker.tableState.isSeated;
-
-    // Auto-navigate if player is seated OR in players list
+    const isSeated = poker.isSeated;
     if (isSeated || isInPlayersList) {
       console.log('🎮 Auto-navigating to game view:', {
         tableId: poker.currentTableId.toString(),
@@ -217,23 +194,19 @@ export function PokerGame() {
     poker.currentTableId,
     poker.tableState,
     poker.tableState?.state,
-    poker.tableState?.isSeated,
+    poker.isSeated,
     poker.players,
     currentView,
   ]);
 
   const handleCreateTable = async () => {
-    // Create the table - this waits for the transaction and sets currentTableId
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
-    // Wagmi event listeners will automatically refresh when TableCreated event is detected
     console.log('✅ Table created, Wagmi will handle state updates');
   };
 
   const handleJoinTable = async () => {
     const tableId = BigInt(tableIdInput || poker.currentTableId?.toString() || "0");
     const buyInAmount = ethers.parseEther(buyInAmountInput);
-
-    // Check balance if using smart account
     if (isSmartAccount && smartAccountAddress && checkBalance) {
       const balance = await checkBalance();
       setCurrentBalance(balance);
@@ -247,26 +220,19 @@ export function PokerGame() {
     }
 
     try {
-      // Join the table - this waits for the transaction to succeed
       await poker.joinTable(tableId, buyInAmountInput);
-
-      // Transaction succeeded! Switch to game view immediately
-      // Wagmi event listeners will refresh the table state automatically
       console.log('✅ Join successful, switching to game view');
       setCurrentView("game");
     } catch (error) {
       console.error('❌ Failed to join table:', error);
-      // Don't switch view if join failed
     }
   };
 
   const handleAdvanceGame = async () => {
     if (poker.currentTableId !== undefined) {
       await poker.advanceGame(poker.currentTableId);
-      // Refresh and navigate after a short delay
       setTimeout(async () => {
         await poker.refreshTableState(poker.currentTableId!);
-        // Force navigate to game view
         setCurrentView("game");
       }, 1000);
     }
@@ -338,7 +304,6 @@ export function PokerGame() {
   }
 
   if (poker.isDeployed === false) {
-    // Show loading if chainId is not yet available
     if (!chainId) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -397,9 +362,7 @@ export function PokerGame() {
     );
   }
 
-  // Game View
   if (currentView === "game") {
-    // Show loading or error if data not ready
     if (poker.currentTableId === undefined) {
       console.log('Game view: currentTableId is undefined', {
         currentTableId: poker.currentTableId,
@@ -445,9 +408,7 @@ export function PokerGame() {
       );
     }
     
-    // Player data mapping with optimization
     const playerData = poker.players.map((address) => {
-      // Get betting state for this specific player from allPlayersBettingState
       const playerBettingState = poker.allPlayersBettingState[address.toLowerCase()];
 
       return {
@@ -566,7 +527,7 @@ export function PokerGame() {
                 )}
 
                 {/* Chips Management Button */}
-                {poker.tableState.isSeated && (
+                {poker.isSeated && (
                   <button
                     onClick={() => {
                       setChipsModalInitialTab("add");
@@ -681,7 +642,7 @@ export function PokerGame() {
                 decryptedCommunityCards={poker.decryptedCommunityCards}
                 isDecrypting={poker.isDecrypting}
                 handleDecryptCommunityCards={handleDecryptCommunityCards}
-                isSeated={poker.tableState.isSeated}
+                isSeated={poker.isSeated}
                 playerState={poker.playerState}
                 clear={poker.cards[0]?.clear}
                 handleDecryptCards={handleDecryptCards}
@@ -690,7 +651,7 @@ export function PokerGame() {
 
               {/* Controls */}
               <div className="space-y-4">
-                {isPlaying && (poker.tableState.isSeated || poker.playerState) && poker.playerState && (
+                {isPlaying && (poker.isSeated || poker.playerState) && poker.playerState && (
                   <>
                     <BettingControls
                       canAct={isYourTurn && !poker.playerState.hasFolded}
@@ -704,13 +665,11 @@ export function PokerGame() {
                         const currentBet = poker.bettingInfo?.currentBet || 0n;
                         const myBet = (typeof poker.playerState === 'object' && poker.playerState?.currentBet) ? poker.playerState.currentBet : 0n;
                         if (myBet >= currentBet) {
-                          // Up-to-date state says no bet to call → check instead
                           return poker.check(poker.currentTableId!);
                         }
                         return poker.call(poker.currentTableId!);
                       }}
                       onRaise={(amount) => {
-                        // Interpret input as "raise to" total; convert to delta for the contract
                         try {
                           const targetWei = ethers.parseEther(amount);
                           const current = poker.bettingInfo?.currentBet || 0n;
@@ -718,7 +677,6 @@ export function PokerGame() {
                           const deltaEth = ethers.formatEther(deltaWei);
                           poker.raise(poker.currentTableId!, deltaEth);
                         } catch {
-                          // Fallback: pass through
                           poker.raise(poker.currentTableId!, amount);
                         }
                       }}
@@ -740,12 +698,6 @@ export function PokerGame() {
               <div className="bg-gray-800/50 rounded-lg p-4 text-xs text-gray-300 space-y-1">
                 <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-700">
                   <p className="font-bold text-white">Debug Info</p>
-                  <button
-                    onClick={() => poker.refreshTableState(poker.currentTableId!)}
-                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white text-xs"
-                  >
-                    🔄 Force Refresh
-                  </button>
                 </div>
                 <p>
                   <span className="text-gray-500">Game State:</span>{" "}
@@ -759,8 +711,11 @@ export function PokerGame() {
                     {poker.isConnected ? "✅ Connected" : "⚠️ Polling Only"}
                   </span>
                 </p>
-                <p className={poker.tableState.isSeated ? "text-green-400" : "text-red-400"}>
-                  <span className="text-gray-500">Is Seated (contract):</span> {poker.tableState.isSeated ? "Yes" : "No"}
+                <p className={poker.isSeated ? "text-green-400" : "text-red-400"}>
+                  <span className="text-gray-500">Is Seated (computed):</span> {poker.isSeated ? "Yes" : "No"}
+                </p>
+                <p className={poker.tableState?.isSeated ? "text-green-400" : "text-red-400"}>
+                  <span className="text-gray-500">Is Seated (contract, unreliable):</span> {poker.tableState?.isSeated ? "Yes" : "No"}
                 </p>
                 <p className={poker.players.some(p => p.toLowerCase() === yourAddress.toLowerCase()) ? "text-green-400" : "text-red-400"}>
                   <span className="text-gray-500">In Players List:</span>{" "}
@@ -906,7 +861,6 @@ export function PokerGame() {
     );
   }
 
-  // Lobby View
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Wallet Header */}
@@ -1174,7 +1128,6 @@ export function PokerGame() {
               setShowJoinTable(true);
               setIsTableBrowserOpen(false);
               setTableIdInput(id.toString());
-              // Auto-fill the buy-in amount with the table's minimum buy-in
               setBuyInAmountInput(ethers.formatEther(minBuyIn));
             }}
             contractAddress={poker.contractAddress}
