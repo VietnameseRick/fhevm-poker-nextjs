@@ -151,6 +151,11 @@ export const useFHEPoker = (parameters: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userAddress, allPlayersBettingState, bettingInfo, lastUpdate]); // lastUpdate intentionally included to force recalc
   
+  const isSeated = useMemo(() => {
+    if (!userAddress) return false;
+    return players.some(p => p.toLowerCase() === userAddress.toLowerCase());
+  }, [userAddress, players]);
+  
   // Log state updates for debugging
   useEffect(() => {
     console.log('🔄 Store updated at:', new Date(lastUpdate).toLocaleTimeString(), {
@@ -1152,6 +1157,7 @@ export const useFHEPoker = (parameters: {
     isConnected,
     timeRemaining,
     pendingAction,
+    isSeated, // Computed from players list (more reliable than contract)
     createTable,
     joinTable,
     leaveTable,

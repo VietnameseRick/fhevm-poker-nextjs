@@ -59,12 +59,12 @@ interface PokerStore {
   players: string[];
   allPlayersBettingState: Record<string, PlayerBettingState>;
   communityCards: CommunityCards | null;
-  decryptedCommunityCards: number[]; // Persisted decrypted community cards (survives refreshes)
-  revealedCards: Record<string, RevealedCards>; // Player revealed cards at showdown
+  decryptedCommunityCards: number[];
+  revealedCards: Record<string, RevealedCards>;
   isLoading: boolean;
   message: string;
-  lastPot: bigint; // Track pot amount before it's awarded (for Showdown display)
-  lastUpdate: number; // Timestamp of last state update - forces React re-renders
+  lastPot: bigint;
+  lastUpdate: number;
   
   // Transaction state
   pendingTransaction: {
@@ -75,7 +75,7 @@ interface PokerStore {
   // Contract info
   contractAddress: string | null;
   provider: ethers.ContractRunner | null;
-  readonlyProvider: ethers.JsonRpcProvider | null; // Fresh provider to bypass caching
+  readonlyProvider: ethers.JsonRpcProvider | null;
   
   // Setters
   setCurrentTableId: (id: bigint | null) => void;
@@ -100,7 +100,7 @@ interface PokerStore {
   
   // Clear state
   clearTable: () => void;
-  clearTableData: () => void; // Clear data but keep currentTableId
+  clearTableData: () => void;
 }
 
 export const usePokerStore = create<PokerStore>()(
@@ -128,7 +128,6 @@ export const usePokerStore = create<PokerStore>()(
       setCurrentTableId: (id) => set({ currentTableId: id }),
       
       setContractInfo: (address, provider) => {
-        // Create fresh provider from RPC URL (no cache sharing with Privy)
         const freshProvider = new ethers.JsonRpcProvider(config.rpcUrl);
         set({ 
           contractAddress: address, 
@@ -166,12 +165,9 @@ export const usePokerStore = create<PokerStore>()(
         console.log('📊 Fetching FRESH table state for tableId:', tableId.toString(), '(cache bypassed)');
         
         try {
-          // Use readonly provider to bypass Privy's cache layer
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
           
-          // First check if table exists by checking nextTableId
           try {
-            // nextTableId is a public variable, not a function
             const nextTableId = await contract.nextTableId();
             console.log('Next table ID:', nextTableId.toString(), 'Requested:', tableId.toString());
             if (tableId >= nextTableId) {
@@ -182,10 +178,8 @@ export const usePokerStore = create<PokerStore>()(
             console.warn('Failed to check nextTableId:', err);
           }
           
-          // Use blockTag: "latest" to force fresh data from chain
           const state = await contract.getTableState(tableId, { blockTag: "latest" });
           console.log('✅ Got table state:', state);
-          // Also fetch table struct to get dealerIndex and blinds
           let tableStruct: {
             dealerIndex: bigint;
             smallBlind: bigint;
@@ -195,11 +189,9 @@ export const usePokerStore = create<PokerStore>()(
             tableStruct = await contract.tables(tableId, { blockTag: "latest" });
           } catch {}
           
-          // Fetch winner if game is finished (state 2)
           let winner: string | undefined = undefined;
           if (Number(state[0]) === 2) {
             try {
-              // Access the winner from the contract's table storage
               const tables = await contract.tables(tableId, { blockTag: "latest" });
               winner = tables.winner;
             } catch (error) {
@@ -222,7 +214,7 @@ export const usePokerStore = create<PokerStore>()(
               turnStartTime: state[6],
               playerActionTimeout: state[7],
             },
-            lastUpdate: Date.now(), // Force React re-render
+            lastUpdate: Date.now(),
           });
         } catch (error) {
           console.error('Failed to fetch table state:', error);
