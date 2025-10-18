@@ -192,7 +192,7 @@ export function PokerTable({
               <div className="text-white text-3xl font-semibold italic opacity-80 animate-pulse z-20">
                 Waiting for other players...
               </div>
-            ) : tableState?.state === 1 || tableState?.state === 3 ? (
+            ) : tableState?.state === 0 || tableState?.state === 2 ? (
               <div className="space-y-2 z-20 relative text-center pointer-events-auto">
                 <button
                   onClick={onStartGame}
@@ -206,7 +206,7 @@ export function PokerTable({
                 >
                   {isLoading
                     ? "Processing..."
-                    : tableState?.state === 1
+                    : tableState?.state === 0
                       ? "Start Game"
                       : "Start New Round"}
                 </button>

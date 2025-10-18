@@ -233,7 +233,7 @@ export const useFHEPoker = (parameters: {
   // Client-side countdown using turnStartTime and playerActionTimeout
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
-    if (tableState?.state === 2 && tableState.turnStartTime && tableState.playerActionTimeout) {
+    if (tableState?.state === 1 && tableState.turnStartTime && tableState.playerActionTimeout) {
       const startMs = Number(tableState.turnStartTime) * 1000;
       const timeoutSec = Number(tableState.playerActionTimeout);
       const tick = () => {

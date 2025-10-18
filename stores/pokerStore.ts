@@ -10,8 +10,6 @@ export interface TableState {
   numPlayers: bigint;
   maxPlayers: bigint;
   minBuyIn: bigint;
-  countdownStartTime: bigint;
-  countdownDuration: bigint;
   currentRound: bigint;
   isSeated: boolean;
   winner?: string;
@@ -197,9 +195,9 @@ export const usePokerStore = create<PokerStore>()(
             tableStruct = await contract.tables(tableId, { blockTag: "latest" });
           } catch {}
           
-          // Fetch winner if game is finished (state 3)
+          // Fetch winner if game is finished (state 2)
           let winner: string | undefined = undefined;
-          if (Number(state[0]) === 3) {
+          if (Number(state[0]) === 2) {
             try {
               // Access the winner from the contract's table storage
               const tables = await contract.tables(tableId, { blockTag: "latest" });
@@ -215,16 +213,14 @@ export const usePokerStore = create<PokerStore>()(
               numPlayers: state[1],
               maxPlayers: state[2],
               minBuyIn: state[3],
-              countdownStartTime: state[4],
-              countdownDuration: state[5],
-              currentRound: state[6],
-              isSeated: state[7],
+              currentRound: state[4],
+              isSeated: state[5],
               winner,
               dealerIndex: tableStruct ? (tableStruct.dealerIndex as bigint) : undefined,
               smallBlind: tableStruct ? (tableStruct.smallBlind as bigint) : undefined,
               bigBlind: tableStruct ? (tableStruct.bigBlind as bigint) : undefined,
-              turnStartTime: state[8],
-              playerActionTimeout: state[9],
+              turnStartTime: state[6],
+              playerActionTimeout: state[7],
             },
             lastUpdate: Date.now(), // Force React re-render
           });
@@ -251,7 +247,7 @@ export const usePokerStore = create<PokerStore>()(
           const potAmount = betting[0];
           
           // If game is about to finish or is Playing with a pot, save the pot amount
-          if (tableState && (tableState.state === 2 || tableState.state === 3) && potAmount > BigInt(0)) {
+          if (tableState && (tableState.state === 1 || tableState.state === 2) && potAmount > BigInt(0)) {
             set({ lastPot: potAmount });
           }
           

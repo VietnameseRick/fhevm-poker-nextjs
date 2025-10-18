@@ -14,13 +14,13 @@ import { useSmartAccount } from "../hooks/useSmartAccount";
 import { usePokerStore } from "@/stores/pokerStore";
 import Image from "next/image";
 
-// Dynamic imports for heavy components (better code splitting)
 const Showdown = lazy(() => import("./Showdown").then(mod => ({ default: mod.Showdown })));
 const TableBrowser = lazy(() => import("./TableBrowser").then(mod => ({ default: mod.TableBrowser })));
 const FundingRequiredModal = lazy(() => import("./FundingRequiredModal").then(mod => ({ default: mod.FundingRequiredModal })));
 const ChipsManagementModal = lazy(() => import("./ChipsManagementModal").then(mod => ({ default: mod.ChipsManagementModal })));
+const ShuffleAnimation = lazy(() => import("./ShuffleAnimation").then(mod => ({ default: mod.ShuffleAnimation })));
 
-const GAME_STATES = ["Waiting for Players", "Countdown", "Playing", "Finished"];
+const GAME_STATES = ["Waiting for Players", "Playing", "Finished"];
 const BETTING_STREETS = ["Pre-Flop", "Flop", "Turn", "River", "Showdown"];
 
 export function PokerGame() {
@@ -44,7 +44,6 @@ export function PokerGame() {
     checkBalance,
   } = useSmartAccount();
 
-  // Auto-switch to Sepolia on first connection
   useEffect(() => {
     console.log('Chain status:', { authenticated, chainId, isCorrectChain });
 
@@ -146,6 +145,7 @@ export function PokerGame() {
 
   // Chips management modal state
   const [showChipsManagementModal, setShowChipsManagementModal] = useState(false);
+  const [chipsModalInitialTab, setChipsModalInitialTab] = useState<"withdraw" | "add" | "leave">("add");
 
   // Use Privy address directly
   const yourAddress = address || "";
@@ -465,7 +465,7 @@ export function PokerGame() {
     });
 
     const isYourTurn = (poker.playerState && typeof poker.playerState === 'object' && poker.playerState.isCurrentPlayer) || false;
-    const isPlaying = poker.tableState?.state === 2;
+    const isPlaying = poker.tableState?.state === 1; // Playing state
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -568,7 +568,10 @@ export function PokerGame() {
                 {/* Chips Management Button */}
                 {poker.tableState.isSeated && (
                   <button
-                    onClick={() => setShowChipsManagementModal(true)}
+                    onClick={() => {
+                      setChipsModalInitialTab("add");
+                      setShowChipsManagementModal(true);
+                    }}
                     className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all duration-200 shadow-lg flex items-center gap-2"
                   >
                     <span className="text-lg">💰</span>
@@ -577,7 +580,10 @@ export function PokerGame() {
                 )}
 
                 <button
-                  onClick={() => setCurrentView("lobby")}
+                  onClick={() => {
+                    setChipsModalInitialTab("leave");
+                    setShowChipsManagementModal(true);
+                  }}
                   className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold transition-colors"
                 >
                   Leave Table
@@ -629,7 +635,7 @@ export function PokerGame() {
                         </div>
                       )}
                     </div>
-                    {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 2 && !poker.pendingAction && (
+                    {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 1 && !poker.pendingAction && (
                       <div className={`ml-2 flex items-center gap-1 px-2 py-1 rounded-full border ${poker.timeRemaining <= 10
                           ? 'bg-red-500/40 border-red-400 animate-pulse'
                           : poker.timeRemaining <= 30
@@ -743,7 +749,7 @@ export function PokerGame() {
                 </div>
                 <p>
                   <span className="text-gray-500">Game State:</span>{" "}
-                  <span className={poker.tableState.state === 2 ? "text-green-400 font-bold" : "text-yellow-400"}>
+                  <span className={poker.tableState.state === 1 ? "text-green-400 font-bold" : "text-yellow-400"}>
                     {poker.tableState.state} ({GAME_STATES[poker.tableState.state]})
                   </span>
                 </p>
@@ -808,8 +814,15 @@ export function PokerGame() {
             </div>
           )}
 
+          {/* Shuffle Animation - Show when waiting for shuffle */}
+          {poker.tableState.state === 2 && (
+            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
+              <ShuffleAnimation />
+            </Suspense>
+          )}
+
           {/* Showdown Overlay - Show when game is finished */}
-          {poker.tableState.state === 3 && poker.tableState.winner && (
+          {poker.tableState.state === 2 && poker.tableState.winner && (
             <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
               <Showdown
               winner={poker.tableState.winner}
@@ -838,6 +851,53 @@ export function PokerGame() {
               tableId={poker.currentTableId}
               contractAddress={poker.contractAddress}
               provider={ethersProvider}
+            />
+            </Suspense>
+          )}
+
+          {/* Chips Management Modal */}
+          {poker.currentTableId && poker.tableState && (
+            <Suspense fallback={null}>
+              <ChipsManagementModal
+              isOpen={showChipsManagementModal}
+              onClose={() => setShowChipsManagementModal(false)}
+              currentChips={typeof poker.playerState === 'object' && poker.playerState?.chips ? poker.playerState.chips : 0n}
+              minBuyIn={poker.tableState.minBuyIn}
+              onLeaveTable={async () => {
+                if (poker.currentTableId) {
+                  try {
+                    await poker.leaveTable(poker.currentTableId);
+                    setShowChipsManagementModal(false);
+                    setCurrentView("lobby"); // Navigate back to lobby
+                    console.log('✅ Left table successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to leave table:', error);
+                  }
+                }
+              }}
+              onWithdrawChips={async (amount: string) => {
+                if (poker.currentTableId) {
+                  try {
+                    await poker.withdrawChips(poker.currentTableId, amount);
+                    console.log('✅ Chips withdrawn successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to withdraw chips:', error);
+                  }
+                }
+              }}
+              onAddChips={async (amount: string) => {
+                if (poker.currentTableId) {
+                  try {
+                    await poker.addChips(poker.currentTableId, amount);
+                    console.log('✅ Chips added successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to add chips:', error);
+                  }
+                }
+              }}
+              isLoading={poker.isLoading}
+              gameState={poker.tableState.state}
+              initialTab={chipsModalInitialTab}
             />
             </Suspense>
           )}
@@ -1061,12 +1121,6 @@ export function PokerGame() {
                       </span>
                       <span className="ml-2 text-xs text-gray-400">(Live: {poker.players.length})</span>
                     </p>
-                    {poker.tableState.state === 1 && (
-                      <div className="mt-3 pt-3 border-t border-purple-500/30">
-                        <p className="text-yellow-300 text-sm font-semibold">⏱️ Countdown in progress...</p>
-                        <p className="text-gray-400 text-xs mt-1">Game will start automatically or you can advance it manually</p>
-                      </div>
-                    )}
                   </>
                 )}
               </div>
@@ -1074,14 +1128,14 @@ export function PokerGame() {
               {/* Action Buttons */}
               <div className="mt-4 space-y-2">
                 {/* Advance Game Button in Lobby */}
-                {poker.tableState && (poker.tableState.state === 1 || poker.tableState.state === 3) && (
+                {poker.tableState && poker.tableState.state === 2 && ( // Finished - ready to start new round
                   <div className="space-y-2">
                     <button
                       onClick={handleAdvanceGame}
                       disabled={poker.isLoading}
                       className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 disabled:cursor-not-allowed"
                     >
-                      {poker.isLoading ? "Processing..." : poker.tableState.state === 1 ? "🚀 Start Game Now" : "🔄 Start New Round"}
+                      {poker.isLoading ? "Processing..." : "🔄 Start New Round"}
                     </button>
                     <p className="text-center text-xs text-gray-400">
                       Will take you to the table after starting
@@ -1099,9 +1153,8 @@ export function PokerGame() {
                       <span className="text-2xl">🎮</span>
                       <div className="text-left">
                         <div className="font-bold">
-                          {poker.tableState?.state === 2 ? "Join Table (Game In Progress!)" :
-                            poker.tableState?.state === 1 ? "View Table (Countdown)" :
-                              "Go to Table"}
+                          {poker.tableState?.state === 1 ? "Go to Table (Game In Progress!)" :
+                            "Go to Table"}
                         </div>
                         <div className="text-xs opacity-90">Click if stuck in lobby</div>
                       </div>
@@ -1143,51 +1196,6 @@ export function PokerGame() {
             </Suspense>
           )}
 
-          {/* Chips Management Modal */}
-          {poker.currentTableId && poker.tableState && (
-            <Suspense fallback={null}>
-              <ChipsManagementModal
-              isOpen={showChipsManagementModal}
-              onClose={() => setShowChipsManagementModal(false)}
-              currentChips={typeof poker.playerState === 'object' && poker.playerState?.chips ? poker.playerState.chips : 0n}
-              minBuyIn={poker.tableState.minBuyIn}
-              onLeaveTable={async () => {
-                if (poker.currentTableId) {
-                  try {
-                    await poker.leaveTable(poker.currentTableId);
-                    setShowChipsManagementModal(false);
-                    setCurrentView("lobby"); // Navigate back to lobby
-                    console.log('✅ Left table successfully');
-                  } catch (error) {
-                    console.error('❌ Failed to leave table:', error);
-                  }
-                }
-              }}
-              onWithdrawChips={async (amount: string) => {
-                if (poker.currentTableId) {
-                  try {
-                    await poker.withdrawChips(poker.currentTableId, amount);
-                    console.log('✅ Chips withdrawn successfully');
-                  } catch (error) {
-                    console.error('❌ Failed to withdraw chips:', error);
-                  }
-                }
-              }}
-              onAddChips={async (amount: string) => {
-                if (poker.currentTableId) {
-                  try {
-                    await poker.addChips(poker.currentTableId, amount);
-                    console.log('✅ Chips added successfully');
-                  } catch (error) {
-                    console.error('❌ Failed to add chips:', error);
-                  }
-                }
-              }}
-              isLoading={poker.isLoading}
-              gameState={poker.tableState.state}
-            />
-            </Suspense>
-          )}
         </div>
       </div>
     </div>
