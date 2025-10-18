@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ethers } from "ethers";
+import toast, { Toaster } from 'react-hot-toast';
 
 interface ChipsManagementModalProps {
   isOpen: boolean;
@@ -12,7 +13,8 @@ interface ChipsManagementModalProps {
   onWithdrawChips: (amount: string) => Promise<void>;
   onAddChips: (amount: string) => Promise<void>;
   isLoading: boolean;
-  gameState: number; // 0=WaitingForPlayers, 1=Countdown, 2=Playing, 3=Finished
+  gameState: number; // 0=WaitingForPlayers, 1=Playing, 2=Finished
+  initialTab?: "withdraw" | "add" | "leave";
 }
 
 export function ChipsManagementModal({
@@ -25,52 +27,118 @@ export function ChipsManagementModal({
   onAddChips,
   isLoading,
   gameState,
+  initialTab = "add",
 }: ChipsManagementModalProps) {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [addAmount, setAddAmount] = useState("");
-  const [activeTab, setActiveTab] = useState<"withdraw" | "add" | "leave">("add");
+  const [activeTab, setActiveTab] = useState<"withdraw" | "add" | "leave">(initialTab);
+
+  // Reset active tab when modal opens with new initialTab
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   if (!isOpen) return null;
 
   const currentChipsEth = ethers.formatEther(currentChips);
   const minBuyInEth = ethers.formatEther(minBuyIn);
-  const canManageChips = gameState === 0 || gameState === 3; // WaitingForPlayers or Finished
+  const isPlaying = gameState === 1; // Playing state
 
   const handleWithdraw = async () => {
-    if (!withdrawAmount || isLoading) return;
-    await onWithdrawChips(withdrawAmount);
-    setWithdrawAmount("");
+    if (isLoading) {
+      toast.error('Please wait for the current operation to complete');
+      return;
+    }
+    if (!withdrawAmount) {
+      toast.error('Please enter an amount to withdraw');
+      return;
+    }
+    
+    try {
+      await onWithdrawChips(withdrawAmount);
+      toast.success(`Successfully withdrew ${withdrawAmount} ETH!`);
+      setWithdrawAmount("");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('CANNOT_WITHDRAW_ON_YOUR_TURN')) {
+        toast.error('Cannot withdraw during your turn. Please act first or wait for the next round.', {
+          duration: 5000,
+        });
+      } else if (errorMessage.includes('MUST_LEAVE_10X_BIG_BLIND')) {
+        toast.error('During game: must leave at least 10x big blind or withdraw all', {
+          duration: 5000,
+        });
+      } else {
+        toast.error(`Failed to withdraw: ${errorMessage}`);
+      }
+    }
   };
 
   const handleAdd = async () => {
-    if (!addAmount || isLoading) return;
-    await onAddChips(addAmount);
-    setAddAmount("");
+    if (isLoading) {
+      toast.error('Please wait for the current operation to complete');
+      return;
+    }
+    if (!addAmount) {
+      toast.error('Please enter an amount to add');
+      return;
+    }
+    
+    try {
+      await onAddChips(addAmount);
+      toast.success(`Successfully added ${addAmount} ETH to your stack!`);
+      setAddAmount("");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to add chips: ${errorMessage}`);
+    }
   };
 
   const handleLeave = async () => {
-    console.log('🔘 Leave button clicked', { isLoading, canManageChips, gameState });
     if (isLoading) {
-      console.log('⏳ Already loading, ignoring click');
+      toast.error('Please wait for the current operation to complete');
       return;
     }
-    if (!canManageChips) {
-      console.log('⚠️ Cannot manage chips in current game state:', gameState);
-      return;
-    }
-    console.log('✅ Calling onLeaveTable...');
+    
     try {
       await onLeaveTable();
-      console.log('✅ onLeaveTable completed successfully');
+      toast.success('Successfully left the table!');
       onClose();
     } catch (error) {
-      console.error('❌ Error in handleLeave:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to leave table: ${errorMessage}`);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-70 backdrop-blur-sm">
-      <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700">
+    <>
+      <Toaster 
+        position="top-center"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#1f2937',
+            color: '#fff',
+            border: '1px solid #374151',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-70 backdrop-blur-sm">
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
@@ -112,13 +180,12 @@ export function ChipsManagementModal({
             </div>
           </div>
 
-          {!canManageChips && (
-            <div className="bg-orange-900 bg-opacity-30 border border-orange-700 rounded-xl p-4">
+          {isPlaying && (
+            <div className="bg-blue-900 bg-opacity-30 border border-blue-700 rounded-xl p-4">
               <div className="flex gap-2">
-                <span className="text-xl flex-shrink-0">⚠️</span>
-                <p className="text-sm text-orange-200">
-                  Chip management is only available when game is not in progress. 
-                  Wait for the current game to finish.
+                <span className="text-xl flex-shrink-0">ℹ️</span>
+                <p className="text-sm text-blue-200">
+                  Game in progress: You can add chips anytime. Withdrawal/leave has special rules.
                 </p>
               </div>
             </div>
@@ -164,7 +231,7 @@ export function ChipsManagementModal({
             {activeTab === "add" && (
               <div className="space-y-4">
                 <p className="text-gray-300">
-                  Top up your chip stack by adding more ETH. You can add chips any time when the game is not in progress.
+                  Top up your chip stack by adding more ETH. You can add chips anytime, even during an active game!
                 </p>
                 <div>
                   <label className="block text-sm font-semibold text-gray-300 mb-2">
@@ -177,13 +244,13 @@ export function ChipsManagementModal({
                     value={addAmount}
                     onChange={(e) => setAddAmount(e.target.value)}
                     placeholder="0.0"
-                    disabled={!canManageChips || isLoading}
+                    disabled={isLoading}
                     className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none disabled:opacity-50"
                   />
                 </div>
                 <button
                   onClick={handleAdd}
-                  disabled={!addAmount || !canManageChips || isLoading}
+                  disabled={isLoading}
                   className="w-full py-3 px-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold rounded-lg transition-all duration-200 shadow-lg disabled:cursor-not-allowed"
                 >
                   {isLoading ? "Processing..." : `Add ${addAmount || "0"} ETH`}
@@ -195,9 +262,17 @@ export function ChipsManagementModal({
             {activeTab === "withdraw" && (
               <div className="space-y-4">
                 <p className="text-gray-300">
-                  Withdraw chips from the table while staying seated. You must leave at least{" "}
-                  <strong className="text-yellow-400">{minBuyInEth} ETH</strong> (minimum buy-in) 
-                  or withdraw all chips.
+                  Withdraw chips from the table while staying seated.{" "}
+                  {isPlaying ? (
+                    <>
+                      During game: Leave at least <strong className="text-yellow-400">10x big blind</strong> or withdraw all.
+                      Cannot withdraw on your turn.
+                    </>
+                  ) : (
+                    <>
+                      Must leave at least <strong className="text-yellow-400">{minBuyInEth} ETH</strong> or withdraw all.
+                    </>
+                  )}
                 </p>
                 <div>
                   <label className="block text-sm font-semibold text-gray-300 mb-2">
@@ -211,14 +286,14 @@ export function ChipsManagementModal({
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(e.target.value)}
                     placeholder="0.0"
-                    disabled={!canManageChips || isLoading}
+                    disabled={isLoading}
                     className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
                   />
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setWithdrawAmount(currentChipsEth)}
-                    disabled={!canManageChips || isLoading}
+                    disabled={isLoading}
                     className="flex-1 py-2 px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
                     Withdraw All
@@ -226,14 +301,17 @@ export function ChipsManagementModal({
                 </div>
                 <button
                   onClick={handleWithdraw}
-                  disabled={!withdrawAmount || !canManageChips || isLoading}
+                  disabled={isLoading}
                   className="w-full py-3 px-6 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold rounded-lg transition-all duration-200 shadow-lg disabled:cursor-not-allowed"
                 >
                   {isLoading ? "Processing..." : `Withdraw ${withdrawAmount || "0"} ETH`}
                 </button>
                 <div className="bg-yellow-900 bg-opacity-20 border border-yellow-700 rounded-lg p-3">
                     <span className="text-xs text-yellow-200">
-                      💡 <strong>Tip:</strong> Remaining chips must be ≥ {minBuyInEth} ETH or withdraw all to leave your seat
+                      💡 <strong>Tip:</strong> {isPlaying 
+                        ? "During game: must leave ≥ 10x big blind or withdraw all. Can't withdraw on your turn."
+                        : `Remaining chips must be ≥ ${minBuyInEth} ETH or withdraw all to leave your seat`
+                      }
                     </span>
                 </div>
               </div>
@@ -244,7 +322,7 @@ export function ChipsManagementModal({
               <div className="space-y-4">
                 <p className="text-gray-300">
                   Leave the table and withdraw all your remaining chips ({currentChipsEth} ETH).
-                  You can only leave when no game is in progress.
+                  {isPlaying && " If you're in an active hand, you'll automatically fold."}
                 </p>
                 <div className="bg-red-900 bg-opacity-20 border border-red-700 rounded-lg p-4">
                   <div className="flex gap-2">
@@ -255,6 +333,7 @@ export function ChipsManagementModal({
                         Leaving the table will:
                       </p>
                       <ul className="list-disc list-inside mt-2 space-y-1">
+                        {isPlaying && <li>Auto-fold if you&apos;re in an active hand</li>}
                         <li>Remove you from the player list</li>
                         <li>Withdraw all {currentChipsEth} ETH to your wallet</li>
                         <li>You&apos;ll need to join again to play</li>
@@ -263,16 +342,9 @@ export function ChipsManagementModal({
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {!canManageChips && (
-                    <div className="bg-red-900 bg-opacity-30 border border-red-700 rounded-lg p-3">
-                      <p className="text-sm text-red-200">
-                        ⚠️ Cannot leave during {gameState === 1 ? 'countdown' : 'active game'}. Wait for the game to finish.
-                      </p>
-                    </div>
-                  )}
                   <button
                     onClick={handleLeave}
-                    disabled={!canManageChips || isLoading}
+                    disabled={isLoading}
                     className="w-full py-3 px-6 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold rounded-lg transition-all duration-200 shadow-lg disabled:cursor-not-allowed"
                   >
                     {isLoading ? "Processing..." : `Leave Table & Withdraw ${currentChipsEth} ETH`}
@@ -294,6 +366,7 @@ export function ChipsManagementModal({
         </div>
       </div>
     </div>
+    </>
   );
 }
 

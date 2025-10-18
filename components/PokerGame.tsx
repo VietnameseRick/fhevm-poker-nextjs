@@ -1,21 +1,26 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { ethers } from "ethers";
 import { useFhevm } from "@fhevm/react";
 import { useFHEPoker } from "@/hooks/useFHEPoker";
 import { PokerTable } from "./PokerTable";
 import { BettingControls } from "./BettingControls";
-import { Showdown } from "./Showdown";
-import { TableBrowser } from "./TableBrowser";
 import { WalletHeader } from "./WalletHeader";
-import { FundingRequiredModal } from "./FundingRequiredModal";
-import { ChipsManagementModal } from "./ChipsManagementModal";
+import { CyberpunkLoader } from "./CyberpunkLoader";
+import { TransactionConfirmModal } from "./TransactionConfirmModal";
 import { useInMemoryStorage } from "../hooks/useInMemoryStorage";
 import { useSmartAccount } from "../hooks/useSmartAccount";
+import { usePokerStore } from "@/stores/pokerStore";
 import Image from "next/image";
 
-const GAME_STATES = ["Waiting for Players", "Countdown", "Playing", "Finished"];
+const Showdown = lazy(() => import("./Showdown").then(mod => ({ default: mod.Showdown })));
+const TableBrowser = lazy(() => import("./TableBrowser").then(mod => ({ default: mod.TableBrowser })));
+const FundingRequiredModal = lazy(() => import("./FundingRequiredModal").then(mod => ({ default: mod.FundingRequiredModal })));
+const ChipsManagementModal = lazy(() => import("./ChipsManagementModal").then(mod => ({ default: mod.ChipsManagementModal })));
+const ShuffleAnimation = lazy(() => import("./ShuffleAnimation").then(mod => ({ default: mod.ShuffleAnimation })));
+
+const GAME_STATES = ["Waiting for Players", "Playing", "Finished"];
 const BETTING_STREETS = ["Pre-Flop", "Flop", "Turn", "River", "Showdown"];
 
 export function PokerGame() {
@@ -39,7 +44,6 @@ export function PokerGame() {
     checkBalance,
   } = useSmartAccount();
 
-  // Auto-switch to Sepolia on first connection
   useEffect(() => {
     console.log('Chain status:', { authenticated, chainId, isCorrectChain });
 
@@ -78,12 +82,12 @@ export function PokerGame() {
     smartAccountAddress, // Pass smart account address for FHEVM signature
   });
 
-  // UI States
+  const pendingTransaction = usePokerStore(state => state.pendingTransaction);
+  const storeIsLoading = usePokerStore(state => state.isLoading);
+
   const [showCreateTable, setShowCreateTable] = useState(true);
   const [showJoinTable, setShowJoinTable] = useState(false);
   const [currentView, setCurrentView] = useState<"lobby" | "game">("lobby");
-
-  // Update balances periodically
   useEffect(() => {
     const updateBalances = async () => {
       if (smartAccountAddress && checkBalance) {
@@ -110,38 +114,29 @@ export function PokerGame() {
     return () => clearInterval(interval);
   }, [smartAccountAddress, eoaAddress, checkBalance, ethersProvider]);
 
-  // Deposit function
   const handleDepositToSmartAccount = () => {
     setShowFundingModal(true);
   };
+  
   const [isTableBrowserOpen, setIsTableBrowserOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isPortrait, setIsPortrait] = useState(false);
-
-  // Form states
   const [tableIdInput, setTableIdInput] = useState<string>("");
   const [minBuyInInput, setMinBuyInInput] = useState<string>("0.2");
   const [maxPlayersInput, setMaxPlayersInput] = useState<string>("9");
   const [smallBlindInput, setSmallBlindInput] = useState<string>("0.005");
   const [bigBlindInput, setBigBlindInput] = useState<string>("0.01");
   const [buyInAmountInput, setBuyInAmountInput] = useState<string>("0.2");
-
-  // Funding modal states
   const [showFundingModal, setShowFundingModal] = useState(false);
   const [currentBalance, setCurrentBalance] = useState<bigint>(0n);
   const [requiredAmount, setRequiredAmount] = useState<bigint>(0n);
-
-  // Balance states
   const [smartAccountBalance, setSmartAccountBalance] = useState<bigint>(0n);
   const [eoaBalance, setEoaBalance] = useState<bigint>(0n);
-
-  // Chips management modal state
   const [showChipsManagementModal, setShowChipsManagementModal] = useState(false);
+  const [chipsModalInitialTab, setChipsModalInitialTab] = useState<"withdraw" | "add" | "leave">("add");
 
-  // Use Privy address directly
   const yourAddress = address || "";
 
-  // Debug: Log addresses
   useEffect(() => {
     if (yourAddress) {
       console.log('🔍 Address Debug:', {
@@ -154,8 +149,6 @@ export function PokerGame() {
       });
     }
   }, [yourAddress, smartAccountAddress, eoaAddress, isSmartAccount, poker.players]);
-
-  // Responsive detection (mobile + orientation)
   useEffect(() => {
     const updateViewport = () => {
       if (typeof window === "undefined") return;
@@ -172,27 +165,20 @@ export function PokerGame() {
     };
   }, []);
 
-  // Comprehensive auto-navigation - moves to game view when player is seated
   useEffect(() => {
-    // Skip if not authenticated or no table/state data
     if (!authenticated || !yourAddress || !poker.currentTableId || !poker.tableState) {
       return;
     }
 
-    // Skip if already in game view
     if (currentView === "game") {
       return;
     }
 
-    // Check if user is in the players list
     const isInPlayersList = poker.players.some(
       addr => addr.toLowerCase() === yourAddress.toLowerCase()
     );
 
-    // Check if user is marked as seated in table state
-    const isSeated = poker.tableState.isSeated;
-
-    // Auto-navigate if player is seated OR in players list
+    const isSeated = poker.isSeated;
     if (isSeated || isInPlayersList) {
       console.log('🎮 Auto-navigating to game view:', {
         tableId: poker.currentTableId.toString(),
@@ -208,23 +194,19 @@ export function PokerGame() {
     poker.currentTableId,
     poker.tableState,
     poker.tableState?.state,
-    poker.tableState?.isSeated,
+    poker.isSeated,
     poker.players,
     currentView,
   ]);
 
   const handleCreateTable = async () => {
-    // Create the table - this waits for the transaction and sets currentTableId
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
-    // Wagmi event listeners will automatically refresh when TableCreated event is detected
     console.log('✅ Table created, Wagmi will handle state updates');
   };
 
   const handleJoinTable = async () => {
     const tableId = BigInt(tableIdInput || poker.currentTableId?.toString() || "0");
     const buyInAmount = ethers.parseEther(buyInAmountInput);
-
-    // Check balance if using smart account
     if (isSmartAccount && smartAccountAddress && checkBalance) {
       const balance = await checkBalance();
       setCurrentBalance(balance);
@@ -238,26 +220,19 @@ export function PokerGame() {
     }
 
     try {
-      // Join the table - this waits for the transaction to succeed
       await poker.joinTable(tableId, buyInAmountInput);
-
-      // Transaction succeeded! Switch to game view immediately
-      // Wagmi event listeners will refresh the table state automatically
       console.log('✅ Join successful, switching to game view');
       setCurrentView("game");
     } catch (error) {
       console.error('❌ Failed to join table:', error);
-      // Don't switch view if join failed
     }
   };
 
   const handleAdvanceGame = async () => {
     if (poker.currentTableId !== undefined) {
       await poker.advanceGame(poker.currentTableId);
-      // Refresh and navigate after a short delay
       setTimeout(async () => {
         await poker.refreshTableState(poker.currentTableId!);
-        // Force navigate to game view
         setCurrentView("game");
       }, 1000);
     }
@@ -329,7 +304,6 @@ export function PokerGame() {
   }
 
   if (poker.isDeployed === false) {
-    // Show loading if chainId is not yet available
     if (!chainId) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -388,9 +362,7 @@ export function PokerGame() {
     );
   }
 
-  // Game View
   if (currentView === "game") {
-    // Show loading or error if data not ready
     if (poker.currentTableId === undefined) {
       console.log('Game view: currentTableId is undefined', {
         currentTableId: poker.currentTableId,
@@ -414,23 +386,29 @@ export function PokerGame() {
 
     if (!poker.tableState) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
-            <p className="text-white text-xl mb-4">Loading table state...</p>
-            <p className="text-gray-400 text-sm mb-4">Table #{poker.currentTableId.toString()}</p>
-            <button
-              onClick={() => poker.refreshTableState(poker.currentTableId!)}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
-            >
-              🔄 Retry
-            </button>
+        <>
+          {/* Only show CyberpunkLoader when NOT waiting for transaction confirmation */}
+          <CyberpunkLoader isLoading={!pendingTransaction?.isWaiting} />
+          <TransactionConfirmModal 
+            isOpen={pendingTransaction?.isWaiting || false}
+            action={pendingTransaction?.action || ""}
+          />
+          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+            <div className="text-center">
+              <p className="text-gray-400 text-sm mb-4">Table #{poker.currentTableId.toString()}</p>
+              <button
+                onClick={() => poker.refreshTableState(poker.currentTableId!)}
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold border-2 border-green-500 shadow-lg shadow-green-500/50"
+              >
+                🔄 Retry
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       );
     }
+    
     const playerData = poker.players.map((address) => {
-      // Get betting state for this specific player from allPlayersBettingState
       const playerBettingState = poker.allPlayersBettingState[address.toLowerCase()];
 
       return {
@@ -448,10 +426,18 @@ export function PokerGame() {
     });
 
     const isYourTurn = (poker.playerState && typeof poker.playerState === 'object' && poker.playerState.isCurrentPlayer) || false;
-    const isPlaying = poker.tableState?.state === 2;
+    const isPlaying = poker.tableState?.state === 1; // Playing state
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        {/* Global Loaders and Modals */}
+        {/* Only show CyberpunkLoader when loading but NOT waiting for transaction confirmation */}
+        <CyberpunkLoader isLoading={storeIsLoading && !pendingTransaction?.isWaiting} />
+        <TransactionConfirmModal 
+          isOpen={pendingTransaction?.isWaiting || false}
+          action={pendingTransaction?.action || ""}
+        />
+        
         {/* Wallet Header */}
         <WalletHeader
           address={address}
@@ -541,9 +527,12 @@ export function PokerGame() {
                 )}
 
                 {/* Chips Management Button */}
-                {poker.tableState.isSeated && (
+                {poker.isSeated && (
                   <button
-                    onClick={() => setShowChipsManagementModal(true)}
+                    onClick={() => {
+                      setChipsModalInitialTab("add");
+                      setShowChipsManagementModal(true);
+                    }}
                     className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all duration-200 shadow-lg flex items-center gap-2"
                   >
                     <span className="text-lg">💰</span>
@@ -552,7 +541,10 @@ export function PokerGame() {
                 )}
 
                 <button
-                  onClick={() => setCurrentView("lobby")}
+                  onClick={() => {
+                    setChipsModalInitialTab("leave");
+                    setShowChipsManagementModal(true);
+                  }}
                   className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold transition-colors"
                 >
                   Leave Table
@@ -604,7 +596,7 @@ export function PokerGame() {
                         </div>
                       )}
                     </div>
-                    {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 2 && !poker.pendingAction && (
+                    {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 1 && !poker.pendingAction && (
                       <div className={`ml-2 flex items-center gap-1 px-2 py-1 rounded-full border ${poker.timeRemaining <= 10
                           ? 'bg-red-500/40 border-red-400 animate-pulse'
                           : poker.timeRemaining <= 30
@@ -650,7 +642,7 @@ export function PokerGame() {
                 decryptedCommunityCards={poker.decryptedCommunityCards}
                 isDecrypting={poker.isDecrypting}
                 handleDecryptCommunityCards={handleDecryptCommunityCards}
-                isSeated={poker.tableState.isSeated}
+                isSeated={poker.isSeated}
                 playerState={poker.playerState}
                 clear={poker.cards[0]?.clear}
                 handleDecryptCards={handleDecryptCards}
@@ -659,7 +651,7 @@ export function PokerGame() {
 
               {/* Controls */}
               <div className="space-y-4">
-                {isPlaying && (poker.tableState.isSeated || poker.playerState) && poker.playerState && (
+                {isPlaying && (poker.isSeated || poker.playerState) && poker.playerState && (
                   <>
                     <BettingControls
                       canAct={isYourTurn && !poker.playerState.hasFolded}
@@ -673,13 +665,11 @@ export function PokerGame() {
                         const currentBet = poker.bettingInfo?.currentBet || 0n;
                         const myBet = (typeof poker.playerState === 'object' && poker.playerState?.currentBet) ? poker.playerState.currentBet : 0n;
                         if (myBet >= currentBet) {
-                          // Up-to-date state says no bet to call → check instead
                           return poker.check(poker.currentTableId!);
                         }
                         return poker.call(poker.currentTableId!);
                       }}
                       onRaise={(amount) => {
-                        // Interpret input as "raise to" total; convert to delta for the contract
                         try {
                           const targetWei = ethers.parseEther(amount);
                           const current = poker.bettingInfo?.currentBet || 0n;
@@ -687,7 +677,6 @@ export function PokerGame() {
                           const deltaEth = ethers.formatEther(deltaWei);
                           poker.raise(poker.currentTableId!, deltaEth);
                         } catch {
-                          // Fallback: pass through
                           poker.raise(poker.currentTableId!, amount);
                         }
                       }}
@@ -709,16 +698,10 @@ export function PokerGame() {
               <div className="bg-gray-800/50 rounded-lg p-4 text-xs text-gray-300 space-y-1">
                 <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-700">
                   <p className="font-bold text-white">Debug Info</p>
-                  <button
-                    onClick={() => poker.refreshTableState(poker.currentTableId!)}
-                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white text-xs"
-                  >
-                    🔄 Force Refresh
-                  </button>
                 </div>
                 <p>
                   <span className="text-gray-500">Game State:</span>{" "}
-                  <span className={poker.tableState.state === 2 ? "text-green-400 font-bold" : "text-yellow-400"}>
+                  <span className={poker.tableState.state === 1 ? "text-green-400 font-bold" : "text-yellow-400"}>
                     {poker.tableState.state} ({GAME_STATES[poker.tableState.state]})
                   </span>
                 </p>
@@ -728,8 +711,11 @@ export function PokerGame() {
                     {poker.isConnected ? "✅ Connected" : "⚠️ Polling Only"}
                   </span>
                 </p>
-                <p className={poker.tableState.isSeated ? "text-green-400" : "text-red-400"}>
-                  <span className="text-gray-500">Is Seated (contract):</span> {poker.tableState.isSeated ? "Yes" : "No"}
+                <p className={poker.isSeated ? "text-green-400" : "text-red-400"}>
+                  <span className="text-gray-500">Is Seated (computed):</span> {poker.isSeated ? "Yes" : "No"}
+                </p>
+                <p className={poker.tableState?.isSeated ? "text-green-400" : "text-red-400"}>
+                  <span className="text-gray-500">Is Seated (contract, unreliable):</span> {poker.tableState?.isSeated ? "Yes" : "No"}
                 </p>
                 <p className={poker.players.some(p => p.toLowerCase() === yourAddress.toLowerCase()) ? "text-green-400" : "text-red-400"}>
                   <span className="text-gray-500">In Players List:</span>{" "}
@@ -783,9 +769,17 @@ export function PokerGame() {
             </div>
           )}
 
+          {/* Shuffle Animation - Show when waiting for shuffle */}
+          {poker.tableState.state === 2 && (
+            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
+              <ShuffleAnimation />
+            </Suspense>
+          )}
+
           {/* Showdown Overlay - Show when game is finished */}
-          {poker.tableState.state === 3 && poker.tableState.winner && (
-            <Showdown
+          {poker.tableState.state === 2 && poker.tableState.winner && (
+            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
+              <Showdown
               winner={poker.tableState.winner}
               myAddress={yourAddress}
               myCards={
@@ -813,13 +807,60 @@ export function PokerGame() {
               contractAddress={poker.contractAddress}
               provider={ethersProvider}
             />
+            </Suspense>
+          )}
+
+          {/* Chips Management Modal */}
+          {poker.currentTableId && poker.tableState && (
+            <Suspense fallback={null}>
+              <ChipsManagementModal
+              isOpen={showChipsManagementModal}
+              onClose={() => setShowChipsManagementModal(false)}
+              currentChips={typeof poker.playerState === 'object' && poker.playerState?.chips ? poker.playerState.chips : 0n}
+              minBuyIn={poker.tableState.minBuyIn}
+              onLeaveTable={async () => {
+                if (poker.currentTableId) {
+                  try {
+                    await poker.leaveTable(poker.currentTableId);
+                    setShowChipsManagementModal(false);
+                    setCurrentView("lobby"); // Navigate back to lobby
+                    console.log('✅ Left table successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to leave table:', error);
+                  }
+                }
+              }}
+              onWithdrawChips={async (amount: string) => {
+                if (poker.currentTableId) {
+                  try {
+                    await poker.withdrawChips(poker.currentTableId, amount);
+                    console.log('✅ Chips withdrawn successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to withdraw chips:', error);
+                  }
+                }
+              }}
+              onAddChips={async (amount: string) => {
+                if (poker.currentTableId) {
+                  try {
+                    await poker.addChips(poker.currentTableId, amount);
+                    console.log('✅ Chips added successfully');
+                  } catch (error) {
+                    console.error('❌ Failed to add chips:', error);
+                  }
+                }
+              }}
+              isLoading={poker.isLoading}
+              gameState={poker.tableState.state}
+              initialTab={chipsModalInitialTab}
+            />
+            </Suspense>
           )}
         </div>
       </div>
     );
   }
 
-  // Lobby View
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Wallet Header */}
@@ -1034,12 +1075,6 @@ export function PokerGame() {
                       </span>
                       <span className="ml-2 text-xs text-gray-400">(Live: {poker.players.length})</span>
                     </p>
-                    {poker.tableState.state === 1 && (
-                      <div className="mt-3 pt-3 border-t border-purple-500/30">
-                        <p className="text-yellow-300 text-sm font-semibold">⏱️ Countdown in progress...</p>
-                        <p className="text-gray-400 text-xs mt-1">Game will start automatically or you can advance it manually</p>
-                      </div>
-                    )}
                   </>
                 )}
               </div>
@@ -1047,14 +1082,14 @@ export function PokerGame() {
               {/* Action Buttons */}
               <div className="mt-4 space-y-2">
                 {/* Advance Game Button in Lobby */}
-                {poker.tableState && (poker.tableState.state === 1 || poker.tableState.state === 3) && (
+                {poker.tableState && poker.tableState.state === 2 && ( // Finished - ready to start new round
                   <div className="space-y-2">
                     <button
                       onClick={handleAdvanceGame}
                       disabled={poker.isLoading}
                       className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 disabled:cursor-not-allowed"
                     >
-                      {poker.isLoading ? "Processing..." : poker.tableState.state === 1 ? "🚀 Start Game Now" : "🔄 Start New Round"}
+                      {poker.isLoading ? "Processing..." : "🔄 Start New Round"}
                     </button>
                     <p className="text-center text-xs text-gray-400">
                       Will take you to the table after starting
@@ -1072,9 +1107,8 @@ export function PokerGame() {
                       <span className="text-2xl">🎮</span>
                       <div className="text-left">
                         <div className="font-bold">
-                          {poker.tableState?.state === 2 ? "Join Table (Game In Progress!)" :
-                            poker.tableState?.state === 1 ? "View Table (Countdown)" :
-                              "Go to Table"}
+                          {poker.tableState?.state === 1 ? "Go to Table (Game In Progress!)" :
+                            "Go to Table"}
                         </div>
                         <div className="text-xs opacity-90">Click if stuck in lobby</div>
                       </div>
@@ -1085,7 +1119,8 @@ export function PokerGame() {
             </div>
           )}
           {/* Table Browser Modal */}
-          <TableBrowser
+          <Suspense fallback={null}>
+            <TableBrowser
             isOpen={isTableBrowserOpen}
             onClose={() => setIsTableBrowserOpen(false)}
             onSelect={(id, minBuyIn) => {
@@ -1093,16 +1128,17 @@ export function PokerGame() {
               setShowJoinTable(true);
               setIsTableBrowserOpen(false);
               setTableIdInput(id.toString());
-              // Auto-fill the buy-in amount with the table's minimum buy-in
               setBuyInAmountInput(ethers.formatEther(minBuyIn));
             }}
             contractAddress={poker.contractAddress}
             provider={ethersProvider}
           />
+          </Suspense>
 
           {/* Funding Required Modal */}
           {isSmartAccount && smartAccountAddress && (
-            <FundingRequiredModal
+            <Suspense fallback={null}>
+              <FundingRequiredModal
               isOpen={showFundingModal}
               onClose={() => setShowFundingModal(false)}
               smartAccountAddress={smartAccountAddress}
@@ -1110,51 +1146,9 @@ export function PokerGame() {
               requiredAmount={requiredAmount}
               eoaAddress={eoaAddress}
             />
+            </Suspense>
           )}
 
-          {/* Chips Management Modal */}
-          {poker.currentTableId && poker.tableState && (
-            <ChipsManagementModal
-              isOpen={showChipsManagementModal}
-              onClose={() => setShowChipsManagementModal(false)}
-              currentChips={typeof poker.playerState === 'object' && poker.playerState?.chips ? poker.playerState.chips : 0n}
-              minBuyIn={poker.tableState.minBuyIn}
-              onLeaveTable={async () => {
-                if (poker.currentTableId) {
-                  try {
-                    await poker.leaveTable(poker.currentTableId);
-                    setShowChipsManagementModal(false);
-                    setCurrentView("lobby"); // Navigate back to lobby
-                    console.log('✅ Left table successfully');
-                  } catch (error) {
-                    console.error('❌ Failed to leave table:', error);
-                  }
-                }
-              }}
-              onWithdrawChips={async (amount: string) => {
-                if (poker.currentTableId) {
-                  try {
-                    await poker.withdrawChips(poker.currentTableId, amount);
-                    console.log('✅ Chips withdrawn successfully');
-                  } catch (error) {
-                    console.error('❌ Failed to withdraw chips:', error);
-                  }
-                }
-              }}
-              onAddChips={async (amount: string) => {
-                if (poker.currentTableId) {
-                  try {
-                    await poker.addChips(poker.currentTableId, amount);
-                    console.log('✅ Chips added successfully');
-                  } catch (error) {
-                    console.error('❌ Failed to add chips:', error);
-                  }
-                }
-              }}
-              isLoading={poker.isLoading}
-              gameState={poker.tableState.state}
-            />
-          )}
         </div>
       </div>
     </div>

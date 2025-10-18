@@ -3,7 +3,9 @@
 import { PlayerSeat } from "./PlayerSeat";
 import { Card } from "./CardDisplay";
 import React from "react";
-import { PlayerBettingState } from "@/stores/pokerStore";
+import { PlayerBettingState, usePokerStore } from "@/stores/pokerStore";
+import { CyberpunkLoader } from "./CyberpunkLoader";
+import { evaluateBestHand } from "@/utils/handEvaluator";
 
 interface Player {
   address: string;
@@ -70,7 +72,31 @@ export function PokerTable({
   handleDecryptCards,
   timeLeft,
 }: PokerTableProps) {
+  // Get loading state from Zustand store for cyberpunk loader
+  const storeIsLoading = usePokerStore(state => state.isLoading);
   const formatEth = (wei: bigint) => (Number(wei) / 1e18).toFixed(4);
+
+  // Evaluate the player's hand to highlight community cards
+  // Need at least 2 hole cards + 3 community (flop) = 5 total cards
+  const yourPlayer = players.find(p => p.address.toLowerCase() === yourAddress?.toLowerCase());
+  const validPlayerCards = yourPlayer?.cards?.filter((c): c is number => c !== undefined) || [];
+  const validCommunity = decryptedCommunityCards.filter((c): c is number => c !== undefined && c !== 0);
+  const totalPlayerCards = [...validPlayerCards, ...validCommunity];
+
+  const playerHandEval = 
+    showYourCards &&
+    validPlayerCards.length === 2 && 
+    validCommunity.length >= 3 &&
+    totalPlayerCards.length >= 5
+      ? evaluateBestHand(totalPlayerCards)
+      : null;
+
+  // Get community card highlights (indices 0-4 for the 5 community cards)
+  const communityHighlights = playerHandEval
+    ? playerHandEval.contributingCardIndices
+        .filter((i: number) => i >= 2)
+        .map((i: number) => i - 2)
+    : [];
 
   const renderDecryptButton = () => {
     if (!isPlaying || !communityCards || currentStreet < 1) return null;
@@ -144,7 +170,11 @@ export function PokerTable({
 
 
   return (
-    <div className="relative w-full max-w-6xl mx-auto p-10">
+    <>
+      {/* Cyberpunk loading overlay - shows during state fetches */}
+      <CyberpunkLoader isLoading={storeIsLoading || isLoading} />
+      
+      <div className="relative w-full max-w-6xl mx-auto p-10">
       <div className="relative w-full h-[500px] mb-16 mt-10">
         <div
           className="relative flex items-center justify-center mx-auto pointer-events-none"
@@ -162,7 +192,7 @@ export function PokerTable({
               <div className="text-white text-3xl font-semibold italic opacity-80 animate-pulse z-20">
                 Waiting for other players...
               </div>
-            ) : tableState?.state === 1 || tableState?.state === 3 ? (
+            ) : tableState?.state === 0 || tableState?.state === 2 ? (
               <div className="space-y-2 z-20 relative text-center pointer-events-auto">
                 <button
                   onClick={onStartGame}
@@ -176,7 +206,7 @@ export function PokerTable({
                 >
                   {isLoading
                     ? "Processing..."
-                    : tableState?.state === 1
+                    : tableState?.state === 0
                       ? "Start Game"
                       : "Start New Round"}
                 </button>
@@ -191,22 +221,47 @@ export function PokerTable({
                     </div>
                   </div>
 
-                  {/* 🃏 Community Cards */}
+                  {/* 🃏 Community Cards with highlights */}
                   {communityCards && currentStreet > 0 && (
                     <div className="relative z-10 mb-4 flex justify-center">
                       <div className="flex gap-2 justify-center items-center relative">
                         {currentStreet >= 1 && (
                           <>
-                            <Card cardValue={communityCards.flopCard1} dealDelayMs={0} />
-                            <Card cardValue={communityCards.flopCard2} dealDelayMs={120} />
-                            <Card cardValue={communityCards.flopCard3} dealDelayMs={240} />
+                            <Card 
+                              cardValue={communityCards.flopCard1} 
+                              dealDelayMs={0}
+                              highlighted={communityHighlights.includes(0)}
+                              highlightDelay={500}
+                            />
+                            <Card 
+                              cardValue={communityCards.flopCard2} 
+                              dealDelayMs={120}
+                              highlighted={communityHighlights.includes(1)}
+                              highlightDelay={650}
+                            />
+                            <Card 
+                              cardValue={communityCards.flopCard3} 
+                              dealDelayMs={240}
+                              highlighted={communityHighlights.includes(2)}
+                              highlightDelay={800}
+                            />
                           </>
                         )}
                         {currentStreet >= 2 && (
-                          <Card cardValue={communityCards.turnCard} dealDelayMs={360} />
+                          <Card 
+                            cardValue={communityCards.turnCard} 
+                            dealDelayMs={360}
+                            highlighted={communityHighlights.includes(3)}
+                            highlightDelay={950}
+                          />
                         )}
                         {currentStreet >= 3 && (
-                          <Card cardValue={communityCards.riverCard} dealDelayMs={480} />
+                          <Card 
+                            cardValue={communityCards.riverCard} 
+                            dealDelayMs={480}
+                            highlighted={communityHighlights.includes(4)}
+                            highlightDelay={1100}
+                          />
                         )}
 
                         {/* 🔓 Nút decrypt đè lên bài */}
@@ -276,6 +331,7 @@ export function PokerTable({
                       isDecrypting={isDecrypting}
                       handleDecryptCards={handleDecryptCards}
                       timeLeft={timeLeft}
+                      decryptedCommunityCards={decryptedCommunityCards}
                     />
                   ) : (
                     <div className="w-20 h-20 rounded-full bg-black/70 border-2 border-gray-700 flex items-center justify-center text-gray-500 text-sm">
@@ -288,5 +344,6 @@ export function PokerTable({
         </div>
       </div>
     </div>
+    </>
   );
 }

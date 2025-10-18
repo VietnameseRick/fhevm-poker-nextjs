@@ -1,10 +1,6 @@
 import { BrowserProvider, JsonRpcSigner } from 'ethers';
 import type { WalletClient } from 'viem';
 
-/**
- * Converts a viem WalletClient to an ethers JsonRpcSigner
- * This is needed for FHEVM decryption which uses ethers.js
- */
 export function walletClientToSigner(walletClient: WalletClient): JsonRpcSigner {
   const { account, chain, transport } = walletClient;
   
@@ -28,9 +24,6 @@ export function walletClientToSigner(walletClient: WalletClient): JsonRpcSigner 
   return signer;
 }
 
-/**
- * Converts a viem WalletClient to an ethers BrowserProvider
- */
 export function walletClientToProvider(walletClient: WalletClient): BrowserProvider {
   const { chain, transport } = walletClient;
   

@@ -12,33 +12,19 @@ import config from '@/utils/config';
 const chain = config.isLocal ? hardhat : sepolia;
 
 // Wagmi config with environment-based RPC
-// Uses WebSocket for Sepolia (more efficient for events), HTTP for local Hardhat
+// Uses WebSocket for both local and Sepolia networks for real-time events
 export const wagmiConfig = config.isLocal 
   ? createConfig({
       chains: [hardhat],
       transports: {
-        [hardhat.id]: http(config.rpcUrl, {
-          batch: {
-            wait: 100, // Batch multiple calls together
-          },
-        }),
-      },
-      pollingInterval: 5000, // Poll every 5 seconds (reduced RPC load)
-      // Disable caching for real-time poker game
-      cacheTime: 0,
-    })
-  : createConfig({
-      chains: [sepolia],
-      transports: {
-        // Use WebSocket for real-time events (no polling needed!)
-        [sepolia.id]: config.wsRpcUrl 
+        // Use WebSocket for local Hardhat if available (ws://127.0.0.1:8545)
+        [hardhat.id]: config.wsRpcUrl && config.enableWebSocket
           ? webSocket(config.wsRpcUrl, {
               reconnect: {
                 attempts: 10,
                 delay: 1000,
               },
-              // Disable response caching
-              retryCount: 0,
+              keepAlive: true,
             })
           : http(config.rpcUrl, {
               batch: {
@@ -46,7 +32,29 @@ export const wagmiConfig = config.isLocal
               },
             }),
       },
-      pollingInterval: config.wsRpcUrl ? undefined : 5000, // No polling with WebSocket
+      pollingInterval: config.wsRpcUrl && config.enableWebSocket ? undefined : 5000,
+      // Disable caching for real-time poker game
+      cacheTime: 0,
+    })
+  : createConfig({
+      chains: [sepolia],
+      transports: {
+        // Use WebSocket for real-time events (no polling needed!)
+        [sepolia.id]: config.wsRpcUrl && config.enableWebSocket
+          ? webSocket(config.wsRpcUrl, {
+              reconnect: {
+                attempts: 10,
+                delay: 1000,
+              },
+              keepAlive: true,
+            })
+          : http(config.rpcUrl, {
+              batch: {
+                wait: 100,
+              },
+            }),
+      },
+      pollingInterval: config.wsRpcUrl && config.enableWebSocket ? undefined : 5000,
       // Disable caching for real-time poker game
       cacheTime: 0,
     });
@@ -70,7 +78,8 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     <BasePrivyProvider
       appId={config.privyAppId}
       config={{
-        loginMethods: ['email', 'google', 'wallet'],
+        // loginMethods: ['email', 'google', 'wallet'],
+        loginMethods: ['wallet'],
         appearance: {
           theme: 'dark',
           accentColor: '#676FFF',

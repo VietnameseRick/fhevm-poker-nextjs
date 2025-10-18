@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
+import { CardAnimations } from "@/components/CardDisplay";
 
 // Remove edge runtime to support WalletConnect
 // export const runtime = 'edge';
@@ -18,6 +19,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className="bg-gray-900 text-foreground antialiased">
+        <CardAnimations />
         <main>
           <Providers>{children}</Providers>
         </main>

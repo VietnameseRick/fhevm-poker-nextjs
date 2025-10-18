@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { ethers } from 'ethers';
 import { FHEPokerABI } from '@/abi/FHEPokerABI';
+import config from '@/utils/config';
 
 // Types
 export interface TableState {
@@ -9,8 +10,6 @@ export interface TableState {
   numPlayers: bigint;
   maxPlayers: bigint;
   minBuyIn: bigint;
-  countdownStartTime: bigint;
-  countdownDuration: bigint;
   currentRound: bigint;
   isSeated: boolean;
   winner?: string;
@@ -47,6 +46,11 @@ export interface CommunityCards {
   riverCard?: number;
 }
 
+export interface RevealedCards {
+  card1: number;
+  card2: number;
+}
+
 interface PokerStore {
   // State
   currentTableId: bigint | null;
@@ -55,23 +59,36 @@ interface PokerStore {
   players: string[];
   allPlayersBettingState: Record<string, PlayerBettingState>;
   communityCards: CommunityCards | null;
+  decryptedCommunityCards: number[];
+  revealedCards: Record<string, RevealedCards>;
   isLoading: boolean;
   message: string;
-  lastPot: bigint; // Track pot amount before it's awarded (for Showdown display)
-  lastUpdate: number; // Timestamp of last state update - forces React re-renders
+  lastPot: bigint;
+  lastUpdate: number;
+  
+  // Transaction state
+  pendingTransaction: {
+    isWaiting: boolean;
+    action: string;
+  } | null;
   
   // Contract info
   contractAddress: string | null;
   provider: ethers.ContractRunner | null;
+  readonlyProvider: ethers.JsonRpcProvider | null;
   
   // Setters
   setCurrentTableId: (id: bigint | null) => void;
   setContractInfo: (address: string, provider: ethers.ContractRunner) => void;
   setMessage: (msg: string) => void;
   setLoading: (loading: boolean) => void;
+  setDecryptedCommunityCards: (cards: number[]) => void;
+  addRevealedCards: (playerAddress: string, card1: number, card2: number) => void;
+  setPendingTransaction: (action: string | null) => void;
   
   // Fetch actions - these update the store directly
   fetchTableState: (tableId: bigint) => Promise<void>;
+  fetchRevealedCards: (tableId: bigint, playerAddress: string) => Promise<void>;
   fetchBettingInfo: (tableId: bigint) => Promise<void>;
   fetchPlayers: (tableId: bigint) => Promise<void>;
   fetchPlayerState: (tableId: bigint, address: string) => Promise<void>;
@@ -83,7 +100,7 @@ interface PokerStore {
   
   // Clear state
   clearTable: () => void;
-  clearTableData: () => void; // Clear data but keep currentTableId
+  clearTableData: () => void;
 }
 
 export const usePokerStore = create<PokerStore>()(
@@ -96,39 +113,62 @@ export const usePokerStore = create<PokerStore>()(
       players: [],
       allPlayersBettingState: {},
       communityCards: null,
+      decryptedCommunityCards: [],
+      revealedCards: {},
       isLoading: false,
       message: '',
       lastPot: BigInt(0),
       lastUpdate: Date.now(),
       contractAddress: null,
       provider: null,
+      readonlyProvider: null,
+      pendingTransaction: null,
       
       // Simple setters
       setCurrentTableId: (id) => set({ currentTableId: id }),
       
-      setContractInfo: (address, provider) => 
-        set({ contractAddress: address, provider }),
+      setContractInfo: (address, provider) => {
+        const freshProvider = new ethers.JsonRpcProvider(config.rpcUrl);
+        set({ 
+          contractAddress: address, 
+          provider,
+          readonlyProvider: freshProvider 
+        });
+      },
       
       setMessage: (msg) => set({ message: msg }),
       
       setLoading: (loading) => set({ isLoading: loading }),
       
+      setDecryptedCommunityCards: (cards) => set({ 
+        decryptedCommunityCards: cards,
+        lastUpdate: Date.now()
+      }),
+      
+      addRevealedCards: (playerAddress, card1, card2) => set((state) => ({
+        revealedCards: {
+          ...state.revealedCards,
+          [playerAddress.toLowerCase()]: { card1, card2 }
+        },
+        lastUpdate: Date.now()
+      })),
+      
+      setPendingTransaction: (action) => set({ 
+        pendingTransaction: action ? { isWaiting: true, action } : null 
+      }),
+      
       // Fetch table state
       fetchTableState: async (tableId) => {
-        const { contractAddress, provider } = get();
+        const { contractAddress, readonlyProvider: provider } = get();
         if (!contractAddress || !provider) return;
         
         console.log('📊 Fetching FRESH table state for tableId:', tableId.toString(), '(cache bypassed)');
         
         try {
-          // CRITICAL: Use staticCall to bypass Viem/ethers caching
-          // This ensures we ALWAYS get the latest on-chain state
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
           
-          // First check if table exists by checking nextTableId
           try {
-            // Use staticCall to bypass cache completely
-            const nextTableId = await contract.nextTableId.staticCall();
+            const nextTableId = await contract.nextTableId();
             console.log('Next table ID:', nextTableId.toString(), 'Requested:', tableId.toString());
             if (tableId >= nextTableId) {
               console.warn(`⚠️ Table ${tableId} doesn't exist yet. Next available ID: ${nextTableId}`);
@@ -138,25 +178,21 @@ export const usePokerStore = create<PokerStore>()(
             console.warn('Failed to check nextTableId:', err);
           }
           
-          // Use staticCall to force fresh data (bypasses Viem cache)
-          const state = await contract.getTableState.staticCall(tableId);
+          const state = await contract.getTableState(tableId, { blockTag: "latest" });
           console.log('✅ Got table state:', state);
-          // Also fetch table struct to get dealerIndex and blinds
           let tableStruct: {
             dealerIndex: bigint;
             smallBlind: bigint;
             bigBlind: bigint;
           } | null = null;
           try {
-            tableStruct = await contract.tables.staticCall(tableId);
+            tableStruct = await contract.tables(tableId, { blockTag: "latest" });
           } catch {}
           
-          // Fetch winner if game is finished (state 3)
           let winner: string | undefined = undefined;
-          if (Number(state[0]) === 3) {
+          if (Number(state[0]) === 2) {
             try {
-              // Access the winner from the contract's table storage
-              const tables = await contract.tables.staticCall(tableId);
+              const tables = await contract.tables(tableId, { blockTag: "latest" });
               winner = tables.winner;
             } catch (error) {
               console.error('Failed to fetch winner:', error);
@@ -169,18 +205,16 @@ export const usePokerStore = create<PokerStore>()(
               numPlayers: state[1],
               maxPlayers: state[2],
               minBuyIn: state[3],
-              countdownStartTime: state[4],
-              countdownDuration: state[5],
-              currentRound: state[6],
-              isSeated: state[7],
+              currentRound: state[4],
+              isSeated: state[5],
               winner,
               dealerIndex: tableStruct ? (tableStruct.dealerIndex as bigint) : undefined,
               smallBlind: tableStruct ? (tableStruct.smallBlind as bigint) : undefined,
               bigBlind: tableStruct ? (tableStruct.bigBlind as bigint) : undefined,
-              turnStartTime: state[8],
-              playerActionTimeout: state[9],
+              turnStartTime: state[6],
+              playerActionTimeout: state[7],
             },
-            lastUpdate: Date.now(), // Force React re-render
+            lastUpdate: Date.now(),
           });
         } catch (error) {
           console.error('Failed to fetch table state:', error);
@@ -189,7 +223,7 @@ export const usePokerStore = create<PokerStore>()(
       
       // Fetch betting info
       fetchBettingInfo: async (tableId) => {
-        const { contractAddress, provider, tableState } = get();
+        const { contractAddress, readonlyProvider: provider, tableState } = get();
         if (!contractAddress || !provider) return;
         
         // Skip if table doesn't exist
@@ -200,12 +234,12 @@ export const usePokerStore = create<PokerStore>()(
         
         try {
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
-          const betting = await contract.getBettingInfo.staticCall(tableId);
+          const betting = await contract.getBettingInfo(tableId, { blockTag: "latest" });
           
           const potAmount = betting[0];
           
           // If game is about to finish or is Playing with a pot, save the pot amount
-          if (tableState && (tableState.state === 2 || tableState.state === 3) && potAmount > BigInt(0)) {
+          if (tableState && (tableState.state === 1 || tableState.state === 2) && potAmount > BigInt(0)) {
             set({ lastPot: potAmount });
           }
           
@@ -226,7 +260,7 @@ export const usePokerStore = create<PokerStore>()(
       
       // Fetch players
       fetchPlayers: async (tableId) => {
-        const { contractAddress, provider, tableState } = get();
+        const { contractAddress, readonlyProvider: provider, tableState } = get();
         if (!contractAddress || !provider) return;
         
         // Skip if table doesn't exist
@@ -237,7 +271,7 @@ export const usePokerStore = create<PokerStore>()(
         
         try {
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
-          const players = await contract.getPlayers.staticCall(tableId);
+          const players = await contract.getPlayers(tableId, { blockTag: "latest" });
           
           console.log('👥 Fetched players from contract:', {
             players,
@@ -256,12 +290,12 @@ export const usePokerStore = create<PokerStore>()(
       
       // Fetch single player state
       fetchPlayerState: async (tableId, address) => {
-        const { contractAddress, provider } = get();
+        const { contractAddress, readonlyProvider: provider } = get();
         if (!contractAddress || !provider) return;
         
         try {
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
-          const pState = await contract.getPlayerBettingState.staticCall(tableId, address);
+          const pState = await contract.getPlayerBettingState(tableId, address, { blockTag: "latest" });
           
           set((state) => ({
             allPlayersBettingState: {
@@ -284,7 +318,7 @@ export const usePokerStore = create<PokerStore>()(
       
       // Fetch all player states
       fetchAllPlayerStates: async (tableId) => {
-        const { contractAddress, provider, players } = get();
+        const { contractAddress, readonlyProvider: provider, players } = get();
         if (!contractAddress || !provider || players.length === 0) return;
         
         try {
@@ -295,7 +329,7 @@ export const usePokerStore = create<PokerStore>()(
           await Promise.all(
             players.map(async (address) => {
               try {
-                const pState = await contract.getPlayerBettingState.staticCall(tableId, address);
+                const pState = await contract.getPlayerBettingState(tableId, address, { blockTag: "latest" });
                 allStates[address.toLowerCase()] = {
                   chips: pState[0],
                   currentBet: pState[1],
@@ -321,14 +355,14 @@ export const usePokerStore = create<PokerStore>()(
       
       // Fetch community cards
       fetchCommunityCards: async (tableId) => {
-        const { contractAddress, provider } = get();
+        const { contractAddress, readonlyProvider: provider } = get();
         if (!contractAddress || !provider) return;
         
         try {
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
           
           try {
-            const cards = await contract.getCommunityCards.staticCall(tableId);
+            const cards = await contract.getCommunityCards(tableId, { blockTag: "latest" });
             set({
               communityCards: {
                 currentStreet: Number(cards[0]),
@@ -359,6 +393,23 @@ export const usePokerStore = create<PokerStore>()(
           }
         } catch (error) {
           console.error('Failed to fetch community cards:', error);
+        }
+      },
+      
+      // Fetch revealed cards for a specific player (after showdown)
+      fetchRevealedCards: async (tableId, playerAddress) => {
+        const { contractAddress, readonlyProvider: provider } = get();
+        if (!contractAddress || !provider) return;
+        
+        try {
+          const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
+          const [card1, card2] = await contract.getPlayerCards(tableId, playerAddress, { blockTag: "latest" });
+          
+          console.log(`🃏 Fetched revealed cards for ${playerAddress}:`, { card1, card2 });
+          
+          get().addRevealedCards(playerAddress, Number(card1), Number(card2));
+        } catch (error) {
+          console.error(`Failed to fetch revealed cards for ${playerAddress}:`, error);
         }
       },
       
@@ -424,12 +475,14 @@ export const usePokerStore = create<PokerStore>()(
       }),
       
       // Clear table data but keep currentTableId (for event refreshes)
+      // NOTE: Decrypted community cards are preserved to prevent UI flicker
       clearTableData: () => set({
         tableState: null,
         bettingInfo: null,
         players: [],
         allPlayersBettingState: {},
         communityCards: null,
+        // Keep decryptedCommunityCards and revealedCards - they survive refreshes
         lastUpdate: Date.now(), // Force re-render
       }),
     }),
