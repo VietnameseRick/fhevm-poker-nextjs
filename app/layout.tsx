@@ -18,7 +18,7 @@ export default async function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-gray-900 text-foreground antialiased">
+      <body className="bg-black text-foreground antialiased">
         <CardAnimations />
         <main>
           <Providers>{children}</Providers>
