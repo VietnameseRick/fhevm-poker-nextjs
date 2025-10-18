@@ -28,6 +28,7 @@ interface PlayerSeatProps {
   handleDecryptCards?: () => void;
   timeLeft: number | null;
   decryptedCommunityCards?: number[]; // New: for hand evaluation
+  tableState?: { state?: number };
 }
 
 export const PlayerSeat = memo(function PlayerSeat({
@@ -52,6 +53,7 @@ export const PlayerSeat = memo(function PlayerSeat({
   handleDecryptCards,
   timeLeft,
   decryptedCommunityCards = [],
+  tableState,
 }: PlayerSeatProps) {
   const formatEth = (wei: bigint) => (Number(wei) / 1e18).toFixed(4);
   const formatAddress = (addr: string) =>
@@ -62,12 +64,12 @@ export const PlayerSeat = memo(function PlayerSeat({
   const validCards = cards?.filter((c): c is number => c !== undefined) || [];
   const validCommunity = decryptedCommunityCards.filter((c): c is number => c !== undefined && c !== 0);
   const totalCards = [...validCards, ...validCommunity];
-  
-  const handEval = 
-    showCards && 
-    validCards.length === 2 && 
-    validCommunity.length >= 3 &&
-    totalCards.length >= 5
+
+  const handEval =
+    showCards &&
+      validCards.length === 2 &&
+      validCommunity.length >= 3 &&
+      totalCards.length >= 5
       ? evaluateBestHand(totalCards)
       : null;
 
@@ -116,15 +118,12 @@ export const PlayerSeat = memo(function PlayerSeat({
       <div className="relative flex flex-col items-center">
         {/* 🔵 Avatar */}
         <div
-          className={`relative w-24 h-24 rounded-full overflow-visible border-4 flex items-center justify-center bg-black ${
-            pendingAction
+          className={`relative w-24 h-24 rounded-full overflow-visible border-4 flex items-center justify-center bg-black ${pendingAction
               ? "border-purple-400 shadow-lg shadow-purple-500/50 animate-pulse"
               : isCurrentTurn
-              ? "border-yellow-400 shadow-lg shadow-yellow-500/50 animate-pulse"
-              : hasFolded
-              ? "border-gray-500 opacity-50"
-              : "border-green-500"
-          }`}
+                ? "border-yellow-400 shadow-lg shadow-yellow-500/50 animate-pulse"
+                  : "border-green-500"
+            }`}
         >
           <Image
             src="/avatar.png"
@@ -135,17 +134,22 @@ export const PlayerSeat = memo(function PlayerSeat({
             priority
           />
 
+          {hasFolded && (
+            <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-white font-extrabold text-xl uppercase rounded-full z-10">
+              FOLD
+            </div>
+          )}
+
           {/* 🎯 Badge D / SB / BB */}
-          {(isDealer || isSmallBlind || isBigBlind) && (
+          {(isDealer || isSmallBlind || isBigBlind) && hasFolded === false && (
             <div
               className={`absolute -left-5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 flex items-center justify-center text-md font-bold shadow-md
-              ${
-                isDealer
+              ${isDealer
                   ? "bg-yellow-400 border-yellow-600 text-yellow-900"
                   : isSmallBlind
-                  ? "bg-blue-400 border-blue-600 text-white"
-                  : "bg-green-500 border-green-700 text-white"
-              }`}
+                    ? "bg-blue-400 border-blue-600 text-white"
+                    : "bg-green-500 border-green-700 text-white"
+                }`}
             >
               {isDealer ? "D" : isSmallBlind ? "SB" : "BB"}
             </div>
@@ -153,7 +157,7 @@ export const PlayerSeat = memo(function PlayerSeat({
         </div>
 
         {/* 🂡 Player Cards + Decrypt Button + Hand Display */}
-        {cards && cards.length > 0 && (
+        {cards && cards.length > 0 && tableState?.state === 1 && (
           <div className="absolute -top-6 right-[-120px] z-20">
             <div className="relative flex flex-col items-center gap-2">
               {/* 🃏 Bộ bài với highlights */}
@@ -164,16 +168,15 @@ export const PlayerSeat = memo(function PlayerSeat({
                 highlightedIndices={showCards ? cardHighlights.holeHighlights : []}
                 highlightDelay={300}
               />
-              
+
               {/* 💎 Hand rank display during gameplay */}
               {handEval && showCards && !hasFolded && (
                 <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap z-50">
-                  <div className={`px-3 py-1 rounded-lg text-xs font-bold backdrop-blur-sm border shadow-lg ${
-                    handEval.rank >= 7 ? "bg-green-900/90 border-green-400 text-green-200 shadow-green-500/50 animate-pulse" :
-                    handEval.rank >= 4 ? "bg-green-800/80 border-green-500 text-green-100 shadow-green-600/40" :
-                    handEval.rank >= 1 ? "bg-emerald-900/70 border-emerald-600 text-emerald-200" :
-                    "bg-slate-800/80 border-slate-600 text-slate-300"
-                  }`}>
+                  <div className={`px-3 py-1 rounded-lg text-xs font-bold backdrop-blur-sm border shadow-lg ${handEval.rank >= 7 ? "bg-green-900/90 border-green-400 text-green-200 shadow-green-500/50 animate-pulse" :
+                      handEval.rank >= 4 ? "bg-green-800/80 border-green-500 text-green-100 shadow-green-600/40" :
+                        handEval.rank >= 1 ? "bg-emerald-900/70 border-emerald-600 text-emerald-200" :
+                          "bg-slate-800/80 border-slate-600 text-slate-300"
+                    }`}>
                     {getHandRankDisplay(handEval.rank).emoji} {getHandRankDisplay(handEval.rank).name}
                   </div>
                 </div>
@@ -254,7 +257,7 @@ export const PlayerSeat = memo(function PlayerSeat({
       {/* Indicators */}
       {pendingAction && (
         <div className="absolute min-w-[80px] text-center -top-4 left-1/2 transform -translate-x-1/2">
-          <div className="bg-purple-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1 justify-center">
+          <div className="bg-black/70 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1 justify-center">
             <svg
               className="animate-spin h-3 w-3"
               xmlns="http://www.w3.org/2000/svg"
@@ -277,21 +280,20 @@ export const PlayerSeat = memo(function PlayerSeat({
                   1.135 5.824 3 7.938l3-2.647z"
               ></path>
             </svg>
-            ACTING.....
+            {pendingAction}
           </div>
         </div>
       )}
 
-      {!pendingAction && isCurrentTurn && (
+      {!pendingAction && isCurrentTurn && tableState?.state === 1 && (
         <div className="absolute min-w-[80px] text-center -top-4 left-1/2 transform -translate-x-1/2">
           <div
-            className={`${
-              isTimeOut
+            className={`${isTimeOut
                 ? "bg-red-600 text-white animate-pulse"
                 : pendingAction
-                ? "bg-purple-500 text-white"
-                : "bg-yellow-400 text-yellow-900 animate-pulse"
-            } text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center justify-center gap-1`}
+                  ? "bg-purple-500 text-white"
+                  : "bg-yellow-400 text-yellow-900 animate-pulse"
+              } text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center justify-center gap-1`}
           >
             <svg
               className="h-3 w-3"

@@ -429,7 +429,7 @@ export function PokerGame() {
     const isPlaying = poker.tableState?.state === 1; // Playing state
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      <div className="min-h-screen bg-black">
         {/* Global Loaders and Modals */}
         {/* Only show CyberpunkLoader when loading but NOT waiting for transaction confirmation */}
         <CyberpunkLoader isLoading={storeIsLoading && !pendingTransaction?.isWaiting} />
@@ -887,7 +887,7 @@ export function PokerGame() {
             </div>
 
             {/* Network badge — cố định góc phải */}
-            <div className="fixed top-6 right-4 z-50 inline-flex items-center gap-2 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full border border-gray-700 shadow-md">
+            <div className="absolute top-24 right-4 z-50 inline-flex items-center gap-2 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full border border-gray-700 shadow-md">
               <div
                 className={`w-2 h-2 rounded-full ${chainId === 31337 ? "bg-green-400" : "bg-yellow-400"
                   } animate-pulse`}
@@ -990,7 +990,7 @@ export function PokerGame() {
                   disabled={poker.isLoading || !poker.isDeployed}
                   className="w-1/2 block mx-auto hover:scale-105 text-black font-bold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed text-3xl"
                   style={{ backgroundImage: `url(/bg-button.png)`, backgroundSize: '100% 100%' }}>
-                  {poker.isLoading ? "CREATE TABLE..." : "CREATE TABLE"}
+                  {poker.isLoading ? "CREATING TABLE..." : "CREATE TABLE"}
                 </button>
               </div>
             </div>

@@ -313,6 +313,9 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Creating poker table...");
 
+        // Now show loading state for processing
+        setIsLoading(true);
+
         // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
         usePokerStore.getState().setPendingTransaction("Creating Table");
         
@@ -327,9 +330,6 @@ export const useFHEPoker = (parameters: {
         
         const receipt = await tx.wait();
         usePokerStore.getState().setPendingTransaction(null);
-        
-        // Now show loading state for processing
-        setIsLoading(true);
 
         // Parse the TableCreated event to get the table ID
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -396,6 +396,9 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Joining table...");
 
+        // Now show loading state for data refresh
+        setIsLoading(true);
+
         // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
         usePokerStore.getState().setPendingTransaction("Joining Table");
         
@@ -414,9 +417,6 @@ export const useFHEPoker = (parameters: {
           console.warn('Transaction wait error (non-critical):', waitError);
           // Continue even if wait fails - the transaction might still be successful
         }
-        
-        // Now show loading state for data refresh
-        setIsLoading(true);
 
         setMessage(`✅ Successfully joined table ${tableId.toString()}!`);
 
