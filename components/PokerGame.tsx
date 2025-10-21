@@ -14,7 +14,7 @@ import { useSmartAccount } from "../hooks/useSmartAccount";
 import { usePokerStore } from "@/stores/pokerStore";
 import Image from "next/image";
 
-const Showdown = lazy(() => import("./Showdown").then(mod => ({ default: mod.Showdown })));
+const InlineShowdown = lazy(() => import("./InlineShowdown").then(mod => ({ default: mod.InlineShowdown })));
 const TableBrowser = lazy(() => import("./TableBrowser").then(mod => ({ default: mod.TableBrowser })));
 const FundingRequiredModal = lazy(() => import("./FundingRequiredModal").then(mod => ({ default: mod.FundingRequiredModal })));
 const ChipsManagementModal = lazy(() => import("./ChipsManagementModal").then(mod => ({ default: mod.ChipsManagementModal })));
@@ -650,6 +650,33 @@ export function PokerGame() {
                 minRaise={BigInt(Math.floor(Number(poker.tableState.minBuyIn) * 0.1))}
                 bigBlind={bigBlindInput}
                 smallBlind={smallBlindInput}
+                showdownOverlay={
+                  poker.tableState.state === 2 && poker.tableState.winner ? (
+                    <Suspense fallback={null}>
+                      <InlineShowdown
+                        winner={poker.tableState.winner}
+                        allPlayers={playerData}
+                        communityCards={
+                          poker.decryptedCommunityCards.length > 0
+                            ? poker.decryptedCommunityCards.filter(c => c !== 0)
+                            : poker.communityCards
+                              ? [
+                                poker.communityCards.flopCard1,
+                                poker.communityCards.flopCard2,
+                                poker.communityCards.flopCard3,
+                                poker.communityCards.turnCard,
+                                poker.communityCards.riverCard,
+                              ].filter((c): c is number => c !== undefined && c !== 0)
+                              : undefined
+                        }
+                        pot={poker.lastPot || poker.bettingInfo?.pot || BigInt(0)}
+                        tableId={poker.currentTableId}
+                        contractAddress={poker.contractAddress}
+                        provider={ethersProvider}
+                      />
+                    </Suspense>
+                  ) : null
+                }
               />
 
               {/* Controls */}
@@ -781,39 +808,7 @@ export function PokerGame() {
             </Suspense>
           )}
 
-          {/* Showdown Overlay - Show when game is finished */}
-          {poker.tableState.state === 2 && poker.tableState.winner && (
-            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
-              <Showdown
-              winner={poker.tableState.winner}
-              myAddress={yourAddress}
-              myCards={
-                poker.cards[0]?.clear !== undefined && poker.cards[1]?.clear !== undefined
-                  ? [poker.cards[0].clear, poker.cards[1].clear]
-                  : undefined
-              }
-              communityCards={
-                poker.decryptedCommunityCards.length > 0
-                  ? poker.decryptedCommunityCards.filter(c => c !== 0)
-                  : poker.communityCards
-                    ? [
-                      poker.communityCards.flopCard1,
-                      poker.communityCards.flopCard2,
-                      poker.communityCards.flopCard3,
-                      poker.communityCards.turnCard,
-                      poker.communityCards.riverCard,
-                    ].filter((c): c is number => c !== undefined && c !== 0)
-                    : undefined
-              }
-              pot={poker.lastPot || poker.bettingInfo?.pot || BigInt(0)}
-              allPlayers={playerData}
-              onContinue={handleAdvanceGame}
-              tableId={poker.currentTableId}
-              contractAddress={poker.contractAddress}
-              provider={ethersProvider}
-            />
-            </Suspense>
-          )}
+          {/* Showdown now rendered inline on table - see showdownOverlay prop */}
 
           {/* Chips Management Modal */}
           {poker.currentTableId && poker.tableState && (

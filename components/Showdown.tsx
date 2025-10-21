@@ -102,9 +102,9 @@ export function Showdown({
     return () => timers.forEach(clearTimeout);
   }, [isWinner]);
 
-  // Fetch winner's evaluated hand and revealed hole cards from contract (game is finished)
+  // Fetch all active players' cards and winner's hand evaluation from contract (game is finished)
   useEffect(() => {
-    const loadWinnerData = async () => {
+    const loadShowdownData = async () => {
       try {
         // 1. Check if we already have revealed cards from CardsRevealed event
         const revealed = revealedCards[winner.toLowerCase()];
@@ -113,7 +113,7 @@ export function Showdown({
           setWinnerCards([revealed.card1, revealed.card2]);
         }
         
-        // 2. Fetch hand evaluation from contract using readonly provider
+        // 2. Fetch hand evaluation and all players' cards from contract
         if (!contractAddress || tableId === undefined) return;
         
         // Use readonly provider (cache-bypassing) if available, fallback to passed provider
@@ -140,12 +140,32 @@ export function Showdown({
           const c2 = Number(cardsRes[1]);
           setWinnerCards([c1, c2]);
         }
+        
+        // Fetch all active players' cards for showdown transparency
+        console.log('🃏 Fetching all active players cards for showdown...');
+        for (const player of allPlayers) {
+          if (!player.hasFolded) {
+            try {
+              const playerCardsRes = await contract.getPlayerCards(tableId, player.address, { blockTag: "latest" });
+              const card1 = Number(playerCardsRes[0]);
+              const card2 = Number(playerCardsRes[1]);
+              
+              // Store in revealed cards for consistency
+              if (card1 > 0 || card2 > 0) {
+                usePokerStore.getState().addRevealedCards(player.address, card1, card2);
+                console.log(`✅ Revealed cards for ${player.address}:`, { card1, card2 });
+              }
+            } catch (err) {
+              console.warn(`⚠️ Could not fetch cards for ${player.address}:`, err);
+            }
+          }
+        }
       } catch (err) {
-        console.error('❌ Failed to load winner data:', err);
+        console.error('❌ Failed to load showdown data:', err);
       }
     };
-    loadWinnerData();
-  }, [contractAddress, provider, readonlyProvider, tableId, winner, revealedCards]);
+    loadShowdownData();
+  }, [contractAddress, provider, readonlyProvider, tableId, winner, revealedCards, allPlayers]);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">

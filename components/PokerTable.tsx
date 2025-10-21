@@ -50,6 +50,7 @@ interface PokerTableProps {
   bigBlind?: string;
   smallBlind?: string;
   minRaise?: bigint;
+  showdownOverlay?: React.ReactNode;
 }
 
 export function PokerTable({
@@ -77,6 +78,7 @@ export function PokerTable({
   bigBlind,
   smallBlind,
   minRaise,
+  showdownOverlay,
 }: PokerTableProps) {
   // Get loading state from Zustand store for cyberpunk loader
   const storeIsLoading = usePokerStore(state => state.isLoading);
@@ -357,6 +359,9 @@ export function PokerTable({
                   </div>
                 );
               })}
+            
+            {/* Showdown Overlay - Rendered on top of table */}
+            {showdownOverlay}
           </div>
         </div>
       </div>

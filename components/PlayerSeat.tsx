@@ -221,7 +221,7 @@ export const PlayerSeat = memo(function PlayerSeat({
     // Update refs cho lần sau
     prevPlayerBetRef.current = playerBet ?? 0n;
     prevPlayerStateRef.current = playerState;
-  }, [playerBet, playerState, currentBet, bigBlind, smallBlind, chips, isCurrentTurn]);
+  }, [playerBet, playerState, currentBet, bigBlind, smallBlind, chips, isCurrentTurn, safePlayerState]);
 
   return (
     <div
