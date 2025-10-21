@@ -658,6 +658,8 @@ export function PokerGame() {
                       currentBet={poker.bettingInfo?.currentBet || BigInt(0)}
                       playerBet={poker.playerState.currentBet}
                       playerChips={poker.playerState.chips}
+                      bigBlind={bigBlindInput}
+                      smallBlind={smallBlindInput}
                       minRaise={BigInt(Math.floor(Number(poker.tableState.minBuyIn) * 0.1))}
                       onFold={() => poker.fold(poker.currentTableId!)}
                       onCheck={() => poker.check(poker.currentTableId!)}

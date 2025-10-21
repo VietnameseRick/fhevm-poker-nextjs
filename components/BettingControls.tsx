@@ -7,6 +7,8 @@ interface BettingControlsProps {
   currentBet: bigint;
   playerBet: bigint;
   playerChips: bigint;
+  bigBlind: string;
+  smallBlind: string;
   minRaise?: bigint;
   onFold: () => void;
   onCheck: () => void;
@@ -20,6 +22,8 @@ export function BettingControls({
   currentBet,
   playerBet,
   playerChips,
+  bigBlind,
+  smallBlind,
   minRaise,
   onFold,
   onCheck,
@@ -29,6 +33,12 @@ export function BettingControls({
 }: BettingControlsProps) {
   const [raiseAmount, setRaiseAmount] = useState<string>("");
   const [showRaiseInput, setShowRaiseInput] = useState(false);
+
+  const bigBlindEth = parseFloat(bigBlind);
+  const bigBlindValue = BigInt(bigBlindEth * 1e18);
+
+  const smallBlindEth = parseFloat(smallBlind);
+  const smallBlindValue = BigInt(smallBlindEth * 1e18); 
 
   const formatEth = (wei: bigint) => {
     const eth = Number(wei) / 1e18;
@@ -56,6 +66,9 @@ export function BettingControls({
   };
 
   if (!canAct) return null;
+
+  console.log('currentBet: ', currentBet);
+  console.log('playerBet: ', playerBet);
 
   return (
     <div className="p-6 flex flex-col items-end">
@@ -106,7 +119,7 @@ export function BettingControls({
               py-2 transition-all duration-200 
               disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"
               style={{backgroundImage: `url(/bg-betting.png)`, backgroundSize: '100% 100%'}}>
-              <span className="text-2xl">Raise</span>
+              <span className="text-2xl">{currentBet <= bigBlindValue && playerBet <= smallBlindValue  ? "Bet" : "Raise"}</span>
             </button>
           </div>
 
@@ -161,7 +174,7 @@ export function BettingControls({
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-semibold text-cyan-400 mb-2 mono">
-                Raise Amount (ETH)
+                {currentBet <= bigBlindValue && playerBet <= smallBlindValue  ? "Bet Amount (ETH)" : "Raise Amount (ETH)"}
               </label>
               <input
                 type="number"
@@ -193,7 +206,7 @@ export function BettingControls({
                 disabled={isLoading || !raiseAmount || parseFloat(raiseAmount) <= 0}
                 className="bg-gradient-to-br from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all duration-200 disabled:cursor-not-allowed border border-purple-500/50"
               >
-                Confirm Raise
+                {currentBet <= bigBlindValue && playerBet <= smallBlindValue  ? "Confirm Bet" : "Confirm Raise"}
               </button>
             </div>
           </div>
