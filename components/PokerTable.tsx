@@ -47,6 +47,9 @@ interface PokerTableProps {
   handleDecryptCommunityCards?: () => void;
   handleDecryptCards?: () => void;
   timeLeft: number | null;
+  bigBlind?: string;
+  smallBlind?: string;
+  minRaise?: bigint;
 }
 
 export function PokerTable({
@@ -71,6 +74,9 @@ export function PokerTable({
   handleDecryptCommunityCards,
   handleDecryptCards,
   timeLeft,
+  bigBlind,
+  smallBlind,
+  minRaise,
 }: PokerTableProps) {
   // Get loading state from Zustand store for cyberpunk loader
   const storeIsLoading = usePokerStore(state => state.isLoading);
@@ -337,6 +343,11 @@ export function PokerTable({
                         timeLeft={timeLeft}
                         decryptedCommunityCards={decryptedCommunityCards}
                         tableState={tableState}
+                        currentBet={currentBet}
+                        playerBet={player.currentBet}
+                        bigBlind={bigBlind}
+                        smallBlind={smallBlind}
+                        minRaise={minRaise}
                       />
                     ) : (
                       <div className="w-20 h-20 rounded-full bg-black/70 border-2 border-gray-700 flex items-center justify-center text-gray-500 text-sm">
