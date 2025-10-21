@@ -647,6 +647,9 @@ export function PokerGame() {
                 clear={poker.cards[0]?.clear}
                 handleDecryptCards={handleDecryptCards}
                 timeLeft={poker.timeRemaining}
+                minRaise={BigInt(Math.floor(Number(poker.tableState.minBuyIn) * 0.1))}
+                bigBlind={bigBlindInput}
+                smallBlind={smallBlindInput}
               />
 
               {/* Controls */}
