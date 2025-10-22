@@ -148,12 +148,12 @@ export const PlayerSeat = memo(function PlayerSeat({
     if (canCheck) {
       actionText = "Check";
     } else if (canCall) {
-      actionText = `Call ${formatEth(amountToCall)} ETH`;
+      actionText = `Call`;
     } else if (canRaise) {
       const isBet = (currentBet ?? 0n) <= bigBlindValue && (playerBet ?? 0n) <= smallBlindValue;
       const base = (currentBet ?? 0n) > 0n ? (currentBet ?? 0n) : (minRaise || bigBlindValue);
       const minRaiseAmount = formatEth(base * 2n); // Tương tự quick raise logic
-      actionText = isBet ? `Bet ${minRaiseAmount} ETH` : `Raise to ${minRaiseAmount} ETH`;
+      actionText = isBet ? `Bet` : `Raise`;
     } else {
       actionText = "Fold?";
     }
@@ -195,11 +195,11 @@ export const PlayerSeat = memo(function PlayerSeat({
         const smallBlindEth = smallBlind ? parseFloat(smallBlind) : 0.005;
         const smallBlindValue = BigInt(smallBlindEth * 1e18);
         const isBet = prevPlayerBet <= smallBlindValue && (currentBet ?? 0n) <= bigBlindValue;
-        inferredAction = isBet ? `Bet ${diffEth} ETH` : `Raised to ${formatEth(playerBet ?? 0n)} ETH`;
+        inferredAction = isBet ? `Bet` : `Raised`;
       } else if ((playerBet ?? 0n) === (currentBet ?? 0n) && prevPlayerBet < (currentBet ?? 0n)) {
         // Đã match currentBet → Called/Check
         const amount = formatEth((currentBet ?? 0n) - prevPlayerBet);
-        inferredAction = prevPlayerBet === 0n ? `Called ${amount} ETH` : "Checked";
+        inferredAction = prevPlayerBet === 0n ? `Called` : "Checked";
       }
 
       // Infer từ playerState (hasActed, hasFolded) - Use safe states
