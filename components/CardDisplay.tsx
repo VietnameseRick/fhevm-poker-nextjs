@@ -37,7 +37,7 @@ export function Card({ cardValue, hidden = false, className = "", flip = false, 
 
   return (
     <div
-      className={`relative w-14 h-20 rounded-xl border-2 shadow-2xl transform hover:scale-105 transition-all duration-200 hover:shadow-3xl ${
+      className={`relative w-14 h-20 shadow-2xl transform hover:scale-105 transition-all duration-200 hover:shadow-3xl ${
         highlighted ? 'ring-4 ring-green-400 border-green-500 shadow-green-500/80 animate-highlight-pulse highlight-card' : ''
       } ${className}`}
       style={{
@@ -49,7 +49,7 @@ export function Card({ cardValue, hidden = false, className = "", flip = false, 
     >
       {/* Front face with image */}
       <div
-        className="absolute inset-0 rounded-xl backface-hidden overflow-hidden"
+        className="absolute inset-0 backface-hidden overflow-hidden"
         style={{
           transform: flip ? 'rotateY(180deg)' : 'rotateY(0deg)',
           transition: 'transform 400ms ease',

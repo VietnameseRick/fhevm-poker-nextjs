@@ -1048,12 +1048,12 @@ export function PokerGame() {
                     : "bg-blue-500/20 border-blue-500"
                 }`}>
                 <p className={`font-semibold text-xl ${poker.message.includes("✅") || poker.message.includes("Success")
-                  ? "text-green-200"
+                  ? "text-white"
                   : poker.message.includes("⚠️") || poker.message.includes("already")
-                    ? "text-yellow-200"
+                    ? "text-white"
                     : poker.message.includes("❌") || poker.message.includes("Failed")
-                      ? "text-red-200"
-                      : "text-blue-200"
+                      ? "text-white"
+                      : "text-white"
                   }`}>{poker.message}</p>
               </div>
             </div>
