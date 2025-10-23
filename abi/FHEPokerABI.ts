@@ -1230,6 +1230,11 @@ export const FHEPokerABI = {
         },
         {
           "internalType": "uint8",
+          "name": "deckSize",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
           "name": "nextCardIndex",
           "type": "uint8"
         },
