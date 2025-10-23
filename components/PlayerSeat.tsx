@@ -1,9 +1,9 @@
 "use client";
 
-import { memo, useState, useEffect, useRef, useMemo } from "react";
+import { memo, useMemo } from "react";
 import Image from "next/image";
 import { CardHand } from "./CardDisplay";
-import { PlayerBettingState } from "@/stores/pokerStore";
+import { PlayerBettingState, usePokerStore } from "@/stores/pokerStore";
 import { evaluateBestHand, getHandRankDisplay } from "@/utils/handEvaluator";
 
 interface PlayerSeatProps {
@@ -65,14 +65,10 @@ export const PlayerSeat = memo(function PlayerSeat({
   playerBet,
   bigBlind,
   smallBlind,
-  minRaise,
 }: PlayerSeatProps) {
-  // Local state cho lastAction (chỉ trong component này)
-  const [lastAction, setLastAction] = useState<string | null>(null);
-
-  // Ref để track prevPlayerBet (để detect thay đổi khi action complete)
-  const prevPlayerBetRef = useRef<bigint>(playerBet ?? 0n);
-  const prevPlayerStateRef = useRef<"" | PlayerBettingState | undefined>(playerState);
+  // Get player action from global store
+  const playerActions = usePokerStore(state => state.playerActions);
+  const playerAction = playerActions[address.toLowerCase()];
 
   const formatEth = (wei: bigint) => (Number(wei) / 1e18).toFixed(4);
   const formatAddress = (addr: string) =>
@@ -151,77 +147,35 @@ export const PlayerSeat = memo(function PlayerSeat({
       actionText = `Call`;
     } else if (canRaise) {
       const isBet = (currentBet ?? 0n) <= bigBlindValue && (playerBet ?? 0n) <= smallBlindValue;
-      const base = (currentBet ?? 0n) > 0n ? (currentBet ?? 0n) : (minRaise || bigBlindValue);
-      const minRaiseAmount = formatEth(base * 2n); // Tương tự quick raise logic
       actionText = isBet ? `Bet` : `Raise`;
     } else {
       actionText = "Fold?";
     }
 
     return { actionText, canCheck, canCall, canRaise, amountToCall };
-  }, [currentBet, playerBet, chips, bigBlind, smallBlind, minRaise]);
+  }, [currentBet, playerBet, chips, bigBlind, smallBlind]);
 
   const { actionText } = bettingStatus;
 
   // canAct - Use safePlayerState
   const canAct = isCurrentTurn && !hasFolded && !(safePlayerState?.hasFolded ?? false);
 
-  // ✅ useEffect: Infer lastAction từ thay đổi props (không cần store/BettingControls)
-  useEffect(() => {
-    // Clear lastAction khi bắt đầu lượt mới (isCurrentTurn true)
-    if (isCurrentTurn) {
-      setLastAction(null);
-      prevPlayerBetRef.current = playerBet ?? 0n;
-      prevPlayerStateRef.current = playerState;
-      return;
+  // Format action display text
+  const getActionDisplay = () => {
+    if (!playerAction) return null;
+    
+    const { action, amount } = playerAction;
+    
+    if (action === 'Raise' && amount) {
+      return `Raised ${formatEth(amount)} ETH`;
+    } else if (action === 'Call' || action === 'Bet') {
+      return action === 'Call' ? 'Called' : 'Bet';
     }
+    
+    return action === 'Fold' ? 'Folded' : action === 'Check' ? 'Checked' : action;
+  };
 
-    // Detect action complete: playerBet thay đổi (tăng) hoặc playerState thay đổi
-    const prevPlayerBet = prevPlayerBetRef.current;
-    const prevPlayerStateRaw = prevPlayerStateRef.current;
-    const prevSafe = prevPlayerStateRaw && typeof prevPlayerStateRaw !== "string" ? prevPlayerStateRaw : undefined;
-
-    const currentSafe = safePlayerState;
-
-    if ((playerBet ?? 0n) !== prevPlayerBet || currentSafe !== prevSafe) {
-      let inferredAction = "";
-
-      // Infer từ playerBet diff (giống logic BettingControls)
-      const betDiff = (playerBet ?? 0n) - prevPlayerBet;
-      if (betDiff > 0n) {
-        const diffEth = formatEth(betDiff);
-        const bigBlindEth = bigBlind ? parseFloat(bigBlind) : 0.01;
-        const bigBlindValue = BigInt(bigBlindEth * 1e18);
-        const smallBlindEth = smallBlind ? parseFloat(smallBlind) : 0.005;
-        const smallBlindValue = BigInt(smallBlindEth * 1e18);
-        const isBet = prevPlayerBet <= smallBlindValue && (currentBet ?? 0n) <= bigBlindValue;
-        inferredAction = isBet ? `Bet` : `Raised`;
-      } else if ((playerBet ?? 0n) === (currentBet ?? 0n) && prevPlayerBet < (currentBet ?? 0n)) {
-        // Đã match currentBet → Called/Check
-        const amount = formatEth((currentBet ?? 0n) - prevPlayerBet);
-        inferredAction = prevPlayerBet === 0n ? `Called` : "Checked";
-      }
-
-      // Infer từ playerState (hasActed, hasFolded) - Use safe states
-      if (!inferredAction) {
-        if (currentSafe?.hasActed && !prevSafe?.hasActed) {
-          inferredAction = "Acted";
-        } else if (currentSafe?.hasFolded && !prevSafe?.hasFolded) {
-          inferredAction = "Folded";
-        } else if (currentSafe && prevSafe && currentSafe.totalBet >= chips && prevSafe.totalBet < chips) {
-          inferredAction = "All-In";
-        }
-      }
-
-      if (inferredAction) {
-        setLastAction(inferredAction);
-      }
-    }
-
-    // Update refs cho lần sau
-    prevPlayerBetRef.current = playerBet ?? 0n;
-    prevPlayerStateRef.current = playerState;
-  }, [playerBet, playerState, currentBet, bigBlind, smallBlind, chips, isCurrentTurn, safePlayerState]);
+  const lastActionDisplay = getActionDisplay();
 
   return (
     <div
@@ -418,11 +372,17 @@ export const PlayerSeat = memo(function PlayerSeat({
         </div>
       )}
 
-      {/* Nếu KHÔNG currentTurn nhưng có lastAction: Show lastAction (giữ đến lượt sau) */}
-      {!pendingAction && !isCurrentTurn && lastAction && tableState?.state === 1 && (
+      {/* Nếu KHÔNG currentTurn nhưng có lastActionDisplay: Show player's last action */}
+      {!pendingAction && !isCurrentTurn && lastActionDisplay && tableState?.state === 1 && (
         <div className="absolute min-w-[100px] text-center -top-4 left-1/2 transform -translate-x-1/2 z-10">
-          <div className="bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center justify-center whitespace-nowrap">
-            {lastAction}
+          <div className={`text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center justify-center whitespace-nowrap ${
+            playerAction?.action === 'Fold' ? 'bg-red-500' :
+            playerAction?.action === 'Raise' || playerAction?.action === 'Bet' ? 'bg-orange-500' :
+            playerAction?.action === 'Call' ? 'bg-green-500' :
+            playerAction?.action === 'Check' ? 'bg-blue-500' :
+            'bg-purple-500'
+          }`}>
+            {lastActionDisplay}
           </div>
         </div>
       )}

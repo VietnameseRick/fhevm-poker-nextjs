@@ -199,6 +199,19 @@ export function PokerGame() {
     currentView,
   ]);
 
+  // Clear player actions when betting street changes or game state changes
+  useEffect(() => {
+    const currentStreet = poker.communityCards?.currentStreet;
+    const gameState = poker.tableState?.state;
+    
+    // Clear actions when:
+    // 1. Betting street advances (pre-flop -> flop -> turn -> river)
+    // 2. Game state changes (waiting -> playing -> finished)
+    if (currentStreet !== undefined || gameState !== undefined) {
+      usePokerStore.getState().clearPlayerActions();
+    }
+  }, [poker.communityCards?.currentStreet, poker.tableState?.state]);
+
   const handleCreateTable = async () => {
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
     console.log('✅ Table created, Wagmi will handle state updates');

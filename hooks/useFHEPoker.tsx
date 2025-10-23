@@ -523,6 +523,11 @@ export const useFHEPoker = (parameters: {
         setMessage("✅ Folded!");
         setPendingAction(null);
         
+        // Track action in store
+        if (userAddress) {
+          usePokerStore.getState().setPlayerAction(userAddress, 'Fold');
+        }
+        
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
@@ -535,7 +540,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, refreshAll]
+    [pokerContract, ethersSigner, userAddress, refreshAll]
   );
 
   const check = useCallback(
@@ -560,6 +565,11 @@ export const useFHEPoker = (parameters: {
         setMessage("✅ Checked!");
         setPendingAction(null);
         
+        // Track action in store
+        if (userAddress) {
+          usePokerStore.getState().setPlayerAction(userAddress, 'Check');
+        }
+        
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
@@ -572,7 +582,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, refreshAll]
+    [pokerContract, ethersSigner, userAddress, refreshAll]
   );
 
   const call = useCallback(
@@ -618,6 +628,11 @@ export const useFHEPoker = (parameters: {
         setMessage("✅ Called!");
         setPendingAction(null);
         
+        // Track action in store
+        if (userAddress) {
+          usePokerStore.getState().setPlayerAction(userAddress, 'Call');
+        }
+        
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
@@ -655,6 +670,11 @@ export const useFHEPoker = (parameters: {
         setMessage(`✅ Raised ${raiseAmount} ETH!`);
         setPendingAction(null);
         
+        // Track action in store
+        if (userAddress) {
+          usePokerStore.getState().setPlayerAction(userAddress, 'Raise', ethers.parseEther(raiseAmount));
+        }
+        
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
@@ -667,7 +687,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, refreshAll]
+    [pokerContract, ethersSigner, userAddress, refreshAll]
   );
 
   // Refresh table state
