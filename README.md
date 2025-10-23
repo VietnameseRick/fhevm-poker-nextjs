@@ -74,37 +74,6 @@ npm run deploy:sepolia
 
 3. Open the Metamask extension to connect to the Sepolia network
 
-## How to fix Hardhat Node + Metamask Errors ?
-
-When using MetaMask as a wallet provider with a development node like Hardhat, you may encounter two common types of errors:
-
-### 1. ⚠️ Nonce Mismatch ❌💥
-
-MetaMask tracks wallet nonces (the number of transactions sent from a wallet). However, if you restart your Hardhat node, the nonce is reset on the dev node, but MetaMask does not update its internal nonce tracking. This discrepancy causes a nonce mismatch error.
-
-### 2. ⚠️ View Function Call Result Mismatch ❌💥
-
-MetaMask caches the results of view function calls. If you restart your Hardhat node, MetaMask may return outdated cached data corresponding to a previous instance of the node, leading to incorrect results.
-
-### ✅ How to Fix Nonce Mismatch:
-
-To fix the nonce mismatch error, simply clear the MetaMask cache:
-
-1. Open the MetaMask browser extension.
-2. Select the Hardhat network.
-3. Go to Settings > Advanced.
-4. Click the "Clear Activity Tab" red button to reset the nonce tracking.
-
-The correct way to do this is also explained [here](https://docs.metamask.io/wallet/how-to/run-devnet/).
-
-### ✅ How to Fix View Function Return Value Mismatch:
-
-To fix the view function result mismatch:
-
-1. Restart the entire browser. MetaMask stores its cache in the extension's memory, which cannot be cleared by simply clearing the browser cache or using MetaMask's built-in cache cleaning options.
-
-By following these steps, you can ensure that MetaMask syncs correctly with your Hardhat node and avoid potential issues related to nonces and cached view function results.
-
 ## Project Structure Overview
 
 ### Key Files/Folders
@@ -133,7 +102,7 @@ By following these steps, you can ensure that MetaMask syncs correctly with your
 
 This project uses a **dual license** structure:
 
-### Your Poker Frontend Implementation
+### FHE Poker Frontend Implementation
 - **License**: Business Source License 1.1 (BSL 1.1)
 - **Scope**: All frontend code (components, hooks, stores, app)
 - **Commercial Use**: Requires separate licensing agreement
