@@ -51,6 +51,12 @@ export interface RevealedCards {
   card2: number;
 }
 
+export interface PlayerAction {
+  action: 'Fold' | 'Check' | 'Call' | 'Raise' | 'Bet' | 'All-In';
+  amount?: bigint;
+  timestamp: number;
+}
+
 interface PokerStore {
   // State
   currentTableId: bigint | null;
@@ -61,6 +67,7 @@ interface PokerStore {
   communityCards: CommunityCards | null;
   decryptedCommunityCards: number[];
   revealedCards: Record<string, RevealedCards>;
+  playerActions: Record<string, PlayerAction>; // Track last action per player
   isLoading: boolean;
   message: string;
   lastPot: bigint;
@@ -85,6 +92,8 @@ interface PokerStore {
   setDecryptedCommunityCards: (cards: number[]) => void;
   addRevealedCards: (playerAddress: string, card1: number, card2: number) => void;
   setPendingTransaction: (action: string | null) => void;
+  setPlayerAction: (playerAddress: string, action: PlayerAction['action'], amount?: bigint) => void;
+  clearPlayerActions: () => void;
   
   // Fetch actions - these update the store directly
   fetchTableState: (tableId: bigint) => Promise<void>;
@@ -115,6 +124,7 @@ export const usePokerStore = create<PokerStore>()(
       communityCards: null,
       decryptedCommunityCards: [],
       revealedCards: {},
+      playerActions: {},
       isLoading: false,
       message: '',
       lastPot: BigInt(0),
@@ -155,6 +165,23 @@ export const usePokerStore = create<PokerStore>()(
       
       setPendingTransaction: (action) => set({ 
         pendingTransaction: action ? { isWaiting: true, action } : null 
+      }),
+      
+      setPlayerAction: (playerAddress, action, amount) => set((state) => ({
+        playerActions: {
+          ...state.playerActions,
+          [playerAddress.toLowerCase()]: {
+            action,
+            amount,
+            timestamp: Date.now(),
+          }
+        },
+        lastUpdate: Date.now()
+      })),
+      
+      clearPlayerActions: () => set({
+        playerActions: {},
+        lastUpdate: Date.now()
       }),
       
       // Fetch table state
@@ -482,6 +509,7 @@ export const usePokerStore = create<PokerStore>()(
         players: [],
         allPlayersBettingState: {},
         communityCards: null,
+        playerActions: {}, // Clear actions when table data resets
         // Keep decryptedCommunityCards and revealedCards - they survive refreshes
         lastUpdate: Date.now(), // Force re-render
       }),
