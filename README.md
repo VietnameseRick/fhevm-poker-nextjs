@@ -1,10 +1,10 @@
-# FHEVM React Template
+# FHE Poker Frontend 🎰
 
-The FHEVM React Template is an ultra-minimal React project for building and running an FHEVM-enabled dApp.
-It works alongside the [fhevm-hardhat-template](https://github.com/zama-ai/fhevm-hardhat-template)
-and provides a simple development frontend for interacting with the `FHECounter.sol` contract.
+Privacy-first blockchain poker frontend using React and Next.js. Play Texas Hold'em with encrypted cards powered by Fully Homomorphic Encryption (FHE).
 
-This template also illustrates how to run your FHEVM-dApp on both Sepolia as well as a local Hardhat Node (much faster).
+**Powered by Zama's fhEVM technology.**
+
+This dApp connects to the FHEPoker smart contract and provides a beautiful, cyberpunk-themed poker interface where all cards remain encrypted until showdown.
 
 ## Features
 
@@ -129,6 +129,22 @@ By following these steps, you can ensure that MetaMask syncs correctly with your
 - [FHEVM Discord Community](https://discord.com/invite/zama)
 - [GitHub Issues](https://github.com/zama-ai/fhevm-react-template/issues)
 
-## License
+## 📄 License
 
-This project is licensed under the BSD-3-Clause-Clear License - see the LICENSE file for details.
+This project uses a **dual license** structure:
+
+### Your Poker Frontend Implementation
+- **License**: Business Source License 1.1 (BSL 1.1)
+- **Scope**: All frontend code (components, hooks, stores, app)
+- **Commercial Use**: Requires separate licensing agreement
+- **Non-Commercial Use**: Free for development, testing, research, and personal projects
+- **Change Date**: 4 years from release → converts to MIT License
+
+### Zama's fhEVM Technology
+- **License**: BSD 3-Clause Clear License
+- **Scope**: FHE libraries and operations (@fhevm/react, @zama-fhe/*)
+
+📋 See [LICENSE-BSL](LICENSE-BSL) for complete terms.
+
+**For commercial licensing inquiries**: vietnameserick@tuta.com  
+**For Zama fhEVM licensing**: https://www.zama.ai/contact

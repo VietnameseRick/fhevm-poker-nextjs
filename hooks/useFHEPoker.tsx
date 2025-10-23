@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * FHE Poker React Hook
+ * 
+ * Copyright (c) 2025 vietnameserick (Tra Anh Khoi)
+ * Licensed under Business Source License 1.1 (see LICENSE-BSL)
+ */
+
 import { ethers } from "ethers";
 import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 

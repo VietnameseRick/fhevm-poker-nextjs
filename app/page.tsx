@@ -1,3 +1,13 @@
+/**
+ * FHE Poker - Privacy-First Blockchain Poker
+ * 
+ * Copyright (c) 2025 vietnameserick (Tra Anh Khoi)
+ * Licensed under Business Source License 1.1 (see LICENSE-BSL)
+ * 
+ * Portions Copyright (c) 2025 Zama
+ * Licensed under BSD 3-Clause Clear License (see LICENSE)
+ */
+
 import { PokerGame } from "@/components/PokerGame";
 
 // Remove edge runtime to support WalletConnect
