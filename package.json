@@ -1,8 +1,9 @@
 {
-    "name": "fhevm-react-template",
-    "version": "0.3.0",
+    "name": "fhevm-poker-frontend",
+    "version": "1.0.0",
+    "author": "vietnameserick <vietnameserick@tuta.com>",
     "private": true,
-    "license": "BSD-3-Clause-Clear",
+    "license": "SEE LICENSE IN LICENSE-BSL",
     "homepage": "https://github.com/zama-ai/fhevm-react-template/blob/main/packages/site/README.md",
     "repository": {
         "type": "git",
