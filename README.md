@@ -1,10 +1,10 @@
-# FHEVM React Template
+# FHE Poker Frontend 🎰
 
-The FHEVM React Template is an ultra-minimal React project for building and running an FHEVM-enabled dApp.
-It works alongside the [fhevm-hardhat-template](https://github.com/zama-ai/fhevm-hardhat-template)
-and provides a simple development frontend for interacting with the `FHECounter.sol` contract.
+Privacy-first blockchain poker frontend using React and Next.js. Play Texas Hold'em with encrypted cards powered by Fully Homomorphic Encryption (FHE).
 
-This template also illustrates how to run your FHEVM-dApp on both Sepolia as well as a local Hardhat Node (much faster).
+**Powered by Zama's fhEVM technology.**
+
+This dApp connects to the FHEPoker smart contract and provides a beautiful, cyberpunk-themed poker interface where all cards remain encrypted until showdown.
 
 ## Features
 
@@ -74,37 +74,6 @@ npm run deploy:sepolia
 
 3. Open the Metamask extension to connect to the Sepolia network
 
-## How to fix Hardhat Node + Metamask Errors ?
-
-When using MetaMask as a wallet provider with a development node like Hardhat, you may encounter two common types of errors:
-
-### 1. ⚠️ Nonce Mismatch ❌💥
-
-MetaMask tracks wallet nonces (the number of transactions sent from a wallet). However, if you restart your Hardhat node, the nonce is reset on the dev node, but MetaMask does not update its internal nonce tracking. This discrepancy causes a nonce mismatch error.
-
-### 2. ⚠️ View Function Call Result Mismatch ❌💥
-
-MetaMask caches the results of view function calls. If you restart your Hardhat node, MetaMask may return outdated cached data corresponding to a previous instance of the node, leading to incorrect results.
-
-### ✅ How to Fix Nonce Mismatch:
-
-To fix the nonce mismatch error, simply clear the MetaMask cache:
-
-1. Open the MetaMask browser extension.
-2. Select the Hardhat network.
-3. Go to Settings > Advanced.
-4. Click the "Clear Activity Tab" red button to reset the nonce tracking.
-
-The correct way to do this is also explained [here](https://docs.metamask.io/wallet/how-to/run-devnet/).
-
-### ✅ How to Fix View Function Return Value Mismatch:
-
-To fix the view function result mismatch:
-
-1. Restart the entire browser. MetaMask stores its cache in the extension's memory, which cannot be cleared by simply clearing the browser cache or using MetaMask's built-in cache cleaning options.
-
-By following these steps, you can ensure that MetaMask syncs correctly with your Hardhat node and avoid potential issues related to nonces and cached view function results.
-
 ## Project Structure Overview
 
 ### Key Files/Folders
@@ -129,6 +98,22 @@ By following these steps, you can ensure that MetaMask syncs correctly with your
 - [FHEVM Discord Community](https://discord.com/invite/zama)
 - [GitHub Issues](https://github.com/zama-ai/fhevm-react-template/issues)
 
-## License
+## 📄 License
 
-This project is licensed under the BSD-3-Clause-Clear License - see the LICENSE file for details.
+This project uses a **dual license** structure:
+
+### FHE Poker Frontend Implementation
+- **License**: Business Source License 1.1 (BSL 1.1)
+- **Scope**: All frontend code (components, hooks, stores, app)
+- **Commercial Use**: Requires separate licensing agreement
+- **Non-Commercial Use**: Free for development, testing, research, and personal projects
+- **Change Date**: 4 years from release → converts to MIT License
+
+### Zama's fhEVM Technology
+- **License**: BSD 3-Clause Clear License
+- **Scope**: FHE libraries and operations (@fhevm/react, @zama-fhe/*)
+
+📋 See [LICENSE-BSL](LICENSE-BSL) for complete terms.
+
+**For commercial licensing inquiries**: vietnameserick@tuta.com  
+**For Zama fhEVM licensing**: https://www.zama.ai/contact

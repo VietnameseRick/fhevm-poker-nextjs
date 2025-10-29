@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * FHE Poker Game Component
+ * 
+ * Copyright (c) 2025 vietnameserick (Tra Anh Khoi)
+ * Licensed under Business Source License 1.1 (see LICENSE-BSL)
+ */
+
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { ethers } from "ethers";
 import { useFhevm } from "@fhevm/react";
@@ -14,7 +21,7 @@ import { useSmartAccount } from "../hooks/useSmartAccount";
 import { usePokerStore } from "@/stores/pokerStore";
 import Image from "next/image";
 
-const Showdown = lazy(() => import("./Showdown").then(mod => ({ default: mod.Showdown })));
+const InlineShowdown = lazy(() => import("./InlineShowdown").then(mod => ({ default: mod.InlineShowdown })));
 const TableBrowser = lazy(() => import("./TableBrowser").then(mod => ({ default: mod.TableBrowser })));
 const FundingRequiredModal = lazy(() => import("./FundingRequiredModal").then(mod => ({ default: mod.FundingRequiredModal })));
 const ChipsManagementModal = lazy(() => import("./ChipsManagementModal").then(mod => ({ default: mod.ChipsManagementModal })));
@@ -198,6 +205,19 @@ export function PokerGame() {
     poker.players,
     currentView,
   ]);
+
+  // Clear player actions when betting street changes or game state changes
+  useEffect(() => {
+    const currentStreet = poker.communityCards?.currentStreet;
+    const gameState = poker.tableState?.state;
+    
+    // Clear actions when:
+    // 1. Betting street advances (pre-flop -> flop -> turn -> river)
+    // 2. Game state changes (waiting -> playing -> finished)
+    if (currentStreet !== undefined || gameState !== undefined) {
+      usePokerStore.getState().clearPlayerActions();
+    }
+  }, [poker.communityCards?.currentStreet, poker.tableState?.state]);
 
   const handleCreateTable = async () => {
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
@@ -429,7 +449,7 @@ export function PokerGame() {
     const isPlaying = poker.tableState?.state === 1; // Playing state
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      <div className="min-h-screen bg-black">
         {/* Global Loaders and Modals */}
         {/* Only show CyberpunkLoader when loading but NOT waiting for transaction confirmation */}
         <CyberpunkLoader isLoading={storeIsLoading && !pendingTransaction?.isWaiting} />
@@ -647,6 +667,36 @@ export function PokerGame() {
                 clear={poker.cards[0]?.clear}
                 handleDecryptCards={handleDecryptCards}
                 timeLeft={poker.timeRemaining}
+                minRaise={BigInt(Math.floor(Number(poker.tableState.minBuyIn) * 0.1))}
+                bigBlind={bigBlindInput}
+                smallBlind={smallBlindInput}
+                showdownOverlay={
+                  poker.tableState.state === 2 && poker.tableState.winner ? (
+                    <Suspense fallback={null}>
+                      <InlineShowdown
+                        winner={poker.tableState.winner}
+                        allPlayers={playerData}
+                        communityCards={
+                          poker.decryptedCommunityCards.length > 0
+                            ? poker.decryptedCommunityCards.filter(c => c !== 0)
+                            : poker.communityCards
+                              ? [
+                                poker.communityCards.flopCard1,
+                                poker.communityCards.flopCard2,
+                                poker.communityCards.flopCard3,
+                                poker.communityCards.turnCard,
+                                poker.communityCards.riverCard,
+                              ].filter((c): c is number => c !== undefined && c !== 0)
+                              : undefined
+                        }
+                        pot={poker.lastPot || poker.bettingInfo?.pot || BigInt(0)}
+                        tableId={poker.currentTableId}
+                        contractAddress={poker.contractAddress}
+                        provider={ethersProvider}
+                      />
+                    </Suspense>
+                  ) : null
+                }
               />
 
               {/* Controls */}
@@ -658,6 +708,8 @@ export function PokerGame() {
                       currentBet={poker.bettingInfo?.currentBet || BigInt(0)}
                       playerBet={poker.playerState.currentBet}
                       playerChips={poker.playerState.chips}
+                      bigBlind={bigBlindInput}
+                      smallBlind={smallBlindInput}
                       minRaise={BigInt(Math.floor(Number(poker.tableState.minBuyIn) * 0.1))}
                       onFold={() => poker.fold(poker.currentTableId!)}
                       onCheck={() => poker.check(poker.currentTableId!)}
@@ -776,39 +828,7 @@ export function PokerGame() {
             </Suspense>
           )}
 
-          {/* Showdown Overlay - Show when game is finished */}
-          {poker.tableState.state === 2 && poker.tableState.winner && (
-            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
-              <Showdown
-              winner={poker.tableState.winner}
-              myAddress={yourAddress}
-              myCards={
-                poker.cards[0]?.clear !== undefined && poker.cards[1]?.clear !== undefined
-                  ? [poker.cards[0].clear, poker.cards[1].clear]
-                  : undefined
-              }
-              communityCards={
-                poker.decryptedCommunityCards.length > 0
-                  ? poker.decryptedCommunityCards.filter(c => c !== 0)
-                  : poker.communityCards
-                    ? [
-                      poker.communityCards.flopCard1,
-                      poker.communityCards.flopCard2,
-                      poker.communityCards.flopCard3,
-                      poker.communityCards.turnCard,
-                      poker.communityCards.riverCard,
-                    ].filter((c): c is number => c !== undefined && c !== 0)
-                    : undefined
-              }
-              pot={poker.lastPot || poker.bettingInfo?.pot || BigInt(0)}
-              allPlayers={playerData}
-              onContinue={handleAdvanceGame}
-              tableId={poker.currentTableId}
-              contractAddress={poker.contractAddress}
-              provider={ethersProvider}
-            />
-            </Suspense>
-          )}
+          {/* Showdown now rendered inline on table - see showdownOverlay prop */}
 
           {/* Chips Management Modal */}
           {poker.currentTableId && poker.tableState && (
@@ -887,7 +907,7 @@ export function PokerGame() {
             </div>
 
             {/* Network badge — cố định góc phải */}
-            <div className="fixed top-6 right-4 z-50 inline-flex items-center gap-2 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full border border-gray-700 shadow-md">
+            <div className="absolute top-24 right-4 z-50 inline-flex items-center gap-2 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full border border-gray-700 shadow-md">
               <div
                 className={`w-2 h-2 rounded-full ${chainId === 31337 ? "bg-green-400" : "bg-yellow-400"
                   } animate-pulse`}
@@ -990,7 +1010,7 @@ export function PokerGame() {
                   disabled={poker.isLoading || !poker.isDeployed}
                   className="w-1/2 block mx-auto hover:scale-105 text-black font-bold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed text-3xl"
                   style={{ backgroundImage: `url(/bg-button.png)`, backgroundSize: '100% 100%' }}>
-                  {poker.isLoading ? "CREATE TABLE..." : "CREATE TABLE"}
+                  {poker.isLoading ? "CREATING TABLE..." : "CREATE TABLE"}
                 </button>
               </div>
             </div>
@@ -1048,12 +1068,12 @@ export function PokerGame() {
                     : "bg-blue-500/20 border-blue-500"
                 }`}>
                 <p className={`font-semibold text-xl ${poker.message.includes("✅") || poker.message.includes("Success")
-                  ? "text-green-200"
+                  ? "text-white"
                   : poker.message.includes("⚠️") || poker.message.includes("already")
-                    ? "text-yellow-200"
+                    ? "text-white"
                     : poker.message.includes("❌") || poker.message.includes("Failed")
-                      ? "text-red-200"
-                      : "text-blue-200"
+                      ? "text-white"
+                      : "text-white"
                   }`}>{poker.message}</p>
               </div>
             </div>

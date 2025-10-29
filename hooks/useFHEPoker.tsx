@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * FHE Poker React Hook
+ * 
+ * Copyright (c) 2025 vietnameserick (Tra Anh Khoi)
+ * Licensed under Business Source License 1.1 (see LICENSE-BSL)
+ */
+
 import { ethers } from "ethers";
 import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -313,6 +320,9 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Creating poker table...");
 
+        // Now show loading state for processing
+        setIsLoading(true);
+
         // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
         usePokerStore.getState().setPendingTransaction("Creating Table");
         
@@ -327,9 +337,6 @@ export const useFHEPoker = (parameters: {
         
         const receipt = await tx.wait();
         usePokerStore.getState().setPendingTransaction(null);
-        
-        // Now show loading state for processing
-        setIsLoading(true);
 
         // Parse the TableCreated event to get the table ID
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -396,6 +403,9 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Joining table...");
 
+        // Now show loading state for data refresh
+        setIsLoading(true);
+
         // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
         usePokerStore.getState().setPendingTransaction("Joining Table");
         
@@ -414,9 +424,6 @@ export const useFHEPoker = (parameters: {
           console.warn('Transaction wait error (non-critical):', waitError);
           // Continue even if wait fails - the transaction might still be successful
         }
-        
-        // Now show loading state for data refresh
-        setIsLoading(true);
 
         setMessage(`✅ Successfully joined table ${tableId.toString()}!`);
 
@@ -523,6 +530,11 @@ export const useFHEPoker = (parameters: {
         setMessage("✅ Folded!");
         setPendingAction(null);
         
+        // Track action in store
+        if (userAddress) {
+          usePokerStore.getState().setPlayerAction(userAddress, 'Fold');
+        }
+        
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
@@ -535,7 +547,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, refreshAll]
+    [pokerContract, ethersSigner, userAddress, refreshAll]
   );
 
   const check = useCallback(
@@ -560,6 +572,11 @@ export const useFHEPoker = (parameters: {
         setMessage("✅ Checked!");
         setPendingAction(null);
         
+        // Track action in store
+        if (userAddress) {
+          usePokerStore.getState().setPlayerAction(userAddress, 'Check');
+        }
+        
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
@@ -572,7 +589,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, refreshAll]
+    [pokerContract, ethersSigner, userAddress, refreshAll]
   );
 
   const call = useCallback(
@@ -618,6 +635,11 @@ export const useFHEPoker = (parameters: {
         setMessage("✅ Called!");
         setPendingAction(null);
         
+        // Track action in store
+        if (userAddress) {
+          usePokerStore.getState().setPlayerAction(userAddress, 'Call');
+        }
+        
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
@@ -655,6 +677,11 @@ export const useFHEPoker = (parameters: {
         setMessage(`✅ Raised ${raiseAmount} ETH!`);
         setPendingAction(null);
         
+        // Track action in store
+        if (userAddress) {
+          usePokerStore.getState().setPlayerAction(userAddress, 'Raise', ethers.parseEther(raiseAmount));
+        }
+        
         // ⚡ Force immediate refresh after action
         await refreshAll(tableId);
       } catch (error) {
@@ -667,7 +694,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, refreshAll]
+    [pokerContract, ethersSigner, userAddress, refreshAll]
   );
 
   // Refresh table state

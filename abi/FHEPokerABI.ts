@@ -11,6 +11,21 @@ export const FHEPokerABI = {
       "type": "constructor"
     },
     {
+      "inputs": [],
+      "name": "HandlesAlreadySavedForRequestID",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidKMSSignatures",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NoHandleFoundForRequestID",
+      "type": "error"
+    },
+    {
       "anonymous": false,
       "inputs": [
         {
@@ -65,25 +80,12 @@ export const FHEPokerABI = {
       "inputs": [
         {
           "indexed": true,
-          "internalType": "address",
-          "name": "by",
-          "type": "address"
+          "internalType": "uint256",
+          "name": "requestID",
+          "type": "uint256"
         }
       ],
-      "name": "EmergencyPaused",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "by",
-          "type": "address"
-        }
-      ],
-      "name": "EmergencyUnpaused",
+      "name": "DecryptionFulfilled",
       "type": "event"
     },
     {
@@ -135,25 +137,6 @@ export const FHEPokerABI = {
         }
       ],
       "name": "GameStarted",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "previousOwner",
-          "type": "address"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "newOwner",
-          "type": "address"
-        }
-      ],
-      "name": "OwnershipTransferred",
       "type": "event"
     },
     {
@@ -524,6 +507,29 @@ export const FHEPokerABI = {
       "inputs": [
         {
           "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_decryptCallback",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
           "name": "tableId",
           "type": "uint256"
         }
@@ -635,33 +641,6 @@ export const FHEPokerABI = {
           "type": "uint256"
         }
       ],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "emergencyPause",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "emergencyUnpause",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "tableId",
-          "type": "uint256"
-        }
-      ],
-      "name": "emergencyWithdraw",
-      "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
     },
@@ -1077,32 +1056,6 @@ export const FHEPokerABI = {
     },
     {
       "inputs": [],
-      "name": "owner",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "paused",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
       "name": "protocolId",
       "outputs": [
         {
@@ -1173,16 +1126,6 @@ export const FHEPokerABI = {
         {
           "internalType": "uint256",
           "name": "maxPlayers",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "gameStartTime",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "gameFinishTime",
           "type": "uint256"
         },
         {
@@ -1287,8 +1230,48 @@ export const FHEPokerABI = {
         },
         {
           "internalType": "uint8",
+          "name": "deckSize",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
           "name": "nextCardIndex",
           "type": "uint8"
+        },
+        {
+          "internalType": "uint32",
+          "name": "decryptedFlopCard1",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "decryptedFlopCard2",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "decryptedFlopCard3",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "decryptedTurnCard",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "decryptedRiverCard",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "decryptionRequestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "isDecryptionPending",
+          "type": "bool"
         },
         {
           "internalType": "uint256",
@@ -1299,27 +1282,9 @@ export const FHEPokerABI = {
           "internalType": "uint256",
           "name": "turnStartTime",
           "type": "uint256"
-        },
-        {
-          "internalType": "uint8",
-          "name": "dealtCount",
-          "type": "uint8"
         }
       ],
       "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "newOwner",
-          "type": "address"
-        }
-      ],
-      "name": "transferOwnership",
-      "outputs": [],
-      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
