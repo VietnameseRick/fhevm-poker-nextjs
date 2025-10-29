@@ -6,7 +6,7 @@ import { CardHand } from "./CardDisplay";
 import { PlayerBettingState, usePokerStore } from "@/stores/pokerStore";
 import { evaluateBestHand, getHandRankDisplay } from "@/utils/handEvaluator";
 
-interface PlayerSeatProps {
+export interface PlayerSeatProps {
   address: string;
   chips: bigint;
   isDealer?: boolean;
@@ -24,17 +24,18 @@ interface PlayerSeatProps {
   clear?: number;
   isLoading?: boolean;
   isDecrypting?: boolean;
-  isPlaying?: boolean;
   handleDecryptCards?: () => void;
   timeLeft: number | null;
-  decryptedCommunityCards?: number[];
+  decryptedCommunityCards?: (number | undefined)[]; // Support undefined for undealt cards (0 is valid card)
   tableState?: { state?: number };
+  isWinner?: boolean; // Highlight winner at showdown
+  winnings?: bigint; // Amount won at showdown
+  losses?: bigint; // Amount lost at showdown
   // Props để infer action từ logic BettingControls
   currentBet?: bigint;
   playerBet?: bigint;
   bigBlind?: string;
   smallBlind?: string;
-  minRaise?: bigint;
 }
 
 export const PlayerSeat = memo(function PlayerSeat({
@@ -54,12 +55,14 @@ export const PlayerSeat = memo(function PlayerSeat({
   playerState,
   clear,
   isLoading = false,
-  isPlaying = true,
   isDecrypting,
   handleDecryptCards,
   timeLeft,
   decryptedCommunityCards = [],
   tableState,
+  isWinner = false,
+  winnings,
+  losses,
   // Props để infer action
   currentBet,
   playerBet,
@@ -69,6 +72,19 @@ export const PlayerSeat = memo(function PlayerSeat({
   // Get player action from global store
   const playerActions = usePokerStore(state => state.playerActions);
   const playerAction = playerActions[address.toLowerCase()];
+
+  // Debug showdown display
+  if (tableState?.state === 2 && !isYou) {
+    console.log(`🎴 [Showdown Debug] Player ${address.slice(0, 6)}:`, {
+      hasCards: !!cards && cards.length > 0,
+      cardsLength: cards?.length,
+      cards: cards,
+      showCards,
+      tableState: tableState?.state,
+      isYou,
+      hasFolded
+    });
+  }
 
   const formatEth = (wei: bigint) => (Number(wei) / 1e18).toFixed(4);
   const formatAddress = (addr: string) =>
@@ -80,7 +96,8 @@ export const PlayerSeat = memo(function PlayerSeat({
   // Evaluate hand in real-time during gameplay
   // Need at least 2 hole cards + 3 community (flop) = 5 total cards
   const validCards = cards?.filter((c): c is number => c !== undefined) || [];
-  const validCommunity = decryptedCommunityCards.filter((c): c is number => c !== undefined && c !== 0);
+  // Note: 0 is a valid card value (2♥), so we only filter undefined
+  const validCommunity = decryptedCommunityCards.filter((c): c is number => c !== undefined);
   const totalCards = [...validCards, ...validCommunity];
 
   const handEval =
@@ -110,8 +127,22 @@ export const PlayerSeat = memo(function PlayerSeat({
     bottom: "items-center",
   };
 
-  // ✅ Điều kiện hiển thị nút decrypt
-  const shouldShowDecryptButton = isPlaying && !clear && (isSeated !== false || !!playerState);
+  // Get table state to check if game has started  
+  const gameTableState = usePokerStore(state => state.tableState);
+  const isGamePlaying = gameTableState?.state === 1; // 1 = Playing state
+
+  // ✅ ON-CHAIN STATE: Only show decrypt button based on CONTRACT state
+  // Show decrypt button if:
+  // 1. Game is in Playing state (on-chain) AND
+  // 2. Cards not yet decrypted (local) AND
+  // 3. Player is seated/has state (on-chain) AND
+  // 4. Player hasn't folded (on-chain)
+  // No need for event tracking - contract is source of truth
+  const shouldShowDecryptButton = 
+    isGamePlaying && 
+    clear === undefined && 
+    (isSeated !== false || !!playerState) && 
+    !hasFolded;
 
   // ✅ Format thời gian mm:ss
   const formatTime = (seconds: number | null) => {
@@ -181,14 +212,35 @@ export const PlayerSeat = memo(function PlayerSeat({
     <div
       className={`flex flex-col gap-2 ${positionClasses[position]} relative items-center`}
     >
+      {/* 🏆 Winner/Loser Dialog at Showdown */}
+      {tableState?.state === 2 && (isSeated || !!playerState) && !hasFolded && (winnings || losses) && (
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 z-50 animate-fadeIn">
+          {isWinner && winnings && winnings > BigInt(0) ? (
+            <div className="bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white px-4 py-2 rounded-full shadow-2xl shadow-yellow-500/50 animate-bounce">
+              <div className="text-center font-bold">
+                <div className="text-sm">🏆 WINNER!</div>
+                <div className="text-lg">+{formatEth(winnings)} ETH</div>
+              </div>
+            </div>
+          ) : losses && losses > BigInt(0) ? (
+            <div className="bg-gray-800/90 border border-gray-600 text-gray-300 px-3 py-1 rounded-full shadow-lg">
+              <div className="text-xs font-semibold">Lost -{formatEth(losses)} ETH</div>
+            </div>
+          ) : null}
+        </div>
+      )}
+      
       {/* Avatar + Cards */}
       <div className="relative flex flex-col items-center">
         {/* 🔵 Avatar */}
         <div
-          className={`relative w-24 h-24 rounded-full overflow-visible border-4 flex items-center justify-center bg-black ${pendingAction
-              ? "border-purple-400 shadow-lg shadow-purple-500/50 animate-pulse"
-              : isCurrentTurn
-                ? "border-yellow-400 shadow-lg shadow-yellow-500/50 animate-pulse"
+          className={`relative w-24 h-24 rounded-full overflow-visible border-4 flex items-center justify-center bg-black ${
+            isWinner
+              ? "border-yellow-400 shadow-2xl shadow-yellow-500/80 animate-pulse ring-4 ring-yellow-300/50"
+              : pendingAction
+                ? "border-purple-400 shadow-lg shadow-purple-500/50 animate-pulse"
+                : isCurrentTurn
+                  ? "border-yellow-400 shadow-lg shadow-yellow-500/50 animate-pulse"
                   : "border-green-500"
             }`}
         >
@@ -208,7 +260,7 @@ export const PlayerSeat = memo(function PlayerSeat({
           )}
 
           {/* 🎯 Badge D / SB / BB */}
-          {(isDealer || isSmallBlind || isBigBlind) && hasFolded === false && (
+          {(isDealer || isSmallBlind || isBigBlind) && hasFolded === false && !isWinner && (
             <div
               className={`absolute -left-5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 flex items-center justify-center text-md font-bold shadow-md
               ${isDealer
@@ -219,6 +271,13 @@ export const PlayerSeat = memo(function PlayerSeat({
                 }`}
             >
               {isDealer ? "D" : isSmallBlind ? "SB" : "BB"}
+            </div>
+          )}
+          
+          {/* 👑 Winner Crown */}
+          {isWinner && (
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-4xl animate-bounce">
+              👑
             </div>
           )}
         </div>
@@ -304,6 +363,41 @@ export const PlayerSeat = memo(function PlayerSeat({
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-[shimmer_2s_infinite]" />
                     )}
                   </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 🎴 Player Cards at Showdown (Finished State) */}
+        {cards && cards.length > 0 && tableState?.state === 2 && showCards && (
+          <div className="absolute -top-6 right-[-120px] z-20">
+            <div className="relative flex flex-col items-center gap-2">
+              {/* 🃏 Cards */}
+              <CardHand
+                cards={cards}
+                hidden={false}
+                className="pointer-events-none"
+                highlightedIndices={handEval ? cardHighlights.holeHighlights : []}
+                highlightDelay={0}
+              />
+
+              {/* 💎 Hand rank display at showdown */}
+              {handEval && (
+                <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap z-50">
+                  <div className={`px-3 py-1 rounded-lg text-xs font-bold backdrop-blur-sm border shadow-lg ${
+                    isWinner
+                      ? "bg-yellow-500/90 border-yellow-300 text-yellow-900 shadow-yellow-500/50 animate-pulse"
+                      : handEval.rank >= 7 
+                        ? "bg-green-900/90 border-green-400 text-green-200 shadow-green-500/50" 
+                        : handEval.rank >= 4 
+                          ? "bg-green-800/80 border-green-500 text-green-100 shadow-green-600/40" 
+                          : handEval.rank >= 1 
+                            ? "bg-emerald-900/70 border-emerald-600 text-emerald-200" 
+                            : "bg-slate-800/80 border-slate-600 text-slate-300"
+                    }`}>
+                    {getHandRankDisplay(handEval.rank).emoji} {getHandRankDisplay(handEval.rank).name}
+                  </div>
                 </div>
               )}
             </div>

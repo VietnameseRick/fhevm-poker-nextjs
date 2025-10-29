@@ -96,6 +96,7 @@ export const useFHEPoker = (parameters: {
   const isLoadingRef = useRef<boolean>(false);
   const isDecryptingRef = useRef<boolean>(false);
   const previousRoundRef = useRef<string | undefined>(undefined);
+  const previousGameStateRef = useRef<number | undefined>(undefined);
   const timeoutHandledRef = useRef<boolean>(false);
 
   // Contract metadata
@@ -223,6 +224,8 @@ export const useFHEPoker = (parameters: {
     // Clear decrypted state when table changes
     setCards([undefined, undefined]);
     setDecryptedCommunityCards([]);
+    // Also clear store's cached decrypted cards
+    usePokerStore.getState().setDecryptedCommunityCards([]);
   }, [currentTableId, setDecryptedCommunityCards]);
 
   // Reset local decrypted data at the start of a new round
@@ -231,16 +234,48 @@ export const useFHEPoker = (parameters: {
     const roundStr = typeof round === 'bigint' || typeof round === 'number' ? round.toString() : undefined;
     if (roundStr !== undefined) {
       if (previousRoundRef.current !== undefined && roundStr !== previousRoundRef.current) {
+        console.log(`🔄 New round detected: ${previousRoundRef.current} -> ${roundStr}, clearing cards`);
         setCards([undefined, undefined]);
         setDecryptedCommunityCards([]);
         setIsDecrypting(false);
         isDecryptingRef.current = false;
+        // Clear both local and store cached data
+        usePokerStore.getState().setDecryptedCommunityCards([]);
+        usePokerStore.getState().clearDealtCardsTracking(); // Clear dealt cards tracking
         // Gentle prompt for users to decrypt again
         setMessage("New round started. 🔓 Decrypt your cards to view them.");
       }
       previousRoundRef.current = roundStr;
     }
   }, [tableState?.currentRound, setDecryptedCommunityCards]);
+
+  // Clear cards when game state transitions (especially from Finished to Waiting/Playing)
+  useEffect(() => {
+    const gameState = tableState?.state;
+    if (gameState !== undefined && previousGameStateRef.current !== undefined) {
+      // Clear cards when transitioning from Finished (2) to Waiting (0) or Playing (1)
+      if (previousGameStateRef.current === 2 && (gameState === 0 || gameState === 1)) {
+        console.log(`🔄 Game state transition: Finished -> ${gameState === 0 ? 'Waiting' : 'Playing'}, clearing cards`);
+        setCards([undefined, undefined]);
+        setDecryptedCommunityCards([]);
+        setIsDecrypting(false);
+        isDecryptingRef.current = false;
+        // Clear both local and store cached data
+        usePokerStore.getState().setDecryptedCommunityCards([]);
+        usePokerStore.getState().clearDealtCardsTracking(); // Clear dealt cards tracking
+      }
+      
+      // Fetch revealed cards when transitioning to Finished state (showdown)
+      if (previousGameStateRef.current === 1 && gameState === 2 && currentTableId) {
+        console.log(`🎴 Game state transition: Playing -> Finished, fetching revealed cards for all players`);
+        // Fetch revealed cards for all players
+        players.forEach((playerAddr) => {
+          usePokerStore.getState().fetchRevealedCards(currentTableId, playerAddr);
+        });
+      }
+    }
+    previousGameStateRef.current = gameState;
+  }, [tableState?.state, currentTableId, players, setDecryptedCommunityCards]);
 
   // Client-side countdown using turnStartTime and playerActionTimeout
   useEffect(() => {
@@ -793,7 +828,9 @@ export const useFHEPoker = (parameters: {
         if (errorMessage.includes("NOT_SEATED")) {
           specificMessage = "You are not seated at this table";
         } else if (errorMessage.includes("CARDS_NOT_DEALT")) {
-          specificMessage = "Cards have not been dealt yet";
+          // This is a timing issue - cards will be dealt shortly
+          specificMessage = "⏳ Cards are being dealt... Please wait a moment and try again.";
+          console.log('⏳ Cards not dealt yet on-chain. This is normal if you just started the game.');
         } else if (errorMessage.includes("TABLE_NOT_FOUND")) {
           specificMessage = "Table not found";
         } else if (errorMessage.includes("CALL_EXCEPTION")) {
@@ -801,7 +838,7 @@ export const useFHEPoker = (parameters: {
           specificMessage = "Contract call failed. Please ensure you're seated at the table and cards have been dealt.";
         }
         
-        setMessage(`Failed to decrypt cards: ${specificMessage}`);
+        setMessage(`${errorMessage.includes("CARDS_NOT_DEALT") ? "" : "Failed to decrypt cards: "}${specificMessage}`);
       } finally {
         isDecryptingRef.current = false;
         setIsDecrypting(false);
@@ -810,21 +847,28 @@ export const useFHEPoker = (parameters: {
     [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, smartAccountAddress]
   );
 
-  // Decrypt community cards
+  // Decrypt community cards with retry logic
   const decryptCommunityCards = useCallback(
-    async (tableId: bigint) => {
+    async (tableId: bigint, retryCount = 0): Promise<boolean> => {
       if (
         !pokerContract.address ||
         !instance ||
-        !ethersSigner ||
-        isDecryptingRef.current
+        !ethersSigner
       ) {
-        return;
+        return false;
+      }
+
+      // Only block on first attempt, allow retries to proceed
+      if (isDecryptingRef.current && retryCount === 0) {
+        return false;
       }
 
       try {
-        isDecryptingRef.current = true;
-        setIsDecrypting(true);
+        if (retryCount === 0) {
+          isDecryptingRef.current = true;
+          setIsDecrypting(true);
+        }
+        
         // Set action label based on current street
         let actionLabel = "Decrypting";
         const street = communityCards?.currentStreet;
@@ -832,7 +876,9 @@ export const useFHEPoker = (parameters: {
         else if (street === 2) actionLabel = "Decrypting Turn";
         else if (street === 3) actionLabel = "Decrypting River";
         setCurrentAction(actionLabel);
-        setMessage("Fetching encrypted community cards...");
+        setMessage(retryCount > 0 
+          ? `Retrying... (${retryCount}/5)` 
+          : "Fetching encrypted community cards...");
 
         const contract = new ethers.Contract(
           pokerContract.address,
@@ -876,7 +922,7 @@ export const useFHEPoker = (parameters: {
           setMessage("⚠️ No community cards to decrypt yet");
           isDecryptingRef.current = false;
           setIsDecrypting(false);
-          return;
+          return false;
         }
 
         setMessage("Decrypting community cards...");
@@ -896,7 +942,9 @@ export const useFHEPoker = (parameters: {
         if (!sig) {
           usePokerStore.getState().setPendingTransaction(null);
           setMessage("Unable to build FHEVM decryption signature");
-          return;
+          isDecryptingRef.current = false;
+          setIsDecrypting(false);
+          return false;
         }
 
         const decryptRequests = validHandles.map((handle) => ({
@@ -917,9 +965,12 @@ export const useFHEPoker = (parameters: {
 
         usePokerStore.getState().setPendingTransaction(null);
 
-        // Build the full decrypted array (5 cards), filling in zeros for undealt cards
-        const decryptedValues = [0, 0, 0, 0, 0];
+        // Build the full decrypted array (5 cards), filling in undefined for undealt cards
+        // Note: 0 is a valid card value (2♥), so we use undefined as placeholder
+        const decryptedValues: (number | undefined)[] = [undefined, undefined, undefined, undefined, undefined];
         let validIndex = 0;
+        
+        console.log(`🎴 Decrypting community cards for street ${currentStreet}, validHandles:`, validHandles.length);
         
         if (currentStreet >= 1) {
           decryptedValues[0] = Number(res[validHandles[validIndex++]]);
@@ -933,16 +984,46 @@ export const useFHEPoker = (parameters: {
           decryptedValues[4] = Number(res[validHandles[validIndex++]]);
         }
 
+        console.log(`✅ Decrypted community cards:`, decryptedValues);
+        console.log(`📦 Storing in Zustand store...`);
+        
         // Store decrypted community cards in Zustand (survives refreshes)
         setDecryptedCommunityCards(decryptedValues);
+        
+        // Verify storage
+        const stored = usePokerStore.getState().decryptedCommunityCards;
+        console.log(`🔍 Verified stored community cards:`, stored);
+        
         setMessage("✅ Community cards decrypted!");
+        
+        // Success - clear decrypting state
+        isDecryptingRef.current = false;
+        setIsDecrypting(false);
+        setCurrentAction(undefined);
+        return true;
+        
       } catch (error) {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        setMessage(`❌ Failed to decrypt community cards: ${errorMessage}`);
-      } finally {
+        const isNotDealtError = errorMessage.includes('COMMUNITY_CARDS_NOT_DEALT');
+        
+        // Retry logic: max 5 attempts (15 seconds total)
+        if (isNotDealtError && retryCount < 5) {
+          console.log(`⏳ Cards not dealt yet, retrying in 3s... (${retryCount + 1}/5)`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          return decryptCommunityCards(tableId, retryCount + 1);
+        }
+        
+        // Max retries reached or different error
+        console.error('❌ Decrypt community cards error:', error);
+        setMessage(isNotDealtError 
+          ? '⚠️ Cards not available yet. Please wait for the next street.' 
+          : `❌ Failed to decrypt community cards: ${errorMessage}`);
+        
         isDecryptingRef.current = false;
         setIsDecrypting(false);
+        setCurrentAction(undefined);
+        return false;
       }
     },
     [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet, smartAccountAddress, setDecryptedCommunityCards]

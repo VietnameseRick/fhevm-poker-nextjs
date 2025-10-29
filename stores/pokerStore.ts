@@ -72,9 +72,10 @@ interface PokerStore {
   players: string[];
   allPlayersBettingState: Record<string, PlayerBettingState>;
   communityCards: CommunityCards | null;
-  decryptedCommunityCards: number[];
+  decryptedCommunityCards: (number | undefined)[]; // Support undefined for undealt cards (0 is valid card value)
   revealedCards: Record<string, RevealedCards>;
   playerActions: Record<string, PlayerAction>; // Track last action per player
+  playersWithDealtCards: Set<string>; // Track players who have cards dealt (for decrypt button)
   isLoading: boolean;
   message: string;
   lastPot: bigint;
@@ -96,11 +97,13 @@ interface PokerStore {
   setContractInfo: (address: string, provider: ethers.ContractRunner) => void;
   setMessage: (msg: string) => void;
   setLoading: (loading: boolean) => void;
-  setDecryptedCommunityCards: (cards: number[]) => void;
+  setDecryptedCommunityCards: (cards: (number | undefined)[]) => void;
   addRevealedCards: (playerAddress: string, card1: number, card2: number) => void;
   setPendingTransaction: (action: string | null) => void;
   setPlayerAction: (playerAddress: string, action: PlayerAction['action'], amount?: bigint) => void;
   clearPlayerActions: () => void;
+  setPlayerCardsDealt: (playerAddress: string) => void;
+  clearDealtCardsTracking: () => void;
   
   // Fetch actions - these update the store directly
   fetchTableState: (tableId: bigint) => Promise<void>;
@@ -132,6 +135,7 @@ export const usePokerStore = create<PokerStore>()(
       decryptedCommunityCards: [],
       revealedCards: {},
       playerActions: {},
+      playersWithDealtCards: new Set(),
       isLoading: false,
       message: '',
       lastPot: BigInt(0),
@@ -188,6 +192,16 @@ export const usePokerStore = create<PokerStore>()(
       
       clearPlayerActions: () => set({
         playerActions: {},
+        lastUpdate: Date.now()
+      }),
+      
+      setPlayerCardsDealt: (playerAddress) => set((state) => ({
+        playersWithDealtCards: new Set([...state.playersWithDealtCards, playerAddress.toLowerCase()]),
+        lastUpdate: Date.now()
+      })),
+      
+      clearDealtCardsTracking: () => set({
+        playersWithDealtCards: new Set(),
         lastUpdate: Date.now()
       }),
       
@@ -509,15 +523,16 @@ export const usePokerStore = create<PokerStore>()(
       }),
       
       // Clear table data but keep currentTableId (for event refreshes)
-      // NOTE: Decrypted community cards are preserved to prevent UI flicker
       clearTableData: () => set({
         tableState: null,
         bettingInfo: null,
         players: [],
         allPlayersBettingState: {},
         communityCards: null,
-        playerActions: {}, // Clear actions when table data resets
-        // Keep decryptedCommunityCards and revealedCards - they survive refreshes
+        decryptedCommunityCards: [], // Clear to prevent stale decrypt button
+        // DON'T clear playerActions - they persist until street change
+        playersWithDealtCards: new Set(), // Clear dealt cards tracking
+        // Keep revealedCards - they survive refreshes (only for showdown)
         lastUpdate: Date.now(), // Force re-render
       }),
     }),

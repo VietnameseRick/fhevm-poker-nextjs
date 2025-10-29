@@ -2,10 +2,11 @@
 
 import { PlayerSeat } from "./PlayerSeat";
 import { Card } from "./CardDisplay";
-import React from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { PlayerBettingState, usePokerStore } from "@/stores/pokerStore";
 import { CyberpunkLoader } from "./CyberpunkLoader";
 import { evaluateBestHand } from "@/utils/handEvaluator";
+import { ChipFlyAnimation } from "./ChipFlyAnimation";
 
 interface Player {
   address: string;
@@ -14,6 +15,8 @@ interface Player {
   hasFolded: boolean;
   isCurrentPlayer: boolean;
   cards?: Array<number | undefined>;
+  winnings?: bigint;
+  losses?: bigint;
 }
 
 interface CommunityCards {
@@ -42,15 +45,14 @@ interface PokerTableProps {
   playerState?: "" | PlayerBettingState | undefined;
   clear?: number;
   isPlaying?: boolean;
-  decryptedCommunityCards?: number[];
+  decryptedCommunityCards?: (number | undefined)[]; // Support undefined for undealt cards (0 is valid card)
   isDecrypting?: boolean;
   handleDecryptCommunityCards?: () => void;
   handleDecryptCards?: () => void;
   timeLeft: number | null;
   bigBlind?: string;
   smallBlind?: string;
-  minRaise?: bigint;
-  showdownOverlay?: React.ReactNode;
+  winnerAddress?: string; // Winner address when game is finished
 }
 
 export function PokerTable({
@@ -77,18 +79,57 @@ export function PokerTable({
   timeLeft,
   bigBlind,
   smallBlind,
-  minRaise,
-  showdownOverlay,
+  winnerAddress,
 }: PokerTableProps) {
   // Get loading state from Zustand store for cyberpunk loader
   const storeIsLoading = usePokerStore(state => state.isLoading);
   const formatEth = (wei: bigint) => (Number(wei) / 1e18).toFixed(4);
 
+  // Chip animation state
+  const [showChipAnimation, setShowChipAnimation] = useState(false);
+  const [chipAnimationPositions, setChipAnimationPositions] = useState<{from: {x: number; y: number}; to: {x: number; y: number}} | null>(null);
+  const potRef = useRef<HTMLDivElement>(null);
+  const winnerSeatRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Trigger chip animation when showdown completes
+  useEffect(() => {
+    if (tableState?.state === 2 && winnerAddress && pot > BigInt(0)) {
+      // Wait a moment for cards to be revealed first
+      const timeout = setTimeout(() => {
+        // Get pot and winner positions
+        const potElement = potRef.current;
+        const winnerElement = winnerSeatRefs.current.get(winnerAddress.toLowerCase());
+        
+        if (potElement && winnerElement) {
+          const potRect = potElement.getBoundingClientRect();
+          const winnerRect = winnerElement.getBoundingClientRect();
+          
+          setChipAnimationPositions({
+            from: {
+              x: potRect.left + potRect.width / 2,
+              y: potRect.top + potRect.height / 2,
+            },
+            to: {
+              x: winnerRect.left + winnerRect.width / 2,
+              y: winnerRect.top + winnerRect.height / 2,
+            },
+          });
+          setShowChipAnimation(true);
+        }
+      }, 800); // Delay to let cards reveal first
+
+      return () => clearTimeout(timeout);
+    } else {
+      setShowChipAnimation(false);
+    }
+  }, [tableState?.state, winnerAddress, pot]);
+
   // Evaluate the player's hand to highlight community cards
   // Need at least 2 hole cards + 3 community (flop) = 5 total cards
   const yourPlayer = players.find(p => p.address.toLowerCase() === yourAddress?.toLowerCase());
   const validPlayerCards = yourPlayer?.cards?.filter((c): c is number => c !== undefined) || [];
-  const validCommunity = decryptedCommunityCards.filter((c): c is number => c !== undefined && c !== 0);
+  // Note: 0 is a valid card value (2♥), so we only filter undefined
+  const validCommunity = decryptedCommunityCards.filter((c): c is number => c !== undefined);
   const totalPlayerCards = [...validPlayerCards, ...validCommunity];
 
   const playerHandEval =
@@ -110,6 +151,47 @@ export function PokerTable({
     <>
       {/* Cyberpunk loading overlay - shows during state fetches */}
       <CyberpunkLoader isLoading={storeIsLoading || isLoading} />
+
+      {/* Winner Banner */}
+      {winnerAddress && tableState?.state === 2 && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white px-8 py-4 rounded-b-2xl shadow-2xl shadow-yellow-500/50 animate-pulse">
+            <div className="text-center space-y-1">
+              <div className="text-2xl font-bold">🏆 WINNER 🏆</div>
+              <div className="text-lg font-semibold">
+                {winnerAddress.toLowerCase() === yourAddress?.toLowerCase() 
+                  ? "YOU WON!" 
+                  : `${winnerAddress.slice(0, 6)}...${winnerAddress.slice(-4)}`}
+              </div>
+              <div className="text-xl font-bold text-yellow-100">
+                💰 {formatEth(pot)} ETH
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Waiting for FHE Decryption Banner - Showdown in progress */}
+      {currentStreet === 4 && tableState?.state === 1 && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="bg-gradient-to-r from-black via-green-900 to-black text-green-300 px-8 py-4 rounded-b-2xl shadow-2xl shadow-green-500/50 border-b-2 border-green-500/30">
+            <div className="text-center space-y-1">
+              <div className="text-2xl font-bold flex items-center justify-center gap-3">
+                <span className="animate-pulse">🔓</span>
+                FHE DECRYPTION IN PROGRESS
+                <span className="animate-pulse">🔓</span>
+              </div>
+              <div className="text-sm text-green-200">
+                The contract is decrypting all cards to determine the winner...
+              </div>
+              <div className="text-xs text-green-400 mt-2 flex items-center justify-center gap-2">
+                <span className="animate-spin inline-block">⏳</span>
+                This may take 10-30 seconds on testnet
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="relative w-full max-w-6xl mx-auto p-10">
         <div className="relative w-full h-[500px] mb-16 mt-10">
@@ -153,7 +235,7 @@ export function PokerTable({
                 !isLoading && (
                   <div className="relative z-20 flex flex-col items-center justify-center gap-4 transition-all duration-500 pointer-events-auto">
                     {/* Pot */}
-                    <div className="text-center">
+                    <div ref={potRef} className="text-center">
                       <div className="text-white text-2xl font-semibold uppercase tracking-wider">
                         Pot: {formatEth(pot)} ETH
                       </div>
@@ -184,12 +266,21 @@ export function PokerTable({
 
                           {/* 🟦 Nút Decrypt động */}
                           {isPlaying && (() => {
+                            // ✅ CRITICAL: Only show decrypt button if communityCards exists on-chain
+                            // This prevents showing button for cached state from previous games
+                            if (!communityCards) {
+                              console.log(`🎴 [Decrypt Button] No community cards on-chain yet`);
+                              return null;
+                            }
+
+                            // Check if cards are decrypted (not undefined)
+                            // Note: 0 is a valid card value (2♥)
                             const decoded = [
-                              (decryptedCommunityCards[0] ?? 0) !== 0,
-                              (decryptedCommunityCards[1] ?? 0) !== 0,
-                              (decryptedCommunityCards[2] ?? 0) !== 0,
-                              (decryptedCommunityCards[3] ?? 0) !== 0,
-                              (decryptedCommunityCards[4] ?? 0) !== 0,
+                              decryptedCommunityCards[0] !== undefined,
+                              decryptedCommunityCards[1] !== undefined,
+                              decryptedCommunityCards[2] !== undefined,
+                              decryptedCommunityCards[3] !== undefined,
+                              decryptedCommunityCards[4] !== undefined,
                             ];
 
                             let coverStart = -1;
@@ -229,6 +320,8 @@ export function PokerTable({
                               }
                             }
 
+                            console.log(`🎴 [Decrypt Button Logic] street=${currentStreet}, communityCardsExist=${!!communityCards}, decoded=`, decoded, `cover=${coverStart}-${coverEnd}`);
+
                             if (coverStart === -1) return null;
 
                             // === Tính vị trí overlay ===
@@ -249,7 +342,24 @@ export function PokerTable({
                             const left = `calc(50% + ${leftOffset}px)`;
 
                             const numCovered = coverEnd - coverStart + 1;
-                            const buttonText = numCovered >= 3 ? "Decrypt Cards" : "Decrypt";
+                            
+                            // ✨ Better button text based on what's being decrypted
+                            let buttonText = "Decrypt";
+                            if (currentStreet === 1) {
+                              buttonText = "🃏 Decrypt Flop";
+                            } else if (currentStreet === 2) {
+                              buttonText = numCovered >= 3 ? "🃏 Decrypt Cards" : "🃏 Decrypt Turn";
+                            } else if (currentStreet === 3) {
+                              if (numCovered >= 3) {
+                                buttonText = "🃏 Decrypt Cards";
+                              } else if (coverStart === 3 && coverEnd === 4) {
+                                buttonText = "🃏 Decrypt Turn & River";
+                              } else if (coverStart === 3) {
+                                buttonText = "🃏 Decrypt Turn";
+                              } else {
+                                buttonText = "🃏 Decrypt River";
+                              }
+                            }
 
                             return (
                               <div
@@ -264,15 +374,21 @@ export function PokerTable({
                                 <button
                                   onClick={handleDecryptCommunityCards}
                                   disabled={isDecrypting || isLoading}
-                                  className={`relative z-20 text-black font-bold py-2 px-6 text-lg transition-all duration-200
-                                  hover:scale-105 disabled:cursor-not-allowed ${isDecrypting ? "scale-110" : ""}`}
-                                  style={{
+                                  className={`relative z-20 font-bold py-2 px-6 text-lg transition-all duration-200
+                                  hover:scale-105 disabled:cursor-not-allowed ${
+                                    isDecrypting 
+                                      ? "scale-110 animate-greenBlackGlow text-green-300 border-2 border-green-400/50" 
+                                      : "text-black"
+                                  }`}
+                                  style={isDecrypting ? {
+                                    whiteSpace: "nowrap",
+                                  } : {
                                     backgroundImage: `url(/bg-button.png)`,
                                     backgroundSize: "100% 100%",
                                     whiteSpace: "nowrap",
                                   }}
                                 >
-                                  {isDecrypting ? "Decrypting..." : buttonText}
+                                  {isDecrypting ? "🔓 Decrypting..." : buttonText}
                                 </button>
                               </div>
                             );
@@ -310,6 +426,11 @@ export function PokerTable({
                 return (
                   <div
                     key={i}
+                    ref={(el) => {
+                      if (el && player) {
+                        winnerSeatRefs.current.set(player.address.toLowerCase(), el as HTMLDivElement);
+                      }
+                    }}
                     className="absolute transition-all duration-300"
                     style={{
                       left: "50%",
@@ -329,7 +450,9 @@ export function PokerTable({
                         isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
                         cards={player.cards}
                         showCards={
-                          player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards
+                          // Show cards for: 1) your own cards, 2) all players when game finished (showdown)
+                          (player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards) ||
+                          (tableState?.state === 2 && player.cards && player.cards.length > 0)
                         }
                         position="bottom"
                         pendingAction={
@@ -343,13 +466,15 @@ export function PokerTable({
                         isDecrypting={isDecrypting}
                         handleDecryptCards={handleDecryptCards}
                         timeLeft={timeLeft}
-                        decryptedCommunityCards={decryptedCommunityCards}
+                        decryptedCommunityCards={decryptedCommunityCards as (number | undefined)[]}
                         tableState={tableState}
                         currentBet={currentBet}
                         playerBet={player.currentBet}
                         bigBlind={bigBlind}
                         smallBlind={smallBlind}
-                        minRaise={minRaise}
+                        isWinner={winnerAddress?.toLowerCase() === player.address.toLowerCase()}
+                        winnings={player.winnings}
+                        losses={player.losses}
                       />
                     ) : (
                       <div className="w-20 h-20 rounded-full bg-black/70 border-2 border-gray-700 flex items-center justify-center text-gray-500 text-sm">
@@ -359,12 +484,19 @@ export function PokerTable({
                   </div>
                 );
               })}
-            
-            {/* Showdown Overlay - Rendered on top of table */}
-            {showdownOverlay}
           </div>
         </div>
       </div>
+
+      {/* Chip Fly Animation */}
+      {showChipAnimation && chipAnimationPositions && (
+        <ChipFlyAnimation
+          from={chipAnimationPositions.from}
+          to={chipAnimationPositions.to}
+          amount={pot}
+          onComplete={() => setShowChipAnimation(false)}
+        />
+      )}
     </>
   );
 }

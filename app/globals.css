@@ -208,4 +208,73 @@ html {
       transform: rotate3d(0, 0, 1, 360deg);
     }
   }
+
+/* Showdown Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes chipFly {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(calc(var(--chip-tx) * 0.5), calc(var(--chip-ty) * 0.5 - 100px)) scale(1.2) rotate(180deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--chip-tx), var(--chip-ty)) scale(0.6) rotate(360deg);
+    opacity: 0.8;
+  }
+}
+
+/* Green-Black Glow Animation */
+@keyframes greenBlackGlow {
+  0% {
+    background-position: 0% 50%;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8), 0 0 40px rgba(34, 197, 94, 0.4);
+  }
+  25% {
+    box-shadow: 0 0 25px rgba(34, 197, 94, 0.6), 0 0 50px rgba(0, 0, 0, 0.6);
+  }
+  50% {
+    background-position: 100% 50%;
+    box-shadow: 0 0 30px rgba(34, 197, 94, 0.8), 0 0 60px rgba(0, 0, 0, 0.4);
+  }
+  75% {
+    box-shadow: 0 0 25px rgba(34, 197, 94, 0.6), 0 0 50px rgba(0, 0, 0, 0.6);
+  }
+  100% {
+    background-position: 0% 50%;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8), 0 0 40px rgba(34, 197, 94, 0.4);
+  }
+}
+
+.animate-greenBlackGlow {
+  background: linear-gradient(
+    90deg,
+    #000000,
+    #1a1a1a,
+    #22c55e,
+    #16a34a,
+    #000000,
+    #1a1a1a,
+    #22c55e,
+    #000000
+  );
+  background-size: 200% 200%;
+  animation: greenBlackGlow 2s ease-in-out infinite;
+}
 }
