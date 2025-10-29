@@ -149,7 +149,16 @@ export const usePokerStore = create<PokerStore>()(
       setCurrentTableId: (id) => set({ currentTableId: id }),
       
       setContractInfo: (address, provider) => {
-        const freshProvider = new ethers.JsonRpcProvider(config.rpcUrl);
+        // ✅ Create a dedicated JsonRpcProvider for queries to avoid BrowserProvider caching
+        // BrowserProvider aggressively caches view function calls, even with blockTag: "latest"
+        // This ensures we ALWAYS get fresh on-chain data
+        const freshProvider = new ethers.JsonRpcProvider(config.rpcUrl, undefined, {
+          staticNetwork: true, // Disable network auto-detection for performance
+          batchMaxCount: 1, // Disable batching to get immediate results
+        });
+        
+        console.log('🔧 Created fresh JsonRpcProvider for on-chain queries (no cache):', config.rpcUrl);
+        
         set({ 
           contractAddress: address, 
           provider,
@@ -226,8 +235,11 @@ export const usePokerStore = create<PokerStore>()(
             console.warn('Failed to check nextTableId:', err);
           }
           
+          // Get current block to verify we're querying fresh data
+          const blockNumber = await provider.getBlockNumber();
+          
           const state = await contract.getTableState(tableId, { blockTag: "latest" });
-          console.log('✅ Got table state:', state);
+          console.log(`✅ Got FRESH table state from block ${blockNumber}:`, state);
           let tableStruct: {
             dealerIndex: bigint;
             smallBlind: bigint;

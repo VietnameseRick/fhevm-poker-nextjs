@@ -130,19 +130,24 @@ export const PlayerSeat = memo(function PlayerSeat({
   // Get table state to check if game has started  
   const gameTableState = usePokerStore(state => state.tableState);
   const isGamePlaying = gameTableState?.state === 1; // 1 = Playing state
+  
+  // Check if this player's cards have been dealt (via CardsDealt event)
+  const playersWithDealtCards = usePokerStore(state => state.playersWithDealtCards);
+  const hasCardsDealt = playersWithDealtCards.has(address.toLowerCase());
 
-  // ✅ ON-CHAIN STATE: Only show decrypt button based on CONTRACT state
+  // ✅ ON-CHAIN STATE: Show decrypt button based on CONTRACT state + event tracking
   // Show decrypt button if:
   // 1. Game is in Playing state (on-chain) AND
   // 2. Cards not yet decrypted (local) AND
   // 3. Player is seated/has state (on-chain) AND
-  // 4. Player hasn't folded (on-chain)
-  // No need for event tracking - contract is source of truth
+  // 4. Player hasn't folded (on-chain) AND
+  // 5. CardsDealt event has fired for this player (prevents "CARDS_NOT_DEALT" error)
   const shouldShowDecryptButton = 
     isGamePlaying && 
     clear === undefined && 
     (isSeated !== false || !!playerState) && 
-    !hasFolded;
+    !hasFolded &&
+    hasCardsDealt;
 
   // ✅ Format thời gian mm:ss
   const formatTime = (seconds: number | null) => {
@@ -314,54 +319,26 @@ export const PlayerSeat = memo(function PlayerSeat({
                   {/* 🌫️ Lớp phủ mờ */}
                   <div className="absolute inset-0 bg-black/30 backdrop-blur-sm rounded-lg z-10 pointer-events-none" />
 
-                  {/* 🔘 Nút decrypt */}
+                  {/* 🔘 Nút decrypt with green/black glow when decrypting */}
                   <button
                     onClick={handleDecryptCards}
                     disabled={isDecrypting || isLoading}
-                    className={`relative z-20 text-black font-bold py-2 px-8 text-sm transition-all duration-200 
+                    className={`relative z-20 font-bold py-2 px-8 text-sm transition-all duration-200 
                       hover:scale-105 disabled:cursor-not-allowed 
-                      ${isDecrypting ? "scale-110" : ""}
+                      ${isDecrypting 
+                        ? "scale-110 animate-greenBlackGlow text-green-300 border-2 border-green-400/50" 
+                        : "text-black"
+                      }
                     `}
-                    style={{
+                    style={isDecrypting ? {
+                      whiteSpace: "nowrap",
+                    } : {
                       backgroundImage: `url(/bg-button.png)`,
                       backgroundSize: "100% 100%",
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {isDecrypting ? (
-                      <span className="flex items-center justify-center gap-2 text-sm">
-                        <svg
-                          className="animate-spin h-4 w-4"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 
-                              5.373 0 12h4zm2 5.291A7.962 7.962 0 
-                              014 12H0c0 3.042 1.135 5.824 3 
-                              7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                        Decrypting...
-                      </span>
-                    ) : (
-                      "Decrypt Cards"
-                    )}
-
-                    {isDecrypting && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-[shimmer_2s_infinite]" />
-                    )}
+                    {isDecrypting ? "🔓 Decrypting..." : "🔓 Decrypt"}
                   </button>
                 </div>
               )}

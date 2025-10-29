@@ -740,23 +740,30 @@ export const useFHEPoker = (parameters: {
     [refreshAll]
   );
 
-  // Decrypt hole cards
+  // Decrypt hole cards with retry logic (same as community cards)
   const decryptCards = useCallback(
-    async (tableId: bigint) => {
+    async (tableId: bigint, retryCount = 0): Promise<boolean> => {
       if (
         !pokerContract.address ||
         !instance ||
-        !ethersSigner ||
-        isDecryptingRef.current
+        !ethersSigner
       ) {
-        return;
+        return false;
+      }
+
+      // Only block on first attempt, allow retries to proceed
+      if (isDecryptingRef.current && retryCount === 0) {
+        return false;
       }
 
       try {
-        isDecryptingRef.current = true;
-        setIsDecrypting(true);
+        if (retryCount === 0) {
+          isDecryptingRef.current = true;
+          setIsDecrypting(true);
+        }
+        
         setCurrentAction("Decrypting Your Cards");
-        setMessage("Fetching encrypted cards...");
+        setMessage("Decrypting your cards...");
 
         const contract = new ethers.Contract(
           pokerContract.address,
@@ -768,6 +775,7 @@ export const useFHEPoker = (parameters: {
           tableId: tableId.toString(),
           contractAddress: pokerContract.address,
           signerAddress: await ethersSigner.getAddress(),
+          retryCount,
         });
 
         const [card1Handle, card2Handle] = await contract.getMyHoleCards(tableId);
@@ -775,8 +783,10 @@ export const useFHEPoker = (parameters: {
 
         setMessage("Decrypting cards...");
 
-        // Show transaction confirmation modal for signature
-        usePokerStore.getState().setPendingTransaction("Decrypting Your Cards");
+        // Show transaction confirmation modal for signature (only on first attempt)
+        if (retryCount === 0) {
+          usePokerStore.getState().setPendingTransaction("Decrypting Your Cards");
+        }
 
         const sig = await FhevmDecryptionSignature.loadOrSign(
           instance,
@@ -790,7 +800,9 @@ export const useFHEPoker = (parameters: {
         if (!sig) {
           usePokerStore.getState().setPendingTransaction(null);
           setMessage("Unable to build FHEVM decryption signature");
-          return;
+          isDecryptingRef.current = false;
+          setIsDecrypting(false);
+          return false;
         }
 
         const res = await instance.userDecrypt(
@@ -817,31 +829,50 @@ export const useFHEPoker = (parameters: {
           { handle: card2Handle, clear: card2Value },
         ]);
 
-        setMessage("Cards decrypted!");
+        setMessage("✅ Cards decrypted!");
+        setCurrentAction(undefined);
+        
+        // Success - clear decrypting state
+        isDecryptingRef.current = false;
+        setIsDecrypting(false);
+        return true;
+        
       } catch (error) {
         usePokerStore.getState().setPendingTransaction(null);
         console.error('❌ Decrypt cards error:', error);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        // Try to extract more specific error info
-        let specificMessage = errorMessage;
-        if (errorMessage.includes("NOT_SEATED")) {
-          specificMessage = "You are not seated at this table";
-        } else if (errorMessage.includes("CARDS_NOT_DEALT")) {
-          // This is a timing issue - cards will be dealt shortly
-          specificMessage = "⏳ Cards are being dealt... Please wait a moment and try again.";
-          console.log('⏳ Cards not dealt yet on-chain. This is normal if you just started the game.');
-        } else if (errorMessage.includes("TABLE_NOT_FOUND")) {
-          specificMessage = "Table not found";
-        } else if (errorMessage.includes("CALL_EXCEPTION")) {
-          // Check if player is actually seated
-          specificMessage = "Contract call failed. Please ensure you're seated at the table and cards have been dealt.";
+        const isNotDealtError = errorMessage.includes("CARDS_NOT_DEALT");
+        const isRelayerError = errorMessage.includes('520') || errorMessage.includes('relayer') || errorMessage.includes('network');
+        
+        // Retry logic: max 5 attempts (15 seconds total)
+        if ((isNotDealtError || isRelayerError) && retryCount < 5) {
+          const reason = isRelayerError ? 'Relayer error' : 'Cards not dealt yet';
+          console.log(`⏳ ${reason}, retrying in 3s... (${retryCount + 1}/5)`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          return decryptCards(tableId, retryCount + 1);
         }
         
-        setMessage(`${errorMessage.includes("CARDS_NOT_DEALT") ? "" : "Failed to decrypt cards: "}${specificMessage}`);
-      } finally {
+        // Max retries reached or different error
+        let userMessage = '❌ Failed to decrypt hole cards';
+        if (isRelayerError) {
+          userMessage = '⚠️ Zama relayer is unavailable. Please try again later or contact support.';
+        } else if (isNotDealtError) {
+          userMessage = '⏳ Cards are being dealt... Please wait a moment and try again.';
+        } else if (errorMessage.includes("NOT_SEATED")) {
+          userMessage = "You are not seated at this table";
+        } else if (errorMessage.includes("TABLE_NOT_FOUND")) {
+          userMessage = "Table not found";
+        } else {
+          userMessage = `❌ Failed to decrypt: ${errorMessage}`;
+        }
+        
+        setMessage(userMessage);
+        setCurrentAction(undefined);
+        
         isDecryptingRef.current = false;
         setIsDecrypting(false);
+        return false;
       }
     },
     [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, smartAccountAddress]
@@ -876,9 +907,7 @@ export const useFHEPoker = (parameters: {
         else if (street === 2) actionLabel = "Decrypting Turn";
         else if (street === 3) actionLabel = "Decrypting River";
         setCurrentAction(actionLabel);
-        setMessage(retryCount > 0 
-          ? `Retrying... (${retryCount}/5)` 
-          : "Fetching encrypted community cards...");
+        setMessage("Decrypting community cards...");
 
         const contract = new ethers.Contract(
           pokerContract.address,
@@ -1006,19 +1035,29 @@ export const useFHEPoker = (parameters: {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         const isNotDealtError = errorMessage.includes('COMMUNITY_CARDS_NOT_DEALT');
+        const isRelayerError = errorMessage.includes('520') || errorMessage.includes('relayer') || errorMessage.includes('network');
         
         // Retry logic: max 5 attempts (15 seconds total)
-        if (isNotDealtError && retryCount < 5) {
-          console.log(`⏳ Cards not dealt yet, retrying in 3s... (${retryCount + 1}/5)`);
+        if ((isNotDealtError || isRelayerError) && retryCount < 5) {
+          const reason = isRelayerError ? 'Relayer error' : 'Cards not dealt yet';
+          console.log(`⏳ ${reason}, retrying in 3s... (${retryCount + 1}/5)`);
           await new Promise(resolve => setTimeout(resolve, 3000));
           return decryptCommunityCards(tableId, retryCount + 1);
         }
         
         // Max retries reached or different error
         console.error('❌ Decrypt community cards error:', error);
-        setMessage(isNotDealtError 
-          ? '⚠️ Cards not available yet. Please wait for the next street.' 
-          : `❌ Failed to decrypt community cards: ${errorMessage}`);
+        
+        let userMessage = '❌ Failed to decrypt community cards';
+        if (isRelayerError) {
+          userMessage = '⚠️ Zama relayer is unavailable. Please try again later or contact support.';
+        } else if (isNotDealtError) {
+          userMessage = '⚠️ Cards not available yet. Please wait for the next street.';
+        } else {
+          userMessage = `❌ Failed to decrypt: ${errorMessage}`;
+        }
+        
+        setMessage(userMessage);
         
         isDecryptingRef.current = false;
         setIsDecrypting(false);
