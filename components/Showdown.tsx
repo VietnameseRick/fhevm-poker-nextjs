@@ -23,6 +23,8 @@ interface ShowdownProps {
   tableId: bigint;
   contractAddress: string;
   provider?: ethers.ContractRunner | null;
+  isWaitingForWinner?: boolean; // True when waiting for FHE decryption callback
+  onStartNewRound?: () => void; // Callback to start new round
 }
 
 export function Showdown({
@@ -36,6 +38,8 @@ export function Showdown({
   tableId,
   contractAddress,
   provider,
+  isWaitingForWinner = false,
+  onStartNewRound,
 }: ShowdownProps) {
   const [showConfetti, setShowConfetti] = useState(false);
   const [animationStep, setAnimationStep] = useState(0);
@@ -50,7 +54,6 @@ export function Showdown({
 
   // Use contract winner directly
   const calculatedWinner = winner || allPlayers.find(p => !p.hasFolded)?.address || '';
-  console.log('🏆 Using winner:', calculatedWinner);
 
   const isWinner = calculatedWinner ? calculatedWinner.toLowerCase() === myAddress.toLowerCase() : false;
   const winnerData = calculatedWinner ? allPlayers.find(
@@ -231,6 +234,63 @@ export function Showdown({
           animationStep >= 1 ? "scale-100 opacity-100" : "scale-95 opacity-0"
         } max-h-[95vh] overflow-y-auto relative`}
       >
+        {/* Loading State - Waiting for FHE Decryption */}
+        {isWaitingForWinner && (
+          <div className="text-center py-8">
+            <div className="mb-6">
+              <div className="inline-block relative">
+                <div className="w-20 h-20 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-3xl">🔐</span>
+                </div>
+              </div>
+            </div>
+            
+            <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-purple-400">
+              Decrypting Cards...
+            </h2>
+            
+            <div className="space-y-3 mb-8">
+              <p className="text-slate-300 text-sm sm:text-base">
+                🔓 Decrypting player hands using FHE
+              </p>
+              <p className="text-slate-400 text-xs sm:text-sm">
+                ⚡ Determining winner based on hand ranks
+              </p>
+              <p className="text-slate-500 text-xs">
+                This may take a few moments on localhost
+              </p>
+            </div>
+
+            {/* Start New Round Button */}
+            {onStartNewRound && (
+              <div className="mt-8 p-4 bg-blue-900/20 rounded-xl border border-blue-500/30">
+                <p className="text-slate-300 text-sm mb-4">
+                  Don&apos;t want to wait?
+                </p>
+                <button
+                  onClick={() => {
+                    onStartNewRound();
+                    setIsMinimized(true);
+                  }}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🎮</span>
+                    <span>Start New Round</span>
+                  </div>
+                </button>
+                <p className="text-slate-500 text-xs mt-2">
+                  Results will appear when ready
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Main Content - Only show when not waiting */}
+        {!isWaitingForWinner && (
+          <>
         {/* Close/Minimize buttons */}
         <div className="absolute top-4 right-4 flex gap-2">
           <button
@@ -478,6 +538,8 @@ export function Showdown({
             Close & Continue
           </button>
         </div>
+          </>
+        )}
       </div>
 
       <style jsx>{`

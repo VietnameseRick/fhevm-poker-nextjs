@@ -2,6 +2,7 @@ import { useWatchContractEvent } from 'wagmi';
 import { FHEPokerABI } from '@/abi/FHEPokerABI';
 import { usePokerStore } from '@/stores/pokerStore';
 import { useCallback, useRef, useEffect } from 'react';
+import { autoTriggerMockDecryption } from '@/utils/mockDecryption';
 
 export function usePokerWagmi(
   contractAddress: `0x${string}` | undefined,
@@ -334,6 +335,10 @@ export function usePokerWagmi(
     store.fetchCommunityCards(currentTableId);
     store.fetchTableState(currentTableId);
     
+    // Auto-trigger mock decryption for community cards on localhost
+    // Delay allows the RequestDecryption tx to be mined first
+    autoTriggerMockDecryption(currentTableId, 1500);
+    
     console.log(`✅ [Event ${eventName}] Community cards state refreshed`);
   }, []);
 
@@ -364,13 +369,33 @@ export function usePokerWagmi(
     onLogs: () => handleCommunityCardEvent('RiverDealt'),
   });
 
+  // Special handler for StreetAdvanced - trigger mock decryption when advancing to Showdown
   useWatchContractEvent({
     address: contractAddress,
     abi: FHEPokerABI.abi,
     eventName: 'StreetAdvanced',
     enabled: !!contractAddress && enabled,
     pollingInterval,
-    onLogs: (logs) => debouncedRefresh('StreetAdvanced', logs),
+    onLogs: (logs) => {
+      const currentTableId = tableIdRef.current;
+      if (currentTableId) {
+        // Check if advancing to Showdown (BettingStreet.Showdown = 4)
+        logs.forEach((log) => {
+          try {
+            const logWithArgs = log as { args?: { newStreet?: number } };
+            const newStreet = logWithArgs.args?.newStreet;
+            if (newStreet === 4) {
+              console.log('🎯 [Event StreetAdvanced] Advancing to Showdown - triggering mock decryption');
+              // Trigger mock decryption for player cards at showdown
+              autoTriggerMockDecryption(currentTableId, 2000); // Longer delay for showdown
+            }
+          } catch (error) {
+            console.warn('Failed to parse StreetAdvanced event:', error);
+          }
+        });
+      }
+      debouncedRefresh('StreetAdvanced', logs);
+    },
   });
 
   useWatchContractEvent({

@@ -11,6 +11,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { ethers } from "ethers";
 import { useFhevm } from "@fhevm/react";
 import { useFHEPoker } from "@/hooks/useFHEPoker";
+import { useWinnerPolling } from "@/hooks/useWinnerPolling";
 import { PokerTable } from "./PokerTable";
 import { BettingControls } from "./BettingControls";
 import { WalletHeader } from "./WalletHeader";
@@ -52,15 +53,9 @@ export function PokerGame() {
   } = useSmartAccount();
 
   useEffect(() => {
-    console.log('Chain status:', { authenticated, chainId, isCorrectChain });
-
     if (authenticated && chainId && !isCorrectChain) {
-      console.log(`⚠️ Wrong chain detected: ${chainId}, switching to Sepolia (11155111)...`);
+      console.log(`⚠️ Wrong chain detected: ${chainId}, switching to Sepolia`);
       switchToSepolia();
-    } else if (authenticated && chainId && isCorrectChain) {
-      console.log(`✅ Already on correct chain: ${chainId}`);
-    } else if (authenticated && !chainId) {
-      console.log('⏳ Waiting for chain ID...');
     }
   }, [authenticated, chainId, isCorrectChain, switchToSepolia]);
 
@@ -89,6 +84,13 @@ export function PokerGame() {
     smartAccountAddress, // Pass smart account address for FHEVM signature
   });
 
+  // Poll for winner determination at showdown
+  const { isWaitingForWinner } = useWinnerPolling(
+    poker.currentTableId || null,
+    poker.communityCards?.currentStreet,
+    poker.tableState?.state === 1 // Only poll when game is Playing
+  );
+
   const pendingTransaction = usePokerStore(state => state.pendingTransaction);
   const storeIsLoading = usePokerStore(state => state.isLoading);
 
@@ -98,24 +100,13 @@ export function PokerGame() {
     
     // Poll during Showdown to check decryption status and catch state transition
     if (poker.communityCards.currentStreet === 4 && poker.tableState?.state === 1) {
-      console.log('🎴 Showdown in progress - smart polling with decryption status...');
-      
       const pollInterval = setInterval(async () => {
         if (!poker.currentTableId) return;
         
         // Check if FHE decryption is pending
-        const status = await poker.checkDecryptionPending(poker.currentTableId);
-        
-        if (status) {
-          if (status.isPending) {
-            console.log(`⏳ [Showdown] Waiting for FHE callback (request ID: ${status.requestId.toString()})`);
-          } else {
-            console.log('✅ [Showdown] FHE decryption completed, refreshing state...');
-          }
-        }
+        await poker.checkDecryptionPending(poker.currentTableId);
         
         // Always refresh table state to catch when game finishes
-        console.log('🔄 Polling table state during Showdown...');
         poker.refreshTableState(poker.currentTableId);
       }, 2000); // Poll every 2 seconds
       
@@ -136,7 +127,6 @@ export function PokerGame() {
     const isGameFinished = poker.tableState?.state === 2 && poker.tableState.winner;
     
     if (isShowdownStreet || isGameFinished) {
-      console.log('🎉 Showdown reached, showing modal', { isShowdownStreet, isGameFinished });
       setShowShowdown(true);
     }
     
@@ -200,18 +190,6 @@ export function PokerGame() {
   const yourAddress = address || "";
 
   useEffect(() => {
-    if (yourAddress) {
-      console.log('🔍 Address Debug:', {
-        yourAddress,
-        smartAccountAddress,
-        eoaAddress,
-        isSmartAccount,
-        players: poker.players,
-        playersCount: poker.players.length,
-      });
-    }
-  }, [yourAddress, smartAccountAddress, eoaAddress, isSmartAccount, poker.players]);
-  useEffect(() => {
     const updateViewport = () => {
       if (typeof window === "undefined") return;
       setIsMobile(window.innerWidth < 1024);
@@ -242,12 +220,6 @@ export function PokerGame() {
 
     const isSeated = poker.isSeated;
     if (isSeated || isInPlayersList) {
-      console.log('🎮 Auto-navigating to game view:', {
-        tableId: poker.currentTableId.toString(),
-        isSeated,
-        isInPlayersList,
-        gameState: poker.tableState.state,
-      });
       setCurrentView("game");
     }
   }, [
@@ -269,7 +241,6 @@ export function PokerGame() {
     
     // Clear actions only when street advances (new cards dealt)
     if (prevStreetRef.current !== undefined && currentStreet !== prevStreetRef.current) {
-      console.log(`🧹 Clearing player actions - street changed: ${prevStreetRef.current} -> ${currentStreet}`);
       usePokerStore.getState().clearPlayerActions();
     }
     
@@ -278,7 +249,6 @@ export function PokerGame() {
 
   const handleCreateTable = async () => {
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
-    console.log('✅ Table created, Wagmi will handle state updates');
   };
 
   const handleJoinTable = async () => {
@@ -298,7 +268,6 @@ export function PokerGame() {
 
     try {
       await poker.joinTable(tableId, buyInAmountInput);
-      console.log('✅ Join successful, switching to game view');
       setCurrentView("game");
     } catch (error) {
       console.error('❌ Failed to join table:', error);
@@ -441,11 +410,6 @@ export function PokerGame() {
 
   if (currentView === "game") {
     if (poker.currentTableId === undefined) {
-      console.log('Game view: currentTableId is undefined', {
-        currentTableId: poker.currentTableId,
-        tableState: poker.tableState,
-        message: poker.message
-      });
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
           <div className="text-center">
@@ -508,18 +472,6 @@ export function PokerGame() {
       const losses = !isWinner && !playerBettingState?.hasFolded && (isShowdown || isFinished) 
         ? totalBet 
         : BigInt(0);
-      
-      console.log(`💰 [Win/Loss] ${address.slice(0,6)}: isWinner=${isWinner}, pot=${currentPot.toString()}, bet=${totalBet.toString()}, win=${winnings.toString()}, loss=${losses.toString()}`);
-      
-      // Debug showdown card display
-      if (isFinished && !isYou) {
-        console.log(`🎴 [Showdown Cards] Player ${address.slice(0, 6)}:`, {
-          isFinished,
-          hasRevealedCards: !!revealedCards,
-          revealedCards,
-          hasFolded: playerBettingState?.hasFolded,
-        });
-      }
 
       return {
         address,
@@ -765,6 +717,7 @@ export function PokerGame() {
                 smallBlind={smallBlindInput}
                 winnerAddress={calculatedWinner}
                 showdownMinimized={poker.communityCards?.currentStreet === 4 || poker.tableState.state === 2}
+                revealedCards={poker.revealedCards}
               />
 
               {/* Controls */}
@@ -923,6 +876,8 @@ export function PokerGame() {
                 tableId={poker.currentTableId!}
                 contractAddress={poker.contractAddress}
                 provider={ethersProvider}
+                isWaitingForWinner={isWaitingForWinner}
+                onStartNewRound={handleAdvanceGame}
               />
             </Suspense>
           )}
@@ -950,7 +905,6 @@ export function PokerGame() {
                     await poker.leaveTable(poker.currentTableId);
                     setShowChipsManagementModal(false);
                     setCurrentView("lobby"); // Navigate back to lobby
-                    console.log('✅ Left table successfully');
                   } catch (error) {
                     console.error('❌ Failed to leave table:', error);
                   }
@@ -960,7 +914,6 @@ export function PokerGame() {
                 if (poker.currentTableId) {
                   try {
                     await poker.withdrawChips(poker.currentTableId, amount);
-                    console.log('✅ Chips withdrawn successfully');
                   } catch (error) {
                     console.error('❌ Failed to withdraw chips:', error);
                   }
@@ -970,7 +923,6 @@ export function PokerGame() {
                 if (poker.currentTableId) {
                   try {
                     await poker.addChips(poker.currentTableId, amount);
-                    console.log('✅ Chips added successfully');
                   } catch (error) {
                     console.error('❌ Failed to add chips:', error);
                   }

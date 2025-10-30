@@ -147,14 +147,6 @@ export const useFHEPoker = (parameters: {
   // Derived state - use useMemo to ensure recalculation on store updates
   const playerState = useMemo(() => {
     const state = userAddress ? allPlayersBettingState[userAddress.toLowerCase()] : undefined;
-    if (state) {
-      console.log('🎮 PlayerState updated:', {
-        isCurrentPlayer: state.isCurrentPlayer,
-        currentPlayer: bettingInfo?.currentPlayer,
-        chips: state.chips.toString(),
-        hasFolded: state.hasFolded,
-      });
-    }
     return state;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userAddress, allPlayersBettingState, bettingInfo, lastUpdate]); // lastUpdate intentionally included to force recalc
@@ -164,16 +156,7 @@ export const useFHEPoker = (parameters: {
     return players.some(p => p.toLowerCase() === userAddress.toLowerCase());
   }, [userAddress, players]);
   
-  // Log state updates for debugging
-  useEffect(() => {
-    console.log('🔄 Store updated at:', new Date(lastUpdate).toLocaleTimeString(), {
-      tableState: tableState?.state,
-      playersCount: players.length,
-      bettingStreet: communityCards?.currentStreet,
-      hasPlayerState: !!playerState,
-      isYourTurn: playerState?.isCurrentPlayer,
-    });
-  }, [lastUpdate, tableState?.state, players.length, communityCards?.currentStreet, playerState]);
+  // Store state tracking
 
   // Setup contract info in store
   useEffect(() => {
@@ -249,6 +232,28 @@ export const useFHEPoker = (parameters: {
     }
   }, [tableState?.currentRound, setDecryptedCommunityCards]);
 
+  // Check if stored cards are from a different round (page refresh scenario)
+  useEffect(() => {
+    const currentRound = tableState?.currentRound;
+    const storedRound = usePokerStore.getState().storedRound;
+    
+    if (currentRound !== undefined && storedRound !== null && currentRound !== storedRound) {
+      console.log(`🔄 Round mismatch detected (current: ${currentRound.toString()}, stored: ${storedRound.toString()}), clearing old cards`);
+      setCards([undefined, undefined]);
+      setDecryptedCommunityCards([]);
+      setIsDecrypting(false);
+      isDecryptingRef.current = false;
+      usePokerStore.getState().setDecryptedCommunityCards([]);
+      usePokerStore.getState().clearRevealedCards();
+      usePokerStore.getState().clearDealtCardsTracking();
+    }
+    
+    // Update stored round
+    if (currentRound !== undefined) {
+      usePokerStore.getState().setStoredRound(currentRound);
+    }
+  }, [tableState?.currentRound, setDecryptedCommunityCards]);
+
   // Clear cards when game state transitions (especially from Finished to Waiting/Playing)
   useEffect(() => {
     const gameState = tableState?.state;
@@ -263,6 +268,7 @@ export const useFHEPoker = (parameters: {
         // Clear both local and store cached data
         usePokerStore.getState().setDecryptedCommunityCards([]);
         usePokerStore.getState().clearDealtCardsTracking(); // Clear dealt cards tracking
+        usePokerStore.getState().clearRevealedCards(); // Clear revealed cards from previous round
       }
       
       // Fetch revealed cards when transitioning to Finished state (showdown)

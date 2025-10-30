@@ -54,6 +54,7 @@ interface PokerTableProps {
   smallBlind?: string;
   winnerAddress?: string; // Winner address when game is finished
   showdownMinimized?: boolean; // Show winner/loser badges when showdown is minimized
+  revealedCards?: Record<string, { card1: number; card2: number }>; // Cards revealed at showdown
 }
 
 export function PokerTable({
@@ -82,6 +83,7 @@ export function PokerTable({
   smallBlind,
   winnerAddress,
   showdownMinimized = false,
+  revealedCards = {},
 }: PokerTableProps) {
   // Get loading state from Zustand store for cyberpunk loader
   const storeIsLoading = usePokerStore(state => state.isLoading);
@@ -230,7 +232,7 @@ export function PokerTable({
                       : tableState?.state === 0
                         ? "Start Game"
                         : currentStreet === 4
-                          ? "🔄 Start New Round (Showdown)"
+                          ? "🔄 Start New Round"
                           : "Start New Round"}
                   </button>
                   <span className="text-white text-sm">
@@ -279,7 +281,6 @@ export function PokerTable({
                             // ✅ CRITICAL: Only show decrypt button if communityCards exists on-chain
                             // This prevents showing button for cached state from previous games
                             if (!communityCards) {
-                              console.log(`🎴 [Decrypt Button] No community cards on-chain yet`);
                               return null;
                             }
 
@@ -329,8 +330,6 @@ export function PokerTable({
                                 coverEnd = 4;
                               }
                             }
-
-                            console.log(`🎴 [Decrypt Button Logic] street=${currentStreet}, communityCardsExist=${!!communityCards}, decoded=`, decoded, `cover=${coverStart}-${coverEnd}`);
 
                             if (coverStart === -1) return null;
 
@@ -460,9 +459,9 @@ export function PokerTable({
                         isYou={player.address.toLowerCase() === yourAddress?.toLowerCase()}
                         cards={player.cards}
                         showCards={
-                          // Show cards for: 1) your own cards, 2) all players when game finished (showdown)
+                          // Show cards for: 1) your own cards if decrypted, 2) other players only if revealed (CardsRevealed event fired)
                           (player.address.toLowerCase() === yourAddress?.toLowerCase() && showYourCards) ||
-                          (tableState?.state === 2 && player.cards && player.cards.length > 0)
+                          (tableState?.state === 2 && !!revealedCards[player.address.toLowerCase()])
                         }
                         position="bottom"
                         pendingAction={

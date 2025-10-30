@@ -75,19 +75,6 @@ export const PlayerSeat = memo(function PlayerSeat({
   const playerActions = usePokerStore(state => state.playerActions);
   const playerAction = playerActions[address.toLowerCase()];
 
-  // Debug showdown display
-  if (tableState?.state === 2 && !isYou) {
-    console.log(`🎴 [Showdown Debug] Player ${address.slice(0, 6)}:`, {
-      hasCards: !!cards && cards.length > 0,
-      cardsLength: cards?.length,
-      cards: cards,
-      showCards,
-      tableState: tableState?.state,
-      isYou,
-      hasFolded
-    });
-  }
-
   const formatEth = (wei: bigint) => (Number(wei) / 1e18).toFixed(4);
   const formatAddress = (addr: string) =>
     `${addr.slice(0, 6)}...${addr.slice(-4)}`;

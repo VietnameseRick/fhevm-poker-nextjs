@@ -80,6 +80,8 @@ interface PokerStore {
   message: string;
   lastPot: bigint;
   lastUpdate: number;
+  storedRound: bigint | null; // Track which round the stored cards belong to
+  isWaitingForDecryption: boolean; // True when at showdown waiting for winner determination
   
   // Transaction state
   pendingTransaction: {
@@ -104,6 +106,9 @@ interface PokerStore {
   clearPlayerActions: () => void;
   setPlayerCardsDealt: (playerAddress: string) => void;
   clearDealtCardsTracking: () => void;
+  clearRevealedCards: () => void;
+  setStoredRound: (round: bigint | null) => void;
+  setWaitingForDecryption: (waiting: boolean) => void;
   
   // Fetch actions - these update the store directly
   fetchTableState: (tableId: bigint) => Promise<void>;
@@ -140,6 +145,8 @@ export const usePokerStore = create<PokerStore>()(
       message: '',
       lastPot: BigInt(0),
       lastUpdate: Date.now(),
+      storedRound: null,
+      isWaitingForDecryption: false,
       contractAddress: null,
       provider: null,
       readonlyProvider: null,
@@ -211,6 +218,21 @@ export const usePokerStore = create<PokerStore>()(
       
       clearDealtCardsTracking: () => set({
         playersWithDealtCards: new Set(),
+        lastUpdate: Date.now()
+      }),
+      
+      clearRevealedCards: () => set({
+        revealedCards: {},
+        lastUpdate: Date.now()
+      }),
+      
+      setStoredRound: (round) => set({
+        storedRound: round,
+        lastUpdate: Date.now()
+      }),
+      
+      setWaitingForDecryption: (waiting) => set({
+        isWaitingForDecryption: waiting,
         lastUpdate: Date.now()
       }),
       
