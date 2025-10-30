@@ -810,6 +810,45 @@ export const FHEPokerABI = {
           "type": "uint256"
         }
       ],
+      "name": "getDecryptedCommunityCards",
+      "outputs": [
+        {
+          "internalType": "uint32",
+          "name": "flopCard1",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "flopCard2",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "flopCard3",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "turnCard",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "riverCard",
+          "type": "uint32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        }
+      ],
       "name": "getMyHoleCards",
       "outputs": [
         {
@@ -1010,6 +1049,30 @@ export const FHEPokerABI = {
           "internalType": "bool",
           "name": "",
           "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        }
+      ],
+      "name": "isDecryptionPending",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "isPending",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
         }
       ],
       "stateMutability": "view",

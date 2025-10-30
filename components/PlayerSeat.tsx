@@ -31,6 +31,7 @@ export interface PlayerSeatProps {
   isWinner?: boolean; // Highlight winner at showdown
   winnings?: bigint; // Amount won at showdown
   losses?: bigint; // Amount lost at showdown
+  showdownMinimized?: boolean; // Show badges when showdown modal is minimized
   // Props để infer action từ logic BettingControls
   currentBet?: bigint;
   playerBet?: bigint;
@@ -63,6 +64,7 @@ export const PlayerSeat = memo(function PlayerSeat({
   isWinner = false,
   winnings,
   losses,
+  showdownMinimized = false,
   // Props để infer action
   currentBet,
   playerBet,
@@ -130,24 +132,19 @@ export const PlayerSeat = memo(function PlayerSeat({
   // Get table state to check if game has started  
   const gameTableState = usePokerStore(state => state.tableState);
   const isGamePlaying = gameTableState?.state === 1; // 1 = Playing state
-  
-  // Check if this player's cards have been dealt (via CardsDealt event)
-  const playersWithDealtCards = usePokerStore(state => state.playersWithDealtCards);
-  const hasCardsDealt = playersWithDealtCards.has(address.toLowerCase());
 
-  // ✅ ON-CHAIN STATE: Show decrypt button based on CONTRACT state + event tracking
+  // ✅ SIMPLIFIED: Show decrypt button and let retry logic handle timing
   // Show decrypt button if:
   // 1. Game is in Playing state (on-chain) AND
   // 2. Cards not yet decrypted (local) AND
   // 3. Player is seated/has state (on-chain) AND
-  // 4. Player hasn't folded (on-chain) AND
-  // 5. CardsDealt event has fired for this player (prevents "CARDS_NOT_DEALT" error)
+  // 4. Player hasn't folded (on-chain)
+  // The retry logic (30s) will handle "CARDS_NOT_DEALT" errors automatically
   const shouldShowDecryptButton = 
     isGamePlaying && 
     clear === undefined && 
     (isSeated !== false || !!playerState) && 
-    !hasFolded &&
-    hasCardsDealt;
+    !hasFolded;
 
   // ✅ Format thời gian mm:ss
   const formatTime = (seconds: number | null) => {
@@ -218,7 +215,7 @@ export const PlayerSeat = memo(function PlayerSeat({
       className={`flex flex-col gap-2 ${positionClasses[position]} relative items-center`}
     >
       {/* 🏆 Winner/Loser Dialog at Showdown */}
-      {tableState?.state === 2 && (isSeated || !!playerState) && !hasFolded && (winnings || losses) && (
+      {(tableState?.state === 2 || showdownMinimized) && (isSeated || !!playerState) && !hasFolded && (winnings || losses) && (
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 z-50 animate-fadeIn">
           {isWinner && winnings && winnings > BigInt(0) ? (
             <div className="bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white px-4 py-2 rounded-full shadow-2xl shadow-yellow-500/50 animate-bounce">

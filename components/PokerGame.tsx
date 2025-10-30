@@ -24,7 +24,8 @@ import Image from "next/image";
 const TableBrowser = lazy(() => import("./TableBrowser").then(mod => ({ default: mod.TableBrowser })));
 const FundingRequiredModal = lazy(() => import("./FundingRequiredModal").then(mod => ({ default: mod.FundingRequiredModal })));
 const ChipsManagementModal = lazy(() => import("./ChipsManagementModal").then(mod => ({ default: mod.ChipsManagementModal })));
-const ShuffleAnimation = lazy(() => import("./ShuffleAnimation").then(mod => ({ default: mod.ShuffleAnimation })));
+// const ShuffleAnimation = lazy(() => import("./ShuffleAnimation").then(mod => ({ default: mod.ShuffleAnimation }))); // Temporarily disabled
+const Showdown = lazy(() => import("./Showdown").then(mod => ({ default: mod.Showdown })));
 
 const GAME_STATES = ["Waiting for Players", "Playing", "Finished"];
 const BETTING_STREETS = ["Pre-Flop", "Flop", "Turn", "River", "Showdown"];
@@ -91,22 +92,59 @@ export function PokerGame() {
   const pendingTransaction = usePokerStore(state => state.pendingTransaction);
   const storeIsLoading = usePokerStore(state => state.isLoading);
 
-  // Auto-refresh during Showdown to detect when decryption completes
+  // Smart polling during Showdown using isDecryptionPending
   useEffect(() => {
     if (!poker.currentTableId || !poker.communityCards) return;
     
-    // Poll frequently during Showdown to catch state transition
+    // Poll during Showdown to check decryption status and catch state transition
     if (poker.communityCards.currentStreet === 4 && poker.tableState?.state === 1) {
-      console.log('🎴 Showdown in progress - polling for completion...');
+      console.log('🎴 Showdown in progress - smart polling with decryption status...');
       
-      const pollInterval = setInterval(() => {
+      const pollInterval = setInterval(async () => {
+        if (!poker.currentTableId) return;
+        
+        // Check if FHE decryption is pending
+        const status = await poker.checkDecryptionPending(poker.currentTableId);
+        
+        if (status) {
+          if (status.isPending) {
+            console.log(`⏳ [Showdown] Waiting for FHE callback (request ID: ${status.requestId.toString()})`);
+          } else {
+            console.log('✅ [Showdown] FHE decryption completed, refreshing state...');
+          }
+        }
+        
+        // Always refresh table state to catch when game finishes
         console.log('🔄 Polling table state during Showdown...');
-        poker.refreshTableState(poker.currentTableId!);
+        poker.refreshTableState(poker.currentTableId);
       }, 2000); // Poll every 2 seconds
       
       return () => clearInterval(pollInterval);
     }
   }, [poker]);
+
+  // Track balances before showdown for winner calculation
+  // NO BALANCE TRACKING - We'll use totalBet from contract instead
+  // Winner gets pot, losers lost their totalBet
+
+  // Auto-show showdown when reaching showdown street OR when game finishes
+  useEffect(() => {
+    // Show showdown modal when:
+    // 1. Reaching showdown street (street 4) - immediate feedback
+    // 2. OR when game finishes (state 2) with a winner
+    const isShowdownStreet = poker.communityCards?.currentStreet === 4;
+    const isGameFinished = poker.tableState?.state === 2 && poker.tableState.winner;
+    
+    if (isShowdownStreet || isGameFinished) {
+      console.log('🎉 Showdown reached, showing modal', { isShowdownStreet, isGameFinished });
+      setShowShowdown(true);
+    }
+    
+    // Hide showdown when a new round starts (back to state 0 or pre-flop)
+    if (poker.tableState?.state === 0 || (poker.tableState?.state === 1 && poker.communityCards?.currentStreet === 0)) {
+      setShowShowdown(false);
+    }
+  }, [poker.communityCards?.currentStreet, poker.tableState?.state, poker.tableState?.winner]);
 
   const [showCreateTable, setShowCreateTable] = useState(true);
   const [showJoinTable, setShowJoinTable] = useState(false);
@@ -157,6 +195,7 @@ export function PokerGame() {
   const [eoaBalance, setEoaBalance] = useState<bigint>(0n);
   const [showChipsManagementModal, setShowChipsManagementModal] = useState(false);
   const [chipsModalInitialTab, setChipsModalInitialTab] = useState<"withdraw" | "add" | "leave">("add");
+  const [showShowdown, setShowShowdown] = useState(false);
 
   const yourAddress = address || "";
 
@@ -446,18 +485,31 @@ export function PokerGame() {
       );
     }
     
+    // Get winner from contract - it's determined immediately at showdown
+    const isFinished = poker.tableState?.state === 2;
+    const isShowdown = poker.communityCards?.currentStreet === 4;
+    const calculatedWinner = poker.tableState?.winner; // Contract determines winner immediately
+    
     const playerData = poker.players.map((address) => {
       const playerBettingState = poker.allPlayersBettingState[address.toLowerCase()];
       const isYou = address.toLowerCase() === yourAddress.toLowerCase();
-      const isFinished = poker.tableState?.state === 2;
       const revealedCards = poker.revealedCards[address.toLowerCase()];
       
-      // Calculate winnings/losses for showdown
-      const winnerAddr = isFinished ? poker.tableState?.winner : undefined;
-      const isWinner = winnerAddr?.toLowerCase() === address.toLowerCase();
+      // Calculate winnings/losses from pot and bets
+      const isWinner = calculatedWinner?.toLowerCase() === address.toLowerCase();
       const totalBet = playerBettingState?.totalBet || BigInt(0);
-      const winnings = isWinner && poker.bettingInfo ? poker.bettingInfo.pot : BigInt(0);
-      const losses = !isWinner && !playerBettingState?.hasFolded && isFinished ? totalBet : BigInt(0);
+      const currentPot = poker.lastPot || poker.bettingInfo?.pot || BigInt(0);
+      
+      // Winner gets pot minus their own bet (net gain)
+      // Loser loses their total bet
+      const winnings = isWinner && (isShowdown || isFinished) && currentPot > totalBet 
+        ? currentPot - totalBet 
+        : BigInt(0);
+      const losses = !isWinner && !playerBettingState?.hasFolded && (isShowdown || isFinished) 
+        ? totalBet 
+        : BigInt(0);
+      
+      console.log(`💰 [Win/Loss] ${address.slice(0,6)}: isWinner=${isWinner}, pot=${currentPot.toString()}, bet=${totalBet.toString()}, win=${winnings.toString()}, loss=${losses.toString()}`);
       
       // Debug showdown card display
       if (isFinished && !isYou) {
@@ -711,11 +763,14 @@ export function PokerGame() {
                 timeLeft={poker.timeRemaining}
                 bigBlind={bigBlindInput}
                 smallBlind={smallBlindInput}
-                winnerAddress={poker.tableState.state === 2 ? poker.tableState.winner : undefined}
+                winnerAddress={calculatedWinner}
+                showdownMinimized={poker.communityCards?.currentStreet === 4 || poker.tableState.state === 2}
               />
 
               {/* Controls */}
               <div className="space-y-4">
+
+                {/* Betting Controls - Show during active play */}
                 {isPlaying && (poker.isSeated || poker.playerState) && poker.playerState && poker.communityCards?.currentStreet !== 4 && (
                   <>
                     <BettingControls
@@ -836,12 +891,49 @@ export function PokerGame() {
             </div>
           )}
 
-          {/* Shuffle Animation - Show when waiting for shuffle */}
+          {/* Showdown - Show when reaching showdown street or game finished */}
+          {poker.contractAddress && showShowdown && (
+            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
+              <Showdown
+                winner={poker.tableState.winner}
+                myAddress={yourAddress}
+                myCards={
+                  poker.cards[0]?.clear !== undefined && poker.cards[1]?.clear !== undefined
+                    ? [poker.cards[0].clear, poker.cards[1].clear]
+                    : undefined
+                }
+                communityCards={
+                  poker.decryptedCommunityCards.length === 5
+                    ? poker.decryptedCommunityCards.filter((c): c is number => c !== undefined)
+                    : []
+                }
+                pot={poker.lastPot || poker.bettingInfo?.pot || BigInt(0)}
+                allPlayers={playerData.map(p => ({
+                  address: p.address,
+                  chips: p.chips,
+                  hasFolded: p.hasFolded,
+                }))}
+                onClose={() => {
+                  setShowShowdown(false);
+                  // Optionally refresh table state
+                  if (poker.currentTableId) {
+                    poker.refreshTableState(poker.currentTableId);
+                  }
+                }}
+                tableId={poker.currentTableId!}
+                contractAddress={poker.contractAddress}
+                provider={ethersProvider}
+              />
+            </Suspense>
+          )}
+
+          {/* Shuffle Animation - TEMPORARILY COMMENTED OUT
           {poker.tableState.state === 2 && (
             <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
               <ShuffleAnimation />
             </Suspense>
           )}
+          */}
 
 
           {/* Chips Management Modal */}
@@ -890,6 +982,7 @@ export function PokerGame() {
             />
             </Suspense>
           )}
+
         </div>
       </div>
     );

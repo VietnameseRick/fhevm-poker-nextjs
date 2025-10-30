@@ -53,6 +53,7 @@ interface PokerTableProps {
   bigBlind?: string;
   smallBlind?: string;
   winnerAddress?: string; // Winner address when game is finished
+  showdownMinimized?: boolean; // Show winner/loser badges when showdown is minimized
 }
 
 export function PokerTable({
@@ -80,6 +81,7 @@ export function PokerTable({
   bigBlind,
   smallBlind,
   winnerAddress,
+  showdownMinimized = false,
 }: PokerTableProps) {
   // Get loading state from Zustand store for cyberpunk loader
   const storeIsLoading = usePokerStore(state => state.isLoading);
@@ -211,7 +213,7 @@ export function PokerTable({
                 <div className="text-white text-3xl font-semibold italic opacity-80 animate-pulse z-20">
                   Waiting for other players...
                 </div>
-              ) : tableState?.state === 0 || tableState?.state === 2 ? (
+              ) : tableState?.state === 0 || tableState?.state === 2 || currentStreet === 4 ? (
                 <div className="space-y-2 flex flex-col gap-2 z-20 relative text-center pointer-events-auto">
                   <button
                     onClick={onStartGame}
@@ -227,9 +229,17 @@ export function PokerTable({
                       ? "Starting..."
                       : tableState?.state === 0
                         ? "Start Game"
-                        : "Start New Round"}
+                        : currentStreet === 4
+                          ? "🔄 Start New Round (Showdown)"
+                          : "Start New Round"}
                   </button>
-                  <span>The game starts when any player presses Start.</span>
+                  <span className="text-white text-sm">
+                    {currentStreet === 4 
+                      ? "Showdown complete - Start new round" 
+                      : tableState?.state === 2
+                        ? "Game finished - Ready for new round"
+                        : "The game starts when any player presses Start."}
+                  </span>
                 </div>
               ) : (
                 !isLoading && (
@@ -241,8 +251,8 @@ export function PokerTable({
                       </div>
                     </div>
 
-                    {/* 🃏 Community Cards with highlights */}
-                    {communityCards && currentStreet > 0 && (
+                    {/* 🃏 Community Cards - only show during active play (not showdown) */}
+                    {communityCards && currentStreet > 0 && currentStreet < 4 && (
                       <div className="relative z-10 mb-4 flex justify-center">
                         <div className="flex gap-2 justify-center items-center relative">
                           {/* 🃏 Render theo currentStreet */}
@@ -475,6 +485,7 @@ export function PokerTable({
                         isWinner={winnerAddress?.toLowerCase() === player.address.toLowerCase()}
                         winnings={player.winnings}
                         losses={player.losses}
+                        showdownMinimized={showdownMinimized}
                       />
                     ) : (
                       <div className="w-20 h-20 rounded-full bg-black/70 border-2 border-gray-700 flex items-center justify-center text-gray-500 text-sm">

@@ -845,10 +845,10 @@ export const useFHEPoker = (parameters: {
         const isNotDealtError = errorMessage.includes("CARDS_NOT_DEALT");
         const isRelayerError = errorMessage.includes('520') || errorMessage.includes('relayer') || errorMessage.includes('network');
         
-        // Retry logic: max 5 attempts (15 seconds total)
-        if ((isNotDealtError || isRelayerError) && retryCount < 5) {
+        // Retry logic: max 10 attempts (30 seconds total)
+        if ((isNotDealtError || isRelayerError) && retryCount < 10) {
           const reason = isRelayerError ? 'Relayer error' : 'Cards not dealt yet';
-          console.log(`⏳ ${reason}, retrying in 3s... (${retryCount + 1}/5)`);
+          console.log(`⏳ ${reason}, retrying in 3s... (${retryCount + 1}/10)`);
           await new Promise(resolve => setTimeout(resolve, 3000));
           return decryptCards(tableId, retryCount + 1);
         }
@@ -994,13 +994,23 @@ export const useFHEPoker = (parameters: {
 
         usePokerStore.getState().setPendingTransaction(null);
 
-        // Build the full decrypted array (5 cards), filling in undefined for undealt cards
-        // Note: 0 is a valid card value (2♥), so we use undefined as placeholder
-        const decryptedValues: (number | undefined)[] = [undefined, undefined, undefined, undefined, undefined];
+        // ✅ PRESERVE previously decrypted cards and merge with new ones
+        // Get current decrypted cards from store
+        const existingDecrypted = usePokerStore.getState().decryptedCommunityCards || [];
+        
+        // Start with existing decrypted cards (or empty array)
+        const decryptedValues: (number | undefined)[] = [...existingDecrypted];
+        // Ensure array has 5 slots
+        while (decryptedValues.length < 5) {
+          decryptedValues.push(undefined);
+        }
+        
         let validIndex = 0;
         
         console.log(`🎴 Decrypting community cards for street ${currentStreet}, validHandles:`, validHandles.length);
+        console.log(`🔄 Existing decrypted cards:`, existingDecrypted);
         
+        // Only update the cards that we just decrypted
         if (currentStreet >= 1) {
           decryptedValues[0] = Number(res[validHandles[validIndex++]]);
           decryptedValues[1] = Number(res[validHandles[validIndex++]]);
@@ -1013,7 +1023,7 @@ export const useFHEPoker = (parameters: {
           decryptedValues[4] = Number(res[validHandles[validIndex++]]);
         }
 
-        console.log(`✅ Decrypted community cards:`, decryptedValues);
+        console.log(`✅ Decrypted community cards (merged):`, decryptedValues);
         console.log(`📦 Storing in Zustand store...`);
         
         // Store decrypted community cards in Zustand (survives refreshes)
@@ -1037,10 +1047,10 @@ export const useFHEPoker = (parameters: {
         const isNotDealtError = errorMessage.includes('COMMUNITY_CARDS_NOT_DEALT');
         const isRelayerError = errorMessage.includes('520') || errorMessage.includes('relayer') || errorMessage.includes('network');
         
-        // Retry logic: max 5 attempts (15 seconds total)
-        if ((isNotDealtError || isRelayerError) && retryCount < 5) {
+        // Retry logic: max 10 attempts (30 seconds total)
+        if ((isNotDealtError || isRelayerError) && retryCount < 10) {
           const reason = isRelayerError ? 'Relayer error' : 'Cards not dealt yet';
-          console.log(`⏳ ${reason}, retrying in 3s... (${retryCount + 1}/5)`);
+          console.log(`⏳ ${reason}, retrying in 3s... (${retryCount + 1}/10)`);
           await new Promise(resolve => setTimeout(resolve, 3000));
           return decryptCommunityCards(tableId, retryCount + 1);
         }
@@ -1273,6 +1283,36 @@ export const useFHEPoker = (parameters: {
     [pokerContract, ethersSigner, refreshAll]
   );
 
+  // Check if FHE decryption is pending during showdown
+  const checkDecryptionPending = useCallback(
+    async (tableId: bigint): Promise<{ isPending: boolean; requestId: bigint } | null> => {
+      if (!pokerContract.address || !provider) return null;
+
+      try {
+        const contract = new ethers.Contract(
+          pokerContract.address,
+          pokerContract.abi,
+          provider
+        );
+
+        // Check if function exists (might be old contract)
+        if (typeof contract.isDecryptionPending !== 'function') {
+          console.warn('⚠️ [Showdown] isDecryptionPending not available (old contract?)');
+          return null;
+        }
+
+        const [isPending, requestId] = await contract.isDecryptionPending(tableId);
+        console.log(`🔍 [Showdown] Decryption pending status:`, { isPending, requestId: requestId.toString() });
+        
+        return { isPending, requestId };
+      } catch (error) {
+        console.warn('⚠️ [Showdown] Failed to check decryption pending:', error);
+        return null;
+      }
+    },
+    [pokerContract, provider]
+  );
+
   // Track WebSocket connection status
   useEffect(() => {
     // Simple connection tracking based on WebSocket hook
@@ -1318,6 +1358,7 @@ export const useFHEPoker = (parameters: {
     refreshTableState,
     decryptCards,
     decryptCommunityCards,
+    checkDecryptionPending,
     setCurrentTableId,
   };
 };
