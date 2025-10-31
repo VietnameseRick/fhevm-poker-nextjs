@@ -115,5 +115,5 @@ This project uses a **dual license** structure:
 
 📋 See [LICENSE-BSL](LICENSE-BSL) for complete terms.
 
-**For commercial licensing inquiries**: vietnameserick@tuta.com  
+**For commercial licensing inquiries**: rick@thekey.studio 
 **For Zama fhEVM licensing**: https://www.zama.ai/contact

@@ -1,7 +1,7 @@
 /**
  * FHE Poker Zustand Store
  * 
- * Copyright (c) 2025 vietnameserick (Tra Anh Khoi)
+ * Copyright (c) 2025 0xDRick (Tra Anh Khoi)
  * Licensed under Business Source License 1.1 (see LICENSE-BSL)
  */
 
