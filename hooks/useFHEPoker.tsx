@@ -76,7 +76,7 @@ export const useFHEPoker = (parameters: {
     chainId,
     ethersSigner,
     ethersReadonlyProvider,
-    smartAccountAddress,
+    // smartAccountAddress - Not destructured, not used for decryption (EOA always signs)
   } = parameters;
 
   // State - MUST be declared before any memoized values that use setState
@@ -749,7 +749,7 @@ export const useFHEPoker = (parameters: {
           ethersSigner,
           fhevmDecryptionSignatureStorage,
           undefined, // keyPair
-          smartAccountAddress // Use smart account address if available
+          undefined  // Don't pass smart account - always use EOA for FHEVM decryption
         );
 
         if (!sig) {
@@ -807,7 +807,7 @@ export const useFHEPoker = (parameters: {
         setIsDecrypting(false);
       }
     },
-    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, smartAccountAddress]
+    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage]
   );
 
   // Decrypt community cards
@@ -890,7 +890,7 @@ export const useFHEPoker = (parameters: {
           ethersSigner,
           fhevmDecryptionSignatureStorage,
           undefined, // keyPair
-          smartAccountAddress // Use smart account address if available
+          undefined  // Don't pass smart account - always use EOA for FHEVM decryption
         );
 
         if (!sig) {
@@ -945,7 +945,7 @@ export const useFHEPoker = (parameters: {
         setIsDecrypting(false);
       }
     },
-    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet, smartAccountAddress, setDecryptedCommunityCards]
+    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet, setDecryptedCommunityCards]
   );
 
   // Leave table and withdraw all chips
