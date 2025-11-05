@@ -24,9 +24,10 @@ export default function PlayTablePage() {
     // Set the table ID in store
     store.setCurrentTableId(tableIdBigInt);
 
-    // Save to localStorage
+    // Save to localStorage with timestamp
     if (typeof window !== "undefined") {
       window.localStorage.setItem("poker:lastTableId", tableId);
+      window.localStorage.setItem("poker:lastTableTimestamp", Date.now().toString());
     }
 
     console.log(`📊 Navigated to table ${tableId}`);

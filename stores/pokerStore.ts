@@ -251,7 +251,23 @@ export const usePokerStore = create<PokerStore>()(
             lastUpdate: Date.now(),
           });
         } catch (error) {
-          console.error('Failed to fetch table state:', error);
+          console.error('❌ Failed to fetch table state:', error);
+          // Provide more specific error information
+          if (error instanceof Error) {
+            console.error('❌ Table state error details:', {
+              message: error.message,
+              name: error.name,
+              tableId: tableId.toString(),
+            });
+
+            // Check for specific contract errors
+            if (error.message.includes('Table does not exist') ||
+                error.message.includes('TBL_NF') ||
+                error.message.includes('execution reverted')) {
+              console.error('❌ Table likely does not exist:', tableId.toString());
+            }
+          }
+          throw error; // Re-throw so refreshAll catches it
         }
       },
       
@@ -498,9 +514,17 @@ export const usePokerStore = create<PokerStore>()(
           });
         } catch (error) {
           console.error('❌ Failed to refresh all data:', error);
+          // Provide more specific error information
+          if (error instanceof Error) {
+            console.error('❌ Error details:', {
+              message: error.message,
+              name: error.name,
+              stack: error.stack?.split('\n')[0], // Just first line of stack
+            });
+          }
         } finally {
           // Always clear loading state, even if there's an error
-          set({ isLoading: false });
+          set({ isLoading: false, lastUpdate: Date.now() });
         }
       },
       

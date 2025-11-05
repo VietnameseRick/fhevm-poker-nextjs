@@ -132,43 +132,83 @@ export function PokerGame() {
     setShowFundingModal(true);
   };
 
-  // Auto-detect if user is already seated at a table on mount/reconnect
+  // Only auto-reconnect if explicitly navigated to a table or very recent session
   useEffect(() => {
     const checkExistingTable = async () => {
-      if (!authenticated || !poker.contract) return;
+      if (!authenticated || !poker.contract) {
+        console.log('⏸️ Skipping table check - not authenticated or no contract');
+        return;
+      }
 
       try {
         // Check if store already has a table ID (set by /play/[tableId] route)
         let tableId = store.currentTableId;
-        
-        // If not, check localStorage for last table ID
+
+        // Only check localStorage if tableId was set by route navigation
         if (!tableId) {
-          const savedTableId = typeof window !== 'undefined' 
-            ? window.localStorage.getItem('poker:lastTableId') 
+          // Check if we have a very recent table session (within last 5 minutes)
+          const savedTableId = typeof window !== 'undefined'
+            ? window.localStorage.getItem('poker:lastTableId')
             : null;
-          
-          if (savedTableId) {
-            tableId = BigInt(savedTableId);
-            store.setCurrentTableId(tableId);
+          const savedTimestamp = typeof window !== 'undefined'
+            ? window.localStorage.getItem('poker:lastTableTimestamp')
+            : null;
+
+          if (savedTableId && savedTimestamp) {
+            const timeDiff = Date.now() - parseInt(savedTimestamp);
+            const maxAge = 5 * 60 * 1000; // 5 minutes
+
+            if (timeDiff < maxAge) {
+              // Recent session, try to reconnect
+              try {
+                tableId = BigInt(savedTableId);
+                store.setCurrentTableId(tableId);
+                console.log(`📍 Found recent table session (${Math.round(timeDiff/1000)}s ago): ${tableId}`);
+              } catch (e) {
+                console.warn('Invalid saved table ID, clearing:', savedTableId);
+                cleanupTableData();
+                return;
+              }
+            } else {
+              // Old session, clean it up
+              console.log(`🧹 Cleaning up old table session (${Math.round(timeDiff/60000)}min ago)`);
+              cleanupTableData();
+              return;
+            }
           }
         }
 
         if (tableId) {
           console.log(`🔍 Checking if user is seated at table ${tableId}...`);
-          
-          // Refresh table data
-          await store.refreshAll(tableId);
-          
-          // Check if user is actually seated
-          if (yourAddress && (store.tableState?.isSeated || store.players.some(p => p.toLowerCase() === yourAddress.toLowerCase()))) {
-            console.log(`✅ User is seated at table ${tableId}, navigating to game view`);
-            setCurrentView("game");
-          } else {
-            console.log(`ℹ️ User not seated at table ${tableId}, staying in lobby`);
+
+          try {
+            // Refresh table data
+            await store.refreshAll(tableId);
+
+            // Check if user is actually seated
+            if (yourAddress && (store.tableState?.isSeated || store.players.some(p => p.toLowerCase() === yourAddress.toLowerCase()))) {
+              console.log(`✅ User is seated at table ${tableId}, navigating to game view`);
+              setCurrentView("game");
+            } else {
+              console.log(`ℹ️ User not seated at table ${tableId}, staying in lobby`);
+              cleanupTableData();
+            }
+          } catch (refreshError) {
+            console.error(`❌ Failed to refresh table ${tableId}:`, refreshError);
+            cleanupTableData();
           }
         }
       } catch (error) {
-        console.error('Failed to check existing table:', error);
+        console.error('❌ Failed to check existing table:', error);
+        cleanupTableData();
+      }
+    };
+
+    const cleanupTableData = () => {
+      store.setCurrentTableId(null);
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('poker:lastTableId');
+        window.localStorage.removeItem('poker:lastTableTimestamp');
       }
     };
 
