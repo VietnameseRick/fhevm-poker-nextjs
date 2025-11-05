@@ -18,28 +18,28 @@ import {
 
 /*
   The following two files are automatically generated when `npx hardhat deploy` is called
-  The <root>/packages/<contracts package dir>/deployments directory is parsed to retrieve 
-  deployment information for FHECounter.sol and the following files are generated:
-  
-  - <root>/packages/site/abi/FHECounterABI.ts
-  - <root>/packages/site/abi/FHECounterAddresses.ts
+  The <root>/packages/<contracts package dir>/deployments directory is parsed to retrieve
+  deployment information for FHEPoker.sol and the following files are generated:
+
+  - <root>/packages/site/abi/FHEPokerABI.ts
+  - <root>/packages/site/abi/FHEPokerAddresses.ts
 */
-import { FHECounterAddresses } from "@/abi/FHECounterAddresses";
-import { FHECounterABI } from "@/abi/FHECounterABI";
+import { FHEPokerAddresses } from "@/abi/FHEPokerAddresses";
+import { FHEPokerABI } from "@/abi/FHEPokerABI";
 
 export type ClearValueType = {
   handle: string;
   clear: string | bigint | boolean;
 };
-type FHECounterInfoType = {
-  abi: typeof FHECounterABI.abi;
+type FHEPokerInfoType = {
+  abi: typeof FHEPokerABI.abi;
   address?: `0x${string}`;
   chainId?: number;
   chainName?: string;
 };
 
 /**
- * Resolves FHECounter contract metadata for the given EVM `chainId`.
+ * Resolves FHEPoker contract metadata for the given EVM `chainId`.
  *
  * The ABI and address book are **generated** from the contracts package
  * artifacts into the `@/abi` folder at build time. This function performs a
@@ -52,37 +52,35 @@ type FHECounterInfoType = {
  * @param chainId - Target chain id (e.g., 1, 5, 11155111). `undefined` returns ABI-only.
  * @returns Contract info for the chain or ABI-only fallback.
  * @example
- * const { abi, address } = getFHECounterByChainId(chainId);
+ * const { abi, address } = getFHEPokerByChainId(chainId);
  */
-function getFHECounterByChainId(
+function getFHEPokerByChainId(
   chainId: number | undefined
-): FHECounterInfoType {
+): FHEPokerInfoType {
   if (!chainId) {
-    return { abi: FHECounterABI.abi };
+    return { abi: FHEPokerABI.abi };
   }
 
   const entry =
-    FHECounterAddresses[chainId.toString() as keyof typeof FHECounterAddresses];
+    FHEPokerAddresses[chainId.toString() as keyof typeof FHEPokerAddresses];
 
   if (!("address" in entry) || entry.address === ethers.ZeroAddress) {
-    return { abi: FHECounterABI.abi, chainId };
+    return { abi: FHEPokerABI.abi, chainId };
   }
 
   return {
     address: entry?.address as `0x${string}` | undefined,
     chainId: entry?.chainId ?? chainId,
     chainName: entry?.chainName,
-    abi: FHECounterABI.abi,
+    abi: FHEPokerABI.abi,
   };
 }
 
 /*
- * Main FHECounter React component with 3 buttons
- *  - "Decrypt" button: allows you to decrypt the current FHECounter count handle.
- *  - "Increment" button: allows you to increment the FHECounter count handle using FHE operations.
- *  - "Decrement" button: allows you to decrement the FHECounter count handle using FHE operations.
+ * Main FHEPoker React hook for interacting with the FHE Poker contract
+ *  - Provides contract connection and utilities for the poker game
  */
-export const useFHECounter = (parameters: {
+export const useFHEPoker = (parameters: {
   instance: FhevmInstance | undefined;
   fhevmDecryptionSignatureStorage: GenericStringStorage;
   eip1193Provider: ethers.Eip1193Provider | undefined;
@@ -120,7 +118,7 @@ export const useFHECounter = (parameters: {
   const [isIncOrDec, setIsIncOrDec] = useState<boolean>(false);
   const [message, setMessage] = useState<string>("");
 
-  const fheCounterRef = useRef<FHECounterInfoType | undefined>(undefined);
+  const fhePokerRef = useRef<FHEPokerInfoType | undefined>(undefined);
   const isRefreshingRef = useRef<boolean>(isRefreshing);
   const isDecryptingRef = useRef<boolean>(isDecrypting);
   const isIncOrDecRef = useRef<boolean>(isIncOrDec);
@@ -128,16 +126,16 @@ export const useFHECounter = (parameters: {
   const isDecrypted = countHandle && countHandle === clearCount?.handle;
 
   //////////////////////////////////////////////////////////////////////////////
-  // FHECounter
+  // FHEPoker
   //////////////////////////////////////////////////////////////////////////////
 
-  const fheCounter = useMemo(() => {
-    const c = getFHECounterByChainId(chainId);
+  const fhePoker = useMemo(() => {
+    const c = getFHEPokerByChainId(chainId);
 
-    fheCounterRef.current = c;
+    fhePokerRef.current = c;
 
     if (!c.address) {
-      setMessage(`FHECounter deployment not found for chainId=${chainId}.`);
+      setMessage(`FHEPoker deployment not found for chainId=${chainId}.`);
     }
 
     return c;
@@ -148,28 +146,28 @@ export const useFHECounter = (parameters: {
   //////////////////////////////////////////////////////////////////////////////
 
   const isDeployed = useMemo(() => {
-    if (!fheCounter) {
+    if (!fhePoker) {
       return undefined;
     }
     return (
-      Boolean(fheCounter.address) && fheCounter.address !== ethers.ZeroAddress
+      Boolean(fhePoker.address) && fhePoker.address !== ethers.ZeroAddress
     );
-  }, [fheCounter]);
+  }, [fhePoker]);
 
   const canGetCount = useMemo(() => {
-    return fheCounter.address && ethersReadonlyProvider && !isRefreshing;
-  }, [fheCounter.address, ethersReadonlyProvider, isRefreshing]);
+    return fhePoker.address && ethersReadonlyProvider && !isRefreshing;
+  }, [fhePoker.address, ethersReadonlyProvider, isRefreshing]);
 
   const refreshCountHandle = useCallback(() => {
-    console.log("[useFHECounter] call refreshCountHandle()");
+    console.log("[useFHEPoker] call refreshCountHandle()");
     if (isRefreshingRef.current) {
       return;
     }
 
     if (
-      !fheCounterRef.current ||
-      !fheCounterRef.current?.chainId ||
-      !fheCounterRef.current?.address ||
+      !fhePokerRef.current ||
+      !fhePokerRef.current?.chainId ||
+      !fhePokerRef.current?.address ||
       !ethersReadonlyProvider
     ) {
       setCountHandle(undefined);
@@ -179,22 +177,22 @@ export const useFHECounter = (parameters: {
     isRefreshingRef.current = true;
     setIsRefreshing(true);
 
-    const thisChainId = fheCounterRef.current.chainId;
-    const thisFheCounterAddress = fheCounterRef.current.address;
+    const thisChainId = fhePokerRef.current.chainId;
+    const thisFhePokerAddress = fhePokerRef.current.address;
 
-    const thisFheCounterContract = new ethers.Contract(
-      thisFheCounterAddress,
-      fheCounterRef.current.abi,
+    const thisFhePokerContract = new ethers.Contract(
+      thisFhePokerAddress,
+      fhePokerRef.current.abi,
       ethersReadonlyProvider
     );
 
-    thisFheCounterContract
+    thisFhePokerContract
       .getCount()
       .then((value) => {
-        console.log("[useFHECounter] getCount()=" + value);
+        console.log("[useFHEPoker] getCount()=" + value);
         if (
           sameChain.current(thisChainId) &&
-          thisFheCounterAddress === fheCounterRef.current?.address
+          thisFhePokerAddress === fhePokerRef.current?.address
         ) {
           setCountHandle(value);
         }
@@ -203,7 +201,7 @@ export const useFHECounter = (parameters: {
         setIsRefreshing(false);
       })
       .catch((e) => {
-        setMessage("FHECounter.getCount() call failed! error=" + e);
+        setMessage("FHEPoker.getCount() call failed! error=" + e);
 
         isRefreshingRef.current = false;
         setIsRefreshing(false);
@@ -221,7 +219,7 @@ export const useFHECounter = (parameters: {
 
   const canDecrypt = useMemo(() => {
     return (
-      fheCounter.address &&
+      fhePoker.address &&
       instance &&
       ethersSigner &&
       !isRefreshing &&
@@ -231,7 +229,7 @@ export const useFHECounter = (parameters: {
       countHandle !== clearCount?.handle // not yet decrypted
     );
   }, [
-    fheCounter.address,
+    fhePoker.address,
     instance,
     ethersSigner,
     isRefreshing,
@@ -252,7 +250,7 @@ export const useFHECounter = (parameters: {
       return;
     }
 
-    if (!fheCounter.address || !instance || !ethersSigner) {
+    if (!fhePoker.address || !instance || !ethersSigner) {
       return;
     }
 
@@ -274,7 +272,7 @@ export const useFHECounter = (parameters: {
     }
 
     const thisChainId = chainId;
-    const thisFheCounterAddress = fheCounter.address;
+    const thisFhePokerAddress = fhePoker.address;
     const thisCountHandle = countHandle;
     const thisEthersSigner = ethersSigner;
 
@@ -284,7 +282,7 @@ export const useFHECounter = (parameters: {
 
     const run = async () => {
       const isStale = () =>
-        thisFheCounterAddress !== fheCounterRef.current?.address ||
+        thisFhePokerAddress !== fhePokerRef.current?.address ||
         !sameChain.current(thisChainId) ||
         !sameSigner.current(thisEthersSigner);
 
@@ -292,7 +290,7 @@ export const useFHECounter = (parameters: {
         const sig: FhevmDecryptionSignature | null =
           await FhevmDecryptionSignature.loadOrSign(
             instance,
-            [fheCounter.address as `0x${string}`],
+            [fhePoker.address as `0x${string}`],
             ethersSigner,
             fhevmDecryptionSignatureStorage
           );
@@ -311,7 +309,7 @@ export const useFHECounter = (parameters: {
 
         // should be ok even if instance changed
         const res = await instance.userDecrypt(
-          [{ handle: thisCountHandle, contractAddress: thisFheCounterAddress }],
+          [{ handle: thisCountHandle, contractAddress: thisFhePokerAddress }],
           sig.privateKey,
           sig.publicKey,
           sig.signature,
@@ -347,7 +345,7 @@ export const useFHECounter = (parameters: {
   }, [
     fhevmDecryptionSignatureStorage,
     ethersSigner,
-    fheCounter.address,
+    fhePoker.address,
     instance,
     countHandle,
     chainId,
@@ -361,13 +359,13 @@ export const useFHECounter = (parameters: {
 
   const canIncOrDec = useMemo(() => {
     return (
-      fheCounter.address &&
+      fhePoker.address &&
       instance &&
       ethersSigner &&
       !isRefreshing &&
       !isIncOrDec
     );
-  }, [fheCounter.address, instance, ethersSigner, isRefreshing, isIncOrDec]);
+  }, [fhePoker.address, instance, ethersSigner, isRefreshing, isIncOrDec]);
 
   /**
    * Asynchronous FHEVM encryption process.
@@ -381,16 +379,16 @@ export const useFHECounter = (parameters: {
         return;
       }
 
-      if (!fheCounter.address || !instance || !ethersSigner || value === 0) {
+      if (!fhePoker.address || !instance || !ethersSigner || value === 0) {
         return;
       }
 
       const thisChainId = chainId;
-      const thisFheCounterAddress = fheCounter.address;
+      const thisFhePokerAddress = fhePoker.address;
       const thisEthersSigner = ethersSigner;
-      const thisFheCounterContract = new ethers.Contract(
-        thisFheCounterAddress,
-        fheCounter.abi,
+      const thisFhePokerContract = new ethers.Contract(
+        thisFhePokerAddress,
+        fhePoker.abi,
         thisEthersSigner
       );
 
@@ -407,13 +405,13 @@ export const useFHECounter = (parameters: {
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         const isStale = () =>
-          thisFheCounterAddress !== fheCounterRef.current?.address ||
+          thisFhePokerAddress !== fhePokerRef.current?.address ||
           !sameChain.current(thisChainId) ||
           !sameSigner.current(thisEthersSigner);
 
         try {
           const input = instance.createEncryptedInput(
-            thisFheCounterAddress,
+            thisFhePokerAddress,
             thisEthersSigner.address
           );
           input.add32(valueAbs);
@@ -431,11 +429,11 @@ export const useFHECounter = (parameters: {
           // Call contract (increment or decrement)
           const tx: ethers.TransactionResponse =
             op === "increment"
-              ? await thisFheCounterContract.increment(
+              ? await thisFhePokerContract.increment(
                   enc.handles[0],
                   enc.inputProof
                 )
-              : await thisFheCounterContract.decrement(
+              : await thisFhePokerContract.decrement(
                   enc.handles[0],
                   enc.inputProof
                 );
@@ -464,8 +462,8 @@ export const useFHECounter = (parameters: {
     },
     [
       ethersSigner,
-      fheCounter.address,
-      fheCounter.abi,
+      fhePoker.address,
+      fhePoker.abi,
       instance,
       chainId,
       refreshCountHandle,
@@ -475,7 +473,7 @@ export const useFHECounter = (parameters: {
   );
 
   return {
-    contractAddress: fheCounter.address,
+    contractAddress: fhePoker.address,
     canDecrypt,
     canGetCount,
     canIncOrDec,

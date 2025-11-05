@@ -81,16 +81,18 @@ export function PokerGame() {
   const poker = useFHEPoker({
     instance: fhevmInstance,
     fhevmDecryptionSignatureStorage,
+    eip1193Provider,
     chainId,
     ethersSigner,
     ethersReadonlyProvider: ethersProvider,
     sameChain,
     sameSigner,
-    smartAccountAddress, // Pass smart account address for FHEVM signature
   });
 
-  const pendingTransaction = usePokerStore(state => state.pendingTransaction);
-  const storeIsLoading = usePokerStore(state => state.isLoading);
+  // Use Zustand store for all game state
+  const store = usePokerStore();
+  const pendingTransaction = store.pendingTransaction;
+  const storeIsLoading = store.isLoading;
 
   const [showCreateTable, setShowCreateTable] = useState(true);
   const [showJoinTable, setShowJoinTable] = useState(false);
@@ -141,6 +143,7 @@ export function PokerGame() {
   const [eoaBalance, setEoaBalance] = useState<bigint>(0n);
   const [showChipsManagementModal, setShowChipsManagementModal] = useState(false);
   const [chipsModalInitialTab, setChipsModalInitialTab] = useState<"withdraw" | "add" | "leave">("add");
+  const [isDecrypting, setIsDecrypting] = useState(false);
 
   const yourAddress = address || "";
 
@@ -151,11 +154,11 @@ export function PokerGame() {
         smartAccountAddress,
         eoaAddress,
         isSmartAccount,
-        players: poker.players,
-        playersCount: poker.players.length,
+        players: store.players,
+        playersCount: store.players.length,
       });
     }
-  }, [yourAddress, smartAccountAddress, eoaAddress, isSmartAccount, poker.players]);
+  }, [yourAddress, smartAccountAddress, eoaAddress, isSmartAccount, store.players]);
   useEffect(() => {
     const updateViewport = () => {
       if (typeof window === "undefined") return;
@@ -173,7 +176,7 @@ export function PokerGame() {
   }, []);
 
   useEffect(() => {
-    if (!authenticated || !yourAddress || !poker.currentTableId || !poker.tableState) {
+    if (!authenticated || !yourAddress || !store.currentTableId || !store.tableState) {
       return;
     }
 
@@ -181,35 +184,35 @@ export function PokerGame() {
       return;
     }
 
-    const isInPlayersList = poker.players.some(
+    const isInPlayersList = store.players.some(
       addr => addr.toLowerCase() === yourAddress.toLowerCase()
     );
 
-    const isSeated = poker.isSeated;
+    const isSeated = store.tableState?.isSeated;
     if (isSeated || isInPlayersList) {
       console.log('🎮 Auto-navigating to game view:', {
-        tableId: poker.currentTableId.toString(),
+        tableId: store.currentTableId.toString(),
         isSeated,
         isInPlayersList,
-        gameState: poker.tableState.state,
+        gameState: store.tableState.state,
       });
       setCurrentView("game");
     }
   }, [
     authenticated,
     yourAddress,
-    poker.currentTableId,
-    poker.tableState,
-    poker.tableState?.state,
-    poker.isSeated,
-    poker.players,
+    store.currentTableId,
+    store.tableState,
+    store.tableState?.state,
+    store.tableState?.isSeated,
+    store.players,
     currentView,
   ]);
 
   // Clear player actions when betting street changes or game state changes
   useEffect(() => {
-    const currentStreet = poker.communityCards?.currentStreet;
-    const gameState = poker.tableState?.state;
+    const currentStreet = store.communityCards?.currentStreet;
+    const gameState = store.tableState?.state;
     
     // Clear actions when:
     // 1. Betting street advances (pre-flop -> flop -> turn -> river)
@@ -217,7 +220,7 @@ export function PokerGame() {
     if (currentStreet !== undefined || gameState !== undefined) {
       usePokerStore.getState().clearPlayerActions();
     }
-  }, [poker.communityCards?.currentStreet, poker.tableState?.state]);
+  }, [store.communityCards?.currentStreet, store.tableState?.state]);
 
   const handleCreateTable = async () => {
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
@@ -225,7 +228,7 @@ export function PokerGame() {
   };
 
   const handleJoinTable = async () => {
-    const tableId = BigInt(tableIdInput || poker.currentTableId?.toString() || "0");
+    const tableId = BigInt(tableIdInput || store.currentTableId?.toString() || "0");
     const buyInAmount = ethers.parseEther(buyInAmountInput);
     if (isSmartAccount && smartAccountAddress && checkBalance) {
       const balance = await checkBalance();
@@ -249,24 +252,34 @@ export function PokerGame() {
   };
 
   const handleAdvanceGame = async () => {
-    if (poker.currentTableId !== undefined) {
-      await poker.advanceGame(poker.currentTableId);
+    if (store.currentTableId !== undefined) {
+      await poker.advanceGame(store.currentTableId!);
       setTimeout(async () => {
-        await poker.refreshTableState(poker.currentTableId!);
+        await store.refreshAll(store.currentTableId!);
         setCurrentView("game");
       }, 1000);
     }
   };
 
   const handleDecryptCards = async () => {
-    if (poker.currentTableId !== undefined) {
-      await poker.decryptCards(poker.currentTableId);
+    if (store.currentTableId !== undefined) {
+      setIsDecrypting(true);
+      try {
+        await poker.decryptCards(store.currentTableId!);
+      } finally {
+        setIsDecrypting(false);
+      }
     }
   };
 
   const handleDecryptCommunityCards = async () => {
-    if (poker.currentTableId !== undefined) {
-      await poker.decryptCommunityCards(poker.currentTableId);
+    if (store.currentTableId !== undefined) {
+      setIsDecrypting(true);
+      try {
+        await poker.decryptCommunityCards(store.currentTableId!);
+      } finally {
+        setIsDecrypting(false);
+      }
     }
   };
 
@@ -383,11 +396,11 @@ export function PokerGame() {
   }
 
   if (currentView === "game") {
-    if (poker.currentTableId === undefined) {
+    if (store.currentTableId === null) {
       console.log('Game view: currentTableId is undefined', {
-        currentTableId: poker.currentTableId,
-        tableState: poker.tableState,
-        message: poker.message
+        currentTableId: store.currentTableId,
+        tableState: store.tableState,
+        message: store.message
       });
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -404,7 +417,7 @@ export function PokerGame() {
       );
     }
 
-    if (!poker.tableState) {
+    if (!store.tableState) {
       return (
         <>
           {/* Only show CyberpunkLoader when NOT waiting for transaction confirmation */}
@@ -415,9 +428,9 @@ export function PokerGame() {
           />
           <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
             <div className="text-center">
-              <p className="text-gray-400 text-sm mb-4">Table #{poker.currentTableId.toString()}</p>
+              <p className="text-gray-400 text-sm mb-4">Table #{store.currentTableId.toString()}</p>
               <button
-                onClick={() => poker.refreshTableState(poker.currentTableId!)}
+                onClick={() => store.fetchTableState(store.currentTableId!)}
                 className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold border-2 border-green-500 shadow-lg shadow-green-500/50"
               >
                 🔄 Retry
@@ -428,25 +441,25 @@ export function PokerGame() {
       );
     }
     
-    const playerData = poker.players.map((address) => {
-      const playerBettingState = poker.allPlayersBettingState[address.toLowerCase()];
+    const playerData = store.players.map((address) => {
+      const playerBettingState = store.allPlayersBettingState[address.toLowerCase()];
 
       return {
         address,
         chips: playerBettingState?.chips || BigInt(0),
         currentBet: playerBettingState?.currentBet || BigInt(0),
         hasFolded: playerBettingState?.hasFolded || false,
-        isCurrentPlayer: poker.bettingInfo
-          ? poker.bettingInfo.currentPlayer.toLowerCase() === address.toLowerCase()
+        isCurrentPlayer: store.bettingInfo
+          ? store.bettingInfo.currentPlayer.toLowerCase() === address.toLowerCase()
           : false,
         cards: address.toLowerCase() === yourAddress.toLowerCase()
-          ? [poker.cards[0]?.clear, poker.cards[1]?.clear]
+          ? [store.revealedCards[yourAddress.toLowerCase()]?.card1, store.revealedCards[yourAddress.toLowerCase()]?.card2]
           : undefined,
       };
     });
 
-    const isYourTurn = (poker.playerState && typeof poker.playerState === 'object' && poker.playerState.isCurrentPlayer) || false;
-    const isPlaying = poker.tableState?.state === 1; // Playing state
+    const isYourTurn = (store.allPlayersBettingState[yourAddress.toLowerCase()] && typeof store.allPlayersBettingState[yourAddress.toLowerCase()] === 'object' && store.allPlayersBettingState[yourAddress.toLowerCase()]?.isCurrentPlayer) || false;
+    const isPlaying = store.tableState?.state === 1; // Playing state
 
     return (
       <div className="min-h-screen bg-black">
@@ -479,9 +492,9 @@ export function PokerGame() {
                 <Image src={'/logo.png'} height={120} width={120} alt="logo" className="mx-auto" />
                 <div className="h-6 w-px bg-gray-600"></div>
                 <div className="text-sm">
-                  <span className="text-gray-400">Table #{poker.currentTableId.toString()}</span>
+                  <span className="text-gray-400">Table #{store.currentTableId.toString()}</span>
                   <span className="mx-2 text-gray-600">•</span>
-                  <span className="text-yellow-400 font-semibold">{GAME_STATES[poker.tableState.state]}</span>
+                  <span className="text-yellow-400 font-semibold">{GAME_STATES[store.tableState.state]}</span>
                 </div>
               </div>
 
@@ -502,11 +515,11 @@ export function PokerGame() {
                 {/* Manual Refresh Button */}
                 <button
                   onClick={() => {
-                    if (poker.currentTableId !== undefined) {
-                      poker.refreshTableState(poker.currentTableId);
+                    if (store.currentTableId !== undefined) {
+                      store.refreshAll(store.currentTableId!);
                     }
                   }}
-                  disabled={poker.isLoading || poker.currentTableId === undefined}
+                  disabled={store.isLoading || store.currentTableId === null}
                   className="px-3 py-1 bg-gradient-to-r from-cyan-600/30 to-purple-600/30 hover:from-cyan-600/50 hover:to-purple-600/50 border border-cyan-500/50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Manually refresh game state"
                 >
@@ -519,7 +532,7 @@ export function PokerGame() {
                 </button>
 
                 {/* WebSocket Connection Status */}
-                {poker.isConnected ? (
+                {store.contractAddress ? (
                   <div className="px-3 py-1 bg-green-500/20 border border-green-500 rounded-lg">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
@@ -547,7 +560,7 @@ export function PokerGame() {
                 )}
 
                 {/* Chips Management Button */}
-                {poker.isSeated && (
+                {store.tableState?.isSeated && (
                   <button
                     onClick={() => {
                       setChipsModalInitialTab("add");
@@ -580,52 +593,52 @@ export function PokerGame() {
               {/* Game Status Indicators */}
               <div className="flex justify-center gap-4">
                 {/* Betting Street Indicator */}
-                {poker.communityCards && (
+                {store.communityCards && (
                   <div className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-purple-600 px-6 py-3 rounded-full shadow-lg border-2 border-cyan-400/50 box-glow">
                     <span className="text-2xl">🎴</span>
-                    <span className="text-white font-bold text-xl mono">{BETTING_STREETS[poker.communityCards.currentStreet]}</span>
+                    <span className="text-white font-bold text-xl mono">{BETTING_STREETS[store.communityCards.currentStreet]}</span>
                   </div>
                 )}
                 {/* Turn Indicator */}
-                {poker.bettingInfo && (
-                  <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full shadow-lg border-2 ${poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
+                {store.bettingInfo && (
+                  <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full shadow-lg border-2 ${store.bettingInfo?.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
                     ? 'bg-gradient-to-r from-green-600 to-green-700 border-green-400 shadow-green-500/50 animate-pulse'
-                    : poker.pendingAction
+                    : store.pendingTransaction?.action
                       ? 'bg-gradient-to-r from-purple-600 to-purple-700 border-purple-400 shadow-purple-500/50'
                       : 'bg-gradient-to-r from-gray-600 to-gray-700 border-gray-400'
                     }`}>
                     <span className="text-2xl">
-                      {poker.pendingAction ? (
+                      {store.pendingTransaction?.action ? (
                         <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                      ) : poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase() ? '👉' : '⏳'}
+                      ) : store.bettingInfo?.currentPlayer.toLowerCase() === yourAddress.toLowerCase() ? '👉' : '⏳'}
                     </span>
                     <div className="text-white">
                       <div className="font-bold text-sm">
-                        {poker.pendingAction
-                          ? `Processing ${poker.pendingAction}...`
-                          : poker.bettingInfo.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
+                            {store.pendingTransaction?.action
+                          ? `Processing ${store.pendingTransaction?.action}...`
+                          : store.bettingInfo?.currentPlayer.toLowerCase() === yourAddress.toLowerCase()
                             ? "YOUR TURN!"
-                            : `Waiting for ${poker.bettingInfo.currentPlayer.substring(0, 6)}...${poker.bettingInfo.currentPlayer.substring(38)}`}
+                            : `Waiting for ${store.bettingInfo?.currentPlayer.substring(0, 6)}...${store.bettingInfo?.currentPlayer.substring(38)}`}
                       </div>
-                      {!poker.pendingAction && (
+                      {!store.pendingTransaction?.action && (
                         <div className="text-xs opacity-90">
-                          {poker.bettingInfo.currentPlayer.substring(0, 10)}...
+                          {store.bettingInfo?.currentPlayer.substring(0, 10)}...
                         </div>
                       )}
                     </div>
-                    {typeof poker.timeRemaining === 'number' && poker.tableState?.state === 1 && !poker.pendingAction && (
-                      <div className={`ml-2 flex items-center gap-1 px-2 py-1 rounded-full border ${poker.timeRemaining <= 10
+                    {typeof store.tableState?.turnStartTime === 'number' && store.tableState?.state === 1 && !store.pendingTransaction?.action && (
+                      <div className={`ml-2 flex items-center gap-1 px-2 py-1 rounded-full border ${store.tableState?.turnStartTime <= 10
                           ? 'bg-red-500/40 border-red-400 animate-pulse'
-                          : poker.timeRemaining <= 30
+                          : store.tableState?.turnStartTime <= 30
                             ? 'bg-yellow-500/40 border-yellow-400'
                             : 'bg-black/30 border-white/20'
                         }`}>
                         <span className="text-xs">⏱️</span>
                         <span className="text-xs text-white font-semibold">
-                          {Math.floor((poker.timeRemaining || 0) / 60)}:{String(((poker.timeRemaining || 0) % 60)).padStart(2, '0')}
+                          {Math.floor((store.tableState?.turnStartTime || 0) / 60)}:{String(((store.tableState?.turnStartTime || 0) % 60)).padStart(2, '0')}
                         </span>
                       </div>
                     )}
@@ -636,63 +649,63 @@ export function PokerGame() {
               {/* Table */}
               <PokerTable
                 players={playerData}
-                pot={poker.lastPot || poker.bettingInfo?.pot || BigInt(0)}
-                currentBet={poker.bettingInfo?.currentBet || BigInt(0)}
-                dealerIndex={poker.tableState?.dealerIndex ? Number(poker.tableState.dealerIndex) : 0}
+                pot={store.lastPot || store.bettingInfo?.pot || BigInt(0)}
+                currentBet={store.bettingInfo?.currentBet || BigInt(0)}
+                dealerIndex={store.tableState?.dealerIndex ? Number(store.tableState.dealerIndex) : 0}
                 yourAddress={yourAddress}
-                showYourCards={poker.cards[0]?.clear !== undefined}
+                showYourCards={store.revealedCards[yourAddress.toLowerCase()]?.card1 !== undefined}
                 communityCards={
-                  poker.decryptedCommunityCards.length > 0
+                  store.decryptedCommunityCards.length > 0
                     ? {
-                      currentStreet: poker.communityCards?.currentStreet || 0,
-                      flopCard1: poker.decryptedCommunityCards[0] || undefined,
-                      flopCard2: poker.decryptedCommunityCards[1] || undefined,
-                      flopCard3: poker.decryptedCommunityCards[2] || undefined,
-                      turnCard: poker.decryptedCommunityCards[3] || undefined,
-                      riverCard: poker.decryptedCommunityCards[4] || undefined,
+                      currentStreet: store.communityCards?.currentStreet || 0,
+                      flopCard1: store.decryptedCommunityCards[0] || undefined,
+                      flopCard2: store.decryptedCommunityCards[1] || undefined,
+                      flopCard3: store.decryptedCommunityCards[2] || undefined,
+                      turnCard: store.decryptedCommunityCards[3] || undefined,
+                      riverCard: store.decryptedCommunityCards[4] || undefined,
                     }
-                    : poker.communityCards || undefined
+                    : store.communityCards || undefined
                 }
-                currentStreet={poker.communityCards?.currentStreet}
-                tableState={poker.tableState}
-                isLoading={poker.isLoading}
+                currentStreet={store.communityCards?.currentStreet}
+                tableState={store.tableState}
+                isLoading={store.isLoading}
                 onStartGame={handleAdvanceGame}
-                pendingAction={poker.pendingAction}
+                  pendingAction={store.pendingTransaction?.action}
                 isPlaying={isPlaying}
-                decryptedCommunityCards={poker.decryptedCommunityCards}
-                isDecrypting={poker.isDecrypting}
+                decryptedCommunityCards={store.decryptedCommunityCards}
+                isDecrypting={isDecrypting}
                 handleDecryptCommunityCards={handleDecryptCommunityCards}
-                isSeated={poker.isSeated}
-                playerState={poker.playerState}
-                clear={poker.cards[0]?.clear}
+                isSeated={store.tableState?.isSeated}
+                playerState={store.allPlayersBettingState[yourAddress.toLowerCase()]}
+                clear={store.revealedCards[yourAddress.toLowerCase()]?.card1}
                 handleDecryptCards={handleDecryptCards}
-                timeLeft={poker.timeRemaining}
-                minRaise={BigInt(Math.floor(Number(poker.tableState.minBuyIn) * 0.1))}
+                timeLeft={store.tableState?.turnStartTime ? Number(store.tableState.turnStartTime) : null}
+                minRaise={BigInt(Math.floor(Number(store.tableState?.minBuyIn) * 0.1))}
                 bigBlind={bigBlindInput}
                 smallBlind={smallBlindInput}
                 showdownOverlay={
-                  poker.tableState.state === 2 && poker.tableState.winner ? (
+                  store.tableState?.state === 2 && store.tableState?.winner ? (
                     <Suspense fallback={null}>
                       <InlineShowdown
-                        winner={poker.tableState.winner}
+                        winner={store.tableState?.winner}
                         allPlayers={playerData}
                         communityCards={
-                          poker.decryptedCommunityCards.length > 0
-                            ? poker.decryptedCommunityCards.filter(c => c !== 0)
-                            : poker.communityCards
+                          store.decryptedCommunityCards.length > 0
+                            ? store.decryptedCommunityCards.filter(c => c !== 0)
+                            : store.communityCards
                               ? [
-                                poker.communityCards.flopCard1,
-                                poker.communityCards.flopCard2,
-                                poker.communityCards.flopCard3,
-                                poker.communityCards.turnCard,
-                                poker.communityCards.riverCard,
+                                store.communityCards?.flopCard1,
+                                store.communityCards?.flopCard2,
+                                store.communityCards?.flopCard3,
+                                store.communityCards?.turnCard,
+                                store.communityCards?.riverCard,
                               ].filter((c): c is number => c !== undefined && c !== 0)
                               : undefined
                         }
-                        pot={poker.lastPot || poker.bettingInfo?.pot || BigInt(0)}
-                        tableId={poker.currentTableId}
-                        contractAddress={poker.contractAddress}
-                        provider={ethersProvider}
+                        pot={store.lastPot || store.bettingInfo?.pot || BigInt(0)}
+                        tableId={store.currentTableId}
+                        contractAddress={store.contractAddress as `0x${string}`}
+                        provider={store.provider}
                       />
                     </Suspense>
                   ) : null
@@ -701,43 +714,43 @@ export function PokerGame() {
 
               {/* Controls */}
               <div className="space-y-4">
-                {isPlaying && (poker.isSeated || poker.playerState) && poker.playerState && (
+                {isPlaying && (store.tableState?.isSeated || store.allPlayersBettingState[yourAddress.toLowerCase()]) && store.allPlayersBettingState[yourAddress.toLowerCase()] && (
                   <>
                     <BettingControls
-                      canAct={isYourTurn && !poker.playerState.hasFolded}
-                      currentBet={poker.bettingInfo?.currentBet || BigInt(0)}
-                      playerBet={poker.playerState.currentBet}
-                      playerChips={poker.playerState.chips}
+                      canAct={isYourTurn && !store.allPlayersBettingState[yourAddress.toLowerCase()]?.hasFolded}
+                      currentBet={store.bettingInfo?.currentBet || BigInt(0)}
+                      playerBet={store.allPlayersBettingState[yourAddress.toLowerCase()]?.currentBet || BigInt(0)}
+                      playerChips={store.allPlayersBettingState[yourAddress.toLowerCase()]?.chips || BigInt(0)}
                       bigBlind={bigBlindInput}
                       smallBlind={smallBlindInput}
-                      minRaise={BigInt(Math.floor(Number(poker.tableState.minBuyIn) * 0.1))}
-                      onFold={() => poker.fold(poker.currentTableId!)}
-                      onCheck={() => poker.check(poker.currentTableId!)}
+                      minRaise={BigInt(Math.floor(Number(store.tableState?.minBuyIn) * 0.1))}
+                      onFold={() => poker.fold(store.currentTableId!)}
+                      onCheck={() => poker.check(store.currentTableId!)}
                       onCall={() => {
-                        const currentBet = poker.bettingInfo?.currentBet || 0n;
-                        const myBet = (typeof poker.playerState === 'object' && poker.playerState?.currentBet) ? poker.playerState.currentBet : 0n;
+                        const currentBet = store.bettingInfo?.currentBet || 0n;
+                        const myBet = (typeof store.allPlayersBettingState[yourAddress.toLowerCase()] === 'object' && store.allPlayersBettingState[yourAddress.toLowerCase()]?.currentBet) ? store.allPlayersBettingState[yourAddress.toLowerCase()]?.currentBet : 0n;
                         if (myBet >= currentBet) {
-                          return poker.check(poker.currentTableId!);
+                          return poker.check(store.currentTableId!);
                         }
-                        return poker.call(poker.currentTableId!);
+                        return poker.call(store.currentTableId!);
                       }}
                       onRaise={(amount) => {
                         try {
                           const targetWei = ethers.parseEther(amount);
-                          const current = poker.bettingInfo?.currentBet || 0n;
+                          const current = store.bettingInfo?.currentBet || 0n;
                           const deltaWei = targetWei > current ? targetWei - current : 0n;
                           const deltaEth = ethers.formatEther(deltaWei);
-                          poker.raise(poker.currentTableId!, deltaEth);
+                          poker.raise(store.currentTableId!, deltaEth);
                         } catch {
-                          poker.raise(poker.currentTableId!, amount);
+                          poker.raise(store.currentTableId!, amount);
                         }
                       }}
-                      isLoading={poker.isLoading}
+                      isLoading={store.isLoading}
                     />
                   </>
                 )}
 
-                {isPlaying && !poker.playerState && (
+                {isPlaying && !store.allPlayersBettingState[yourAddress.toLowerCase()] && (
                   <div className="bg-yellow-500/20 border-l-4 border-yellow-500 rounded-lg p-4">
                     <p className="text-yellow-200 text-sm font-semibold">
                       ⏳ Loading player state...
@@ -753,57 +766,57 @@ export function PokerGame() {
                 </div>
                 <p>
                   <span className="text-gray-500">Game State:</span>{" "}
-                  <span className={poker.tableState.state === 1 ? "text-green-400 font-bold" : "text-yellow-400"}>
-                    {poker.tableState.state} ({GAME_STATES[poker.tableState.state]})
+                  <span className={store.tableState?.state === 1 ? "text-green-400 font-bold" : "text-yellow-400"}>
+                    {store.tableState?.state} ({GAME_STATES[store.tableState?.state || 0]})
                   </span>
                 </p>
                 <p>
                   <span className="text-gray-500">WebSocket:</span>{" "}
-                  <span className={poker.isConnected ? "text-green-400" : "text-yellow-400"}>
-                    {poker.isConnected ? "✅ Connected" : "⚠️ Polling Only"}
+                  <span className={store.contractAddress ? "text-green-400" : "text-yellow-400"}>
+                    {store.contractAddress ? "✅ Connected" : "⚠️ Polling Only"}
                   </span>
                 </p>
-                <p className={poker.isSeated ? "text-green-400" : "text-red-400"}>
-                  <span className="text-gray-500">Is Seated (computed):</span> {poker.isSeated ? "Yes" : "No"}
+                <p className={store.tableState?.isSeated ? "text-green-400" : "text-red-400"}>
+                  <span className="text-gray-500">Is Seated (computed):</span> {store.tableState?.isSeated ? "Yes" : "No"}
                 </p>
-                <p className={poker.tableState?.isSeated ? "text-green-400" : "text-red-400"}>
-                  <span className="text-gray-500">Is Seated (contract, unreliable):</span> {poker.tableState?.isSeated ? "Yes" : "No"}
+                <p className={store.tableState?.isSeated ? "text-green-400" : "text-red-400"}>
+                  <span className="text-gray-500">Is Seated (contract, unreliable):</span> {store.tableState?.isSeated ? "Yes" : "No"}
                 </p>
-                <p className={poker.players.some(p => p.toLowerCase() === yourAddress.toLowerCase()) ? "text-green-400" : "text-red-400"}>
+                <p className={store.players.some((p: string) => p.toLowerCase() === yourAddress.toLowerCase()) ? "text-green-400" : "text-red-400"}>
                   <span className="text-gray-500">In Players List:</span>{" "}
-                  {poker.players.some(p => p.toLowerCase() === yourAddress.toLowerCase()) ? "Yes" : "No"}
+                  {store.players.some((p: string) => p.toLowerCase() === yourAddress.toLowerCase()) ? "Yes" : "No"}
                 </p>
-                <p><span className="text-gray-500">Total Players:</span> {poker.players.length}</p>
+                <p><span className="text-gray-500">Total Players:</span> {store.players.length}</p>
                 <p><span className="text-gray-500">Is Playing:</span> {isPlaying ? "Yes" : "No"}</p>
-                <p><span className="text-gray-500">Player State Loaded:</span> {poker.playerState ? "Yes" : "No"}</p>
-                <p><span className="text-gray-500">Cards Decrypted:</span> {poker.cards[0]?.clear !== undefined ? "Yes" : "No"}</p>
-                <p><span className="text-gray-500">Community Cards Decrypted:</span> <span className={poker.decryptedCommunityCards.length > 0 ? "text-green-400" : "text-yellow-400"}>{poker.decryptedCommunityCards.length > 0 ? "✅ Yes" : "No"}</span></p>
-                {poker.decryptedCommunityCards.length > 0 && (
-                  <p className="text-xs text-green-400"><span className="text-gray-500">Decrypted Values:</span> [{poker.decryptedCommunityCards.join(', ')}]</p>
+                <p><span className="text-gray-500">Player State Loaded:</span> {store.allPlayersBettingState[yourAddress.toLowerCase()] ? "Yes" : "No"}</p>
+                <p><span className="text-gray-500">Cards Decrypted:</span> {store.revealedCards[yourAddress.toLowerCase()]?.card1 !== undefined ? "Yes" : "No"}</p>
+                <p><span className="text-gray-500">Community Cards Decrypted:</span> <span className={store.decryptedCommunityCards.length > 0 ? "text-green-400" : "text-yellow-400"}>{store.decryptedCommunityCards.length > 0 ? "✅ Yes" : "No"}</span></p>
+                {store.decryptedCommunityCards.length > 0 && (
+                  <p className="text-xs text-green-400"><span className="text-gray-500">Decrypted Values:</span> [{store.decryptedCommunityCards.join(', ')}]</p>
                 )}
-                {poker.communityCards && (
+                {store.communityCards && (
                   <>
-                    <p><span className="text-gray-500">Street:</span> <span className="text-cyan-400 font-bold">{poker.communityCards.currentStreet}</span> ({BETTING_STREETS[poker.communityCards.currentStreet]})</p>
+                    <p><span className="text-gray-500">Street:</span> <span className="text-cyan-400 font-bold">{store.communityCards.currentStreet}</span> ({BETTING_STREETS[store.communityCards.currentStreet]})</p>
                     <p><span className="text-gray-500">Community Cards (Encrypted):</span></p>
                     <div className="ml-4 space-y-0.5">
                       <p className="text-xs">
-                        <span className="text-gray-500">Flop:</span> {poker.communityCards.flopCard1}, {poker.communityCards.flopCard2}, {poker.communityCards.flopCard3}
+                        <span className="text-gray-500">Flop:</span> {store.communityCards.flopCard1}, {store.communityCards.flopCard2}, {store.communityCards.flopCard3}
                       </p>
                       <p className="text-xs">
-                        <span className="text-gray-500">Turn:</span> {poker.communityCards.turnCard !== undefined ? poker.communityCards.turnCard : 'Not dealt'}
+                        <span className="text-gray-500">Turn:</span> {store.communityCards.turnCard !== undefined ? store.communityCards.turnCard : 'Not dealt'}
                       </p>
                       <p className="text-xs">
-                        <span className="text-gray-500">River:</span> {poker.communityCards.riverCard !== undefined ? poker.communityCards.riverCard : 'Not dealt'}
+                        <span className="text-gray-500">River:</span> {store.communityCards.riverCard !== undefined ? store.communityCards.riverCard : 'Not dealt'}
                       </p>
                     </div>
                   </>
                 )}
-                {poker.playerState && (
+                {store.allPlayersBettingState[yourAddress.toLowerCase()] && (
                   <>
-                    <p><span className="text-gray-500">Your Turn:</span> {poker.playerState.isCurrentPlayer ? "✅ Yes" : "No"}</p>
-                    <p><span className="text-gray-500">Has Folded:</span> {poker.playerState.hasFolded ? "Yes" : "No"}</p>
-                    <p><span className="text-gray-500">Your Chips:</span> {(Number(poker.playerState.chips) / 1e18).toFixed(4)} ETH</p>
-                    <p><span className="text-gray-500">Your Bet:</span> {(Number(poker.playerState.currentBet) / 1e18).toFixed(4)} ETH</p>
+                    <p><span className="text-gray-500">Your Turn:</span> {store.allPlayersBettingState[yourAddress.toLowerCase()]?.isCurrentPlayer ? "✅ Yes" : "No"}</p>
+                    <p><span className="text-gray-500">Has Folded:</span> {store.allPlayersBettingState[yourAddress.toLowerCase()]?.hasFolded ? "Yes" : "No"}</p>
+                    <p><span className="text-gray-500">Your Chips:</span> {(Number(store.allPlayersBettingState[yourAddress.toLowerCase()]?.chips) / 1e18).toFixed(4)} ETH</p>
+                    <p><span className="text-gray-500">Your Bet:</span> {(Number(store.allPlayersBettingState[yourAddress.toLowerCase()]?.currentBet) / 1e18).toFixed(4)} ETH</p>
                   </>
                 )}
               </div>
@@ -822,7 +835,7 @@ export function PokerGame() {
           )}
 
           {/* Shuffle Animation - Show when waiting for shuffle */}
-          {poker.tableState.state === 2 && (
+          {store.tableState?.state === 2 && (
             <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
               <ShuffleAnimation />
             </Suspense>
@@ -831,17 +844,17 @@ export function PokerGame() {
           {/* Showdown now rendered inline on table - see showdownOverlay prop */}
 
           {/* Chips Management Modal */}
-          {poker.currentTableId && poker.tableState && (
+          {store.currentTableId && store.tableState && (
             <Suspense fallback={null}>
               <ChipsManagementModal
               isOpen={showChipsManagementModal}
               onClose={() => setShowChipsManagementModal(false)}
-              currentChips={typeof poker.playerState === 'object' && poker.playerState?.chips ? poker.playerState.chips : 0n}
-              minBuyIn={poker.tableState.minBuyIn}
+              currentChips={store.allPlayersBettingState[yourAddress.toLowerCase()]?.chips || 0n}
+              minBuyIn={store.tableState.minBuyIn}
               onLeaveTable={async () => {
-                if (poker.currentTableId) {
+                if (store.currentTableId) {
                   try {
-                    await poker.leaveTable(poker.currentTableId);
+                    await poker.leaveTable(store.currentTableId);
                     setShowChipsManagementModal(false);
                     setCurrentView("lobby"); // Navigate back to lobby
                     console.log('✅ Left table successfully');
@@ -851,9 +864,9 @@ export function PokerGame() {
                 }
               }}
               onWithdrawChips={async (amount: string) => {
-                if (poker.currentTableId) {
+                if (store.currentTableId) {
                   try {
-                    await poker.withdrawChips(poker.currentTableId, amount);
+                    await poker.withdrawChips(store.currentTableId, amount);
                     console.log('✅ Chips withdrawn successfully');
                   } catch (error) {
                     console.error('❌ Failed to withdraw chips:', error);
@@ -861,17 +874,17 @@ export function PokerGame() {
                 }
               }}
               onAddChips={async (amount: string) => {
-                if (poker.currentTableId) {
+                if (store.currentTableId) {
                   try {
-                    await poker.addChips(poker.currentTableId, amount);
+                    await poker.addChips(store.currentTableId, amount);
                     console.log('✅ Chips added successfully');
                   } catch (error) {
                     console.error('❌ Failed to add chips:', error);
                   }
                 }
               }}
-              isLoading={poker.isLoading}
-              gameState={poker.tableState.state}
+              isLoading={store.isLoading}
+              gameState={store.tableState.state}
               initialTab={chipsModalInitialTab}
             />
             </Suspense>
@@ -1007,10 +1020,10 @@ export function PokerGame() {
                 </div>
                 <button
                   onClick={handleCreateTable}
-                  disabled={poker.isLoading || !poker.isDeployed}
+                  disabled={store.isLoading || !poker.isDeployed}
                   className="w-1/2 block mx-auto hover:scale-105 text-black font-bold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed text-3xl"
                   style={{ backgroundImage: `url(/bg-button.png)`, backgroundSize: '100% 100%' }}>
-                  {poker.isLoading ? "CREATING TABLE..." : "CREATE TABLE"}
+                  {store.isLoading ? "CREATING TABLE..." : "CREATE TABLE"}
                 </button>
               </div>
             </div>
@@ -1029,7 +1042,7 @@ export function PokerGame() {
                     value={tableIdInput}
                     onChange={(e) => setTableIdInput(e.target.value)}
                     className="w-full px-4 py-3 text-xl bg-black border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-semibold"
-                    placeholder={poker.currentTableId?.toString() || "Enter table ID"}
+                    placeholder={store.currentTableId?.toString() || "Enter table ID"}
                   />
                 </div>
                 <div>
@@ -1047,10 +1060,10 @@ export function PokerGame() {
                 </div>
                 <button
                   onClick={handleJoinTable}
-                  disabled={poker.isLoading || !poker.isDeployed}
+                  disabled={store.isLoading || !poker.isDeployed}
                   className="w-1/2 block mx-auto hover:scale-105 text-black font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed text-3xl"
                   style={{ backgroundImage: `url(/bg-button.png)`, backgroundSize: '100% 100%' }}>
-                  {poker.isLoading ? "JOINING TABLE..." : "JOIN TABLE"}
+                  {store.isLoading ? "JOINING TABLE..." : "JOIN TABLE"}
                 </button>
               </div>
             </div>
@@ -1080,20 +1093,20 @@ export function PokerGame() {
           )}
 
           {/* Current Table Info (if any) */}
-          {poker.currentTableId !== undefined && (
+          {store.currentTableId !== null && (
             <div className="mt-8 max-w-2xl mx-auto bg-gradient-to-br from-purple-900/50 to-blue-900/50 backdrop-blur-sm rounded-xl p-6 border border-purple-500/30">
               <h3 className="text-xl font-bold text-white mb-4">📍 Your Current Table</h3>
               <div className="space-y-2 text-gray-300">
-                <p><span className="text-gray-400">Table ID:</span> <span className="font-bold text-white">{poker.currentTableId.toString()}</span></p>
-                {poker.tableState && (
+                <p><span className="text-gray-400">Table ID:</span> <span className="font-bold text-white">{store.currentTableId.toString()}</span></p>
+                {store.tableState && (
                   <>
-                    <p><span className="text-gray-400">Status:</span> <span className="font-bold text-yellow-400">{GAME_STATES[poker.tableState.state]}</span></p>
+                    <p><span className="text-gray-400">Status:</span> <span className="font-bold text-yellow-400">{GAME_STATES[store.tableState.state]}</span></p>
                     <p>
                       <span className="text-gray-400">Players:</span>{" "}
                       <span className="font-bold text-white text-lg">
-                        {poker.tableState.numPlayers.toString()}/{poker.tableState.maxPlayers.toString()}
+                        {store.tableState.numPlayers.toString()}/{store.tableState.maxPlayers.toString()}
                       </span>
-                      <span className="ml-2 text-xs text-gray-400">(Live: {poker.players.length})</span>
+                      <span className="ml-2 text-xs text-gray-400">(Live: {store.players.length})</span>
                     </p>
                   </>
                 )}
@@ -1102,14 +1115,14 @@ export function PokerGame() {
               {/* Action Buttons */}
               <div className="mt-4 space-y-2">
                 {/* Advance Game Button in Lobby */}
-                {poker.tableState && poker.tableState.state === 2 && ( // Finished - ready to start new round
+                {store.tableState && store.tableState.state === 2 && ( // Finished - ready to start new round
                   <div className="space-y-2">
                     <button
                       onClick={handleAdvanceGame}
-                      disabled={poker.isLoading}
+                      disabled={store.isLoading}
                       className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 disabled:cursor-not-allowed"
                     >
-                      {poker.isLoading ? "Processing..." : "🔄 Start New Round"}
+                      {store.isLoading ? "Processing..." : "🔄 Start New Round"}
                     </button>
                     <p className="text-center text-xs text-gray-400">
                       Will take you to the table after starting
@@ -1118,7 +1131,7 @@ export function PokerGame() {
                 )}
 
                 {/* Go to Table Button - Show if player is in game */}
-                {(poker.tableState?.isSeated || poker.players.some(p => p.toLowerCase() === yourAddress.toLowerCase())) && (
+                {(store.tableState?.isSeated || store.players.some((p: string) => p.toLowerCase() === yourAddress.toLowerCase())) && (
                   <button
                     onClick={() => setCurrentView("game")}
                     className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg"
@@ -1127,7 +1140,7 @@ export function PokerGame() {
                       <span className="text-2xl">🎮</span>
                       <div className="text-left">
                         <div className="font-bold">
-                          {poker.tableState?.state === 1 ? "Go to Table (Game In Progress!)" :
+                          {store.tableState?.state === 1 ? "Go to Table (Game In Progress!)" :
                             "Go to Table"}
                         </div>
                         <div className="text-xs opacity-90">Click if stuck in lobby</div>
