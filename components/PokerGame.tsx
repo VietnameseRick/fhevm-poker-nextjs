@@ -165,7 +165,7 @@ export function PokerGame() {
                 store.setCurrentTableId(tableId);
                 console.log(`📍 Found recent table session (${Math.round(timeDiff/1000)}s ago): ${tableId}`);
               } catch (e) {
-                console.warn('Invalid saved table ID, clearing:', savedTableId);
+                console.warn('Invalid saved table ID - error: ', e, ' clearing:', savedTableId);
                 cleanupTableData();
                 return;
               }

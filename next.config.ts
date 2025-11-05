@@ -38,6 +38,12 @@ const nextConfig: NextConfig = {
         '@react-native-async-storage/async-storage': false,
         'react-native': false,
       };
+
+      // Also add to externals to prevent webpack from trying to resolve it
+      config.externals = config.externals || [];
+      config.externals.push({
+        '@react-native-async-storage/async-storage': 'commonjs @react-native-async-storage/async-storage',
+      });
     }
 
     return config;
