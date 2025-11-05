@@ -478,8 +478,8 @@ export const useFHEPoker = (parameters: {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        // Check for specific error messages
-        if (errorMessage.includes("ALREADY_SEATED") || errorMessage.includes("GAME_IN_PROGRESS")) {
+        // Check for specific error messages - player is already seated at this table
+        if (errorMessage.includes("SEATED") || errorMessage.includes("ALREADY_SEATED") || errorMessage.includes("GAME_IN_PROGRESS")) {
           console.log('⚠️ Player already seated at table, setting ID and refreshing state');
           setCurrentTableId(tableId); // Set it anyway so they can see the table
           setMessage("⚠️ You are already seated at this table!");
@@ -487,6 +487,9 @@ export const useFHEPoker = (parameters: {
           // ⚡ Hard refresh: clear store then refresh state to show current game
           try { clearTable(); } catch {}
           await refreshAll(tableId);
+          
+          // Don't throw error - allow the view to switch to game
+          return;
         } else if (errorMessage.includes("TABLE_FULL")) {
           setMessage("❌ This table is full. Try another table.");
           setCurrentTableId(undefined); // Clear since we're not joining
