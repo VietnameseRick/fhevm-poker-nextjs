@@ -206,10 +206,17 @@ export function PokerGame() {
   }, []);
 
   useEffect(() => {
+    // Only auto-switch to game view if:
+    // 1. User is authenticated
+    // 2. User address is available
+    // 3. Table ID is set
+    // 4. Table state is loaded
+    // 5. User is seated or in players list
     if (!authenticated || !yourAddress || !poker.currentTableId || !poker.tableState) {
       return;
     }
 
+    // Don't switch if already in game view
     if (currentView === "game") {
       return;
     }
@@ -219,7 +226,10 @@ export function PokerGame() {
     );
 
     const isSeated = poker.isSeated;
-    if (isSeated || isInPlayersList) {
+    
+    // Only switch to game view if player is confirmed to be seated and table state is fully loaded
+    if ((isSeated || isInPlayersList) && poker.tableState) {
+      console.log('✅ Auto-switching to game view - player is seated and table state loaded');
       setCurrentView("game");
     }
   }, [
@@ -268,7 +278,8 @@ export function PokerGame() {
 
     try {
       await poker.joinTable(tableId, buyInAmountInput);
-      setCurrentView("game");
+      // Don't set view immediately - let the useEffect handle it after tableState loads
+      console.log('✅ Join table completed, waiting for table state to load...');
     } catch (error) {
       console.error('❌ Failed to join table:', error);
     }
@@ -1000,7 +1011,12 @@ export function PokerGame() {
               Join Table
             </button>
             <button
-              onClick={() => setIsTableBrowserOpen(true)}
+              onClick={() => {
+                console.log('🔍 Browse Tables clicked, opening modal...');
+                console.log('Contract Address:', poker.contractAddress);
+                console.log('Provider:', ethersProvider ? 'Available' : 'Not available');
+                setIsTableBrowserOpen(true);
+              }}
               className="px-6 py-2 rounded-3xl text-2xl font-bold transition-all duration-200 bg-gradient-to-r from-green-500 to-green-700 text-white shadow-lg hover:scale-105"
             >
               Browse Tables

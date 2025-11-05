@@ -35,11 +35,27 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
   }, [contractAddress, provider]);
 
   const loadTables = async () => {
-    if (!contract) return;
+    if (!contract) {
+      console.warn('⚠️ TableBrowser: No contract available');
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
+      console.log('📊 Loading tables from contract...');
+      console.log('📊 Contract address:', contractAddress);
+      
+      // Try to get the next table ID
       const nextId: bigint = await contract.nextTableId();
+      console.log(`📊 Found ${Number(nextId) - 1} table(s) (nextId: ${nextId.toString()})`);
+      
+      // If nextId is 1, there are no tables yet
+      if (nextId <= 1n) {
+        console.log('📊 No tables found (nextId = 1)');
+        setTables([]);
+        return;
+      }
+      
       const ids: bigint[] = [];
       for (let i = 1n; i < nextId; i++) ids.push(i);
       const chunks: bigint[][] = [];
@@ -64,7 +80,8 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
                 smallBlind: t.smallBlind as bigint,
                 bigBlind: t.bigBlind as bigint,
               };
-            } catch {
+            } catch (err) {
+              console.warn(`⚠️ Failed to load table ${id}:`, err);
               return null;
             }
           })
@@ -93,9 +110,25 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
         }
       }));
 
+      console.log(`✅ Loaded ${withCounts.length} table(s)`);
       setTables(withCounts);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load tables");
+      console.error('❌ Failed to load tables:', e);
+      
+      // Provide more helpful error messages
+      const errorMessage = e instanceof Error ? e.message : "Failed to load tables";
+      
+      if (errorMessage.includes("execution reverted") || errorMessage.includes("CALL_EXCEPTION")) {
+        setError(
+          "⚠️ Contract call failed. This usually happens when:\n" +
+          "• The contract was redeployed (restart your local node and redeploy)\n" +
+          "• You're on the wrong network\n" +
+          "• The contract address in FHEPokerAddresses.ts is incorrect\n\n" +
+          `Contract address: ${contractAddress}`
+        );
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -103,6 +136,7 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
 
   useEffect(() => {
     if (isOpen) {
+      console.log('📊 TableBrowser opened', { contractAddress, hasProvider: !!provider, hasContract: !!contract });
       loadTables();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,12 +164,17 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
         {contract && (
           <div className="p-4">
             {error && (
-              <div className="mb-3 p-3 rounded border-l-4 border-red-500 bg-red-500/10 text-red-300 text-sm">{error}</div>
+              <div className="mb-3 p-3 rounded border-l-4 border-red-500 bg-red-500/10 text-red-300 text-sm whitespace-pre-line">
+                {error}
+              </div>
             )}
             {isLoading ? (
               <div className="py-12 text-center text-slate-300">Loading tables...</div>
             ) : tables.length === 0 ? (
-              <div className="py-12 text-center text-slate-300">No tables found.</div>
+              <div className="py-12 text-center">
+                <p className="text-slate-300 mb-4">No tables found.</p>
+                <p className="text-slate-400 text-sm">Create a new table to get started!</p>
+              </div>
             ) : (
               <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
                 <table className="min-w-full text-sm">
