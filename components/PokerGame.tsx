@@ -19,6 +19,7 @@ import { TransactionConfirmModal } from "./TransactionConfirmModal";
 import { useInMemoryStorage } from "../hooks/useInMemoryStorage";
 import { useSmartAccount } from "../hooks/useSmartAccount";
 import { usePokerStore } from "@/stores/pokerStore";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 
 const InlineShowdown = lazy(() => import("./InlineShowdown").then(mod => ({ default: mod.InlineShowdown })));
@@ -31,6 +32,7 @@ const GAME_STATES = ["Waiting for Players", "Playing", "Finished"];
 const BETTING_STREETS = ["Pre-Flop", "Flop", "Turn", "River", "Showdown"];
 
 export function PokerGame() {
+  const router = useRouter();
   const { storage: fhevmDecryptionSignatureStorage } = useInMemoryStorage();
   const {
     ready,
@@ -94,6 +96,9 @@ export function PokerGame() {
   const pendingTransaction = store.pendingTransaction;
   const storeIsLoading = store.isLoading;
 
+  // Get user address early for use in effects
+  const yourAddress = (isSmartAccount ? smartAccountAddress : eoaAddress) || "";
+
   const [showCreateTable, setShowCreateTable] = useState(true);
   const [showJoinTable, setShowJoinTable] = useState(false);
   const [currentView, setCurrentView] = useState<"lobby" | "game">("lobby");
@@ -126,6 +131,49 @@ export function PokerGame() {
   const handleDepositToSmartAccount = () => {
     setShowFundingModal(true);
   };
+
+  // Auto-detect if user is already seated at a table on mount/reconnect
+  useEffect(() => {
+    const checkExistingTable = async () => {
+      if (!authenticated || !poker.contract) return;
+
+      try {
+        // Check if store already has a table ID (set by /play/[tableId] route)
+        let tableId = store.currentTableId;
+        
+        // If not, check localStorage for last table ID
+        if (!tableId) {
+          const savedTableId = typeof window !== 'undefined' 
+            ? window.localStorage.getItem('poker:lastTableId') 
+            : null;
+          
+          if (savedTableId) {
+            tableId = BigInt(savedTableId);
+            store.setCurrentTableId(tableId);
+          }
+        }
+
+        if (tableId) {
+          console.log(`🔍 Checking if user is seated at table ${tableId}...`);
+          
+          // Refresh table data
+          await store.refreshAll(tableId);
+          
+          // Check if user is actually seated
+          if (yourAddress && (store.tableState?.isSeated || store.players.some(p => p.toLowerCase() === yourAddress.toLowerCase()))) {
+            console.log(`✅ User is seated at table ${tableId}, navigating to game view`);
+            setCurrentView("game");
+          } else {
+            console.log(`ℹ️ User not seated at table ${tableId}, staying in lobby`);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check existing table:', error);
+      }
+    };
+
+    checkExistingTable();
+  }, [authenticated, poker.contract, yourAddress, store]);
   
   const [isTableBrowserOpen, setIsTableBrowserOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -144,8 +192,6 @@ export function PokerGame() {
   const [showChipsManagementModal, setShowChipsManagementModal] = useState(false);
   const [chipsModalInitialTab, setChipsModalInitialTab] = useState<"withdraw" | "add" | "leave">("add");
   const [isDecrypting, setIsDecrypting] = useState(false);
-
-  const yourAddress = address || "";
 
   useEffect(() => {
     if (yourAddress) {
@@ -224,8 +270,16 @@ export function PokerGame() {
 
   const handleCreateTable = async () => {
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
-    await store.refreshAll(store.currentTableId!);
-    console.log('✅ Table created, Wagmi will handle state updates');
+    
+    // Wait for table ID to be set by event listener
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    if (store.currentTableId) {
+      console.log(`✅ Table ${store.currentTableId} created, navigating...`);
+      router.push(`/play/${store.currentTableId}`);
+    } else {
+      console.log('✅ Table created, Wagmi will handle state updates');
+    }
   };
 
   const handleJoinTable = async () => {
@@ -244,22 +298,12 @@ export function PokerGame() {
     }
 
     try {
-       // Join the table (this waits for transaction confirmation)
+      // Join the table (this waits for transaction confirmation)
       await poker.joinTable(tableId, buyInAmountInput);
-      console.log('✅ Join successful, setting table ID and refreshing data');
+      console.log('✅ Join successful, navigating to table...');
       
-      // Set the current table ID in the store
-      store.setCurrentTableId(tableId);
-      
-      // Wait a bit for blockchain state to update
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Refresh all game data
-      await store.refreshAll(tableId);
-      
-      // Navigate to game view
-      setCurrentView("game");
-      console.log('✅ Navigation to game view complete');
+      // Navigate to the table page
+      router.push(`/play/${tableId}`);
     } catch (error) {
       console.error('❌ Failed to join table:', error);
     }
@@ -1170,12 +1214,10 @@ export function PokerGame() {
             <TableBrowser
             isOpen={isTableBrowserOpen}
             onClose={() => setIsTableBrowserOpen(false)}
-            onSelect={(id, minBuyIn) => {
-              setShowCreateTable(false);
-              setShowJoinTable(true);
+            onSelect={(id) => {
               setIsTableBrowserOpen(false);
-              setTableIdInput(id.toString());
-              setBuyInAmountInput(ethers.formatEther(minBuyIn));
+              // Navigate directly to the table page
+              router.push(`/play/${id}`);
             }}
             contractAddress={poker.contractAddress}
             provider={ethersProvider}
