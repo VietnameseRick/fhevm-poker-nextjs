@@ -17,7 +17,7 @@ export interface ServerStatusData {
   hasIssues: boolean;
 }
 
-const STATUS_API_URL = "https://status.zama.org/index.json";
+const STATUS_API_URL = "/api/server-status";
 const REFRESH_INTERVAL = 60000; // 1 minute
 
 export function useServerStatus(): ServerStatusData {
@@ -33,7 +33,9 @@ export function useServerStatus(): ServerStatusData {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const response = await fetch(STATUS_API_URL);
+        const response = await fetch(STATUS_API_URL, {
+          cache: 'no-cache', // Ensure fresh data
+        });
         if (!response.ok) {
           throw new Error("Failed to fetch status");
         }
