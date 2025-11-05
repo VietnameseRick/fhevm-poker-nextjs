@@ -264,12 +264,15 @@ export function PokerGame() {
       store.setCurrentTableId(tableId);
       
       // Refresh all state from the blockchain to get latest table state
+      console.log('🔄 Starting refreshAll...');
       await store.refreshAll(tableId);
+      console.log('✅ refreshAll completed, switching to game view');
       
       // Switch to game view (auto-navigation effect will also trigger)
       setCurrentView("game");
     } catch (error) {
       console.error('❌ Failed to join table:', error);
+      store.setLoading(false); // Ensure loading state is cleared on error
     }
   };
 

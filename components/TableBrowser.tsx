@@ -39,12 +39,32 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
     setIsLoading(true);
     setError(null);
     try {
-      const nextId: bigint = await contract.nextTableId();
+      // Try to query tables starting from 1 until we find ones that don't exist
+      // We'll query up to 100 tables max for safety
+      const maxTablesToCheck = 100;
       const ids: bigint[] = [];
-      for (let i = 1n; i < nextId; i++) ids.push(i);
+      
+      // First, quickly check which tables exist
+      for (let i = 1n; i <= BigInt(maxTablesToCheck); i++) {
+        try {
+          await contract.tables(i);
+          ids.push(i);
+        } catch {
+          // Table doesn't exist, stop checking
+          break;
+        }
+      }
+
+      if (ids.length === 0) {
+        setTables([]);
+        return;
+      }
+
       const chunks: bigint[][] = [];
       const chunkSize = 20;
-      for (let i = 0; i < ids.length; i += chunkSize) chunks.push(ids.slice(i, i + chunkSize));
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        chunks.push(ids.slice(i, i + chunkSize));
+      }
 
       const rows: TableRow[] = [];
       for (const chunk of chunks) {

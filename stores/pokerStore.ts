@@ -452,6 +452,9 @@ export const usePokerStore = create<PokerStore>()(
         console.log('🔄 refreshAll called for tableId:', tableId.toString());
         const startTime = Date.now();
         
+        // Set loading state to true
+        set({ isLoading: true });
+        
         try {
           const { provider } = get();
           
@@ -495,6 +498,9 @@ export const usePokerStore = create<PokerStore>()(
           });
         } catch (error) {
           console.error('❌ Failed to refresh all data:', error);
+        } finally {
+          // Always clear loading state, even if there's an error
+          set({ isLoading: false });
         }
       },
       
