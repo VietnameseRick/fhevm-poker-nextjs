@@ -17,19 +17,6 @@ export interface ServerStatusData {
   hasIssues: boolean;
 }
 
-interface StatusPageResource {
-  type: string;
-  attributes: {
-    public_name: string;
-    status: "operational" | "downtime" | "degraded" | "maintenance" | "recovered";
-    availability?: number;
-  };
-}
-
-interface StatusPageResponse {
-  included?: StatusPageResource[];
-}
-
 const STATUS_API_URL = "/api/server-status";
 const REFRESH_INTERVAL = 60000; // 1 minute
 
@@ -53,21 +40,21 @@ export function useServerStatus(): ServerStatusData {
           throw new Error("Failed to fetch status");
         }
 
-        const json = await response.json() as StatusPageResponse;
+        const json = await response.json();
         
         // Find the resources in the included array
         const resources = json.included?.filter(
-          (item: StatusPageResource) => item.type === "status_page_resource"
+          (item: { type: string }) => item.type === "status_page_resource"
         ) || [];
 
         // Find specific services
-        const coprocessor = resources.find((r: StatusPageResource) => 
+        const coprocessor = resources.find((r: { attributes: { public_name: string } }) => 
           r.attributes?.public_name?.toLowerCase().includes("coprocessor")
         );
-        const mpc = resources.find((r: StatusPageResource) => 
+        const mpc = resources.find((r: { attributes: { public_name: string } }) => 
           r.attributes?.public_name?.toLowerCase().includes("mpc")
         );
-        const relayer = resources.find((r: StatusPageResource) => 
+        const relayer = resources.find((r: { attributes: { public_name: string } }) => 
           r.attributes?.public_name?.toLowerCase().includes("relayer")
         );
 
@@ -109,8 +96,8 @@ export function useServerStatus(): ServerStatusData {
           mpc: null,
           relayer: null,
           loading: false,
-          error: "Unable to fetch status. Please check status.zama.ai for updates.",
-          hasIssues: true,
+          error: error instanceof Error ? error.message : "Unknown error",
+          hasIssues: false,
         });
       }
     };

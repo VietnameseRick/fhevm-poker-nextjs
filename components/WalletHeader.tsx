@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useServerStatus, ServerStatus } from "../hooks/useServerStatus";
+import { useServerStatus, ServerStatus } from "@/hooks/useServerStatus";
 
 interface WalletHeaderProps {
   address?: string;

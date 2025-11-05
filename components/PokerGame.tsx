@@ -224,21 +224,13 @@ export function PokerGame() {
 
   const handleCreateTable = async () => {
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
+    await store.refreshAll(store.currentTableId!);
     console.log('✅ Table created, Wagmi will handle state updates');
   };
 
   const handleJoinTable = async () => {
     const tableId = BigInt(tableIdInput || store.currentTableId?.toString() || "0");
     const buyInAmount = ethers.parseEther(buyInAmountInput);
-    
-    // Check if player is already seated at this table
-    if (store.currentTableId === tableId && store.tableState?.isSeated) {
-      console.log('ℹ️ Player is already seated at this table, loading game view...');
-      await store.refreshAll(tableId);
-      setCurrentView("game");
-      return;
-    }
-    
     if (isSmartAccount && smartAccountAddress && checkBalance) {
       const balance = await checkBalance();
       setCurrentBalance(balance);
@@ -252,27 +244,24 @@ export function PokerGame() {
     }
 
     try {
-      const result = await poker.joinTable(tableId, buyInAmountInput);
-      
-      if (result?.alreadySeated) {
-        console.log('ℹ️ Already seated, loading game state...');
-      } else {
-        console.log('✅ Join successful');
-      }
+       // Join the table (this waits for transaction confirmation)
+      await poker.joinTable(tableId, buyInAmountInput);
+      console.log('✅ Join successful, setting table ID and refreshing data');
       
       // Set the current table ID in the store
       store.setCurrentTableId(tableId);
       
-      // Refresh all state from the blockchain to get latest table state
-      console.log('🔄 Starting refreshAll...');
-      await store.refreshAll(tableId);
-      console.log('✅ refreshAll completed, switching to game view');
+      // Wait a bit for blockchain state to update
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Switch to game view (auto-navigation effect will also trigger)
+      // Refresh all game data
+      await store.refreshAll(tableId);
+      
+      // Navigate to game view
       setCurrentView("game");
+      console.log('✅ Navigation to game view complete');
     } catch (error) {
       console.error('❌ Failed to join table:', error);
-      store.setLoading(false); // Ensure loading state is cleared on error
     }
   };
 

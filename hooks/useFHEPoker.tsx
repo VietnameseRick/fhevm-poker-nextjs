@@ -180,15 +180,15 @@ export const useFHEPoker = (parameters: {
       setMessage(`Table creation transaction: ${tx.hash}`);
       await tx.wait();
       setMessage("Table created successfully!");
-    } catch (error) {
-      setMessage(`Table creation failed: ${error instanceof Error ? error instanceof Error ? error.message : 'Unknown error' : 'Unknown error'}`);
+    } catch (error: unknown) {
+      setMessage(`Table creation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
   const joinTable = useCallback(async (tableId: bigint, buyInAmount: string) => {
     if (!contract) {
       setMessage("Contract not connected");
-      return { success: false, alreadySeated: false };
+      return;
     }
 
     try {
@@ -198,19 +198,8 @@ export const useFHEPoker = (parameters: {
       setMessage(`Join table transaction: ${tx.hash}`);
       await tx.wait();
       setMessage("Joined table successfully!");
-      return { success: true, alreadySeated: false };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      // Check if the error is because player is already seated
-      if (errorMessage.includes('SEATED')) {
-        console.log('ℹ️ Player is already seated at this table');
-        setMessage("Already seated at table");
-        return { success: true, alreadySeated: true };
-      }
-      
-      setMessage(`Join table failed: ${errorMessage}`);
-      throw error;
+    } catch (error: unknown) {
+      setMessage(`Join table failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
@@ -219,8 +208,8 @@ export const useFHEPoker = (parameters: {
     try {
       const tx = await contract.advanceGame(tableId);
       await tx.wait();
-    } catch (error) {
-      setMessage(`Advance game failed: ${error instanceof Error ? error instanceof Error ? error.message : 'Unknown error' : 'Unknown error'}`);
+    } catch (error: unknown) {
+      setMessage(`Advance game failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
@@ -229,8 +218,8 @@ export const useFHEPoker = (parameters: {
     try {
       const tx = await contract.fold(tableId);
       await tx.wait();
-    } catch (error) {
-      setMessage(`Fold failed: ${error instanceof Error ? error instanceof Error ? error.message : 'Unknown error' : 'Unknown error'}`);
+    } catch (error: unknown) {
+      setMessage(`Fold failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
@@ -239,8 +228,8 @@ export const useFHEPoker = (parameters: {
     try {
       const tx = await contract.check(tableId);
       await tx.wait();
-    } catch (error) {
-      setMessage(`Check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: unknown) {
+      setMessage(`Check failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
@@ -249,8 +238,8 @@ export const useFHEPoker = (parameters: {
     try {
       const tx = await contract.call(tableId);
       await tx.wait();
-    } catch (error) {
-      setMessage(`Call failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: unknown) {
+      setMessage(`Call failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
@@ -260,8 +249,8 @@ export const useFHEPoker = (parameters: {
       const raiseAmount = ethers.parseEther(amount);
       const tx = await contract.raise(tableId, raiseAmount);
       await tx.wait();
-    } catch (error) {
-      setMessage(`Raise failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: unknown) {
+      setMessage(`Raise failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
@@ -270,8 +259,8 @@ export const useFHEPoker = (parameters: {
     try {
       const tx = await contract.leaveTable(tableId);
       await tx.wait();
-    } catch (error) {
-      setMessage(`Leave table failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: unknown) {
+      setMessage(`Leave table failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
@@ -281,8 +270,8 @@ export const useFHEPoker = (parameters: {
       const addAmount = ethers.parseEther(amount);
       const tx = await contract.addChips(tableId, { value: addAmount });
       await tx.wait();
-    } catch (error) {
-      setMessage(`Add chips failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: unknown) {
+      setMessage(`Add chips failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
@@ -292,8 +281,8 @@ export const useFHEPoker = (parameters: {
       const withdrawAmount = ethers.parseEther(amount);
       const tx = await contract.withdrawChips(tableId, withdrawAmount);
       await tx.wait();
-    } catch (error) {
-      setMessage(`Withdraw chips failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: unknown) {
+      setMessage(`Withdraw chips failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
@@ -302,8 +291,8 @@ export const useFHEPoker = (parameters: {
     try {
       const tx = await contract.decryptCards(tableId);
       await tx.wait();
-    } catch (error) {
-      setMessage(`Decrypt cards failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: unknown) {
+      setMessage(`Decrypt cards failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
@@ -312,8 +301,8 @@ export const useFHEPoker = (parameters: {
     try {
       const tx = await contract.decryptCommunityCards(tableId);
       await tx.wait();
-    } catch (error) {
-      setMessage(`Decrypt community cards failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: unknown) {
+      setMessage(`Decrypt community cards failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [contract]);
 
