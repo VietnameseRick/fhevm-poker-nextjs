@@ -4,6 +4,9 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { usePokerStore } from "@/stores/pokerStore";
 
+// Required for Cloudflare Pages dynamic routes
+export const runtime = 'edge';
+
 export default function PlayTablePage() {
   const params = useParams();
   const router = useRouter();
