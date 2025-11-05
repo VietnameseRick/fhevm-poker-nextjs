@@ -188,7 +188,7 @@ export const useFHEPoker = (parameters: {
   const joinTable = useCallback(async (tableId: bigint, buyInAmount: string) => {
     if (!contract) {
       setMessage("Contract not connected");
-      return;
+      return { success: false, alreadySeated: false };
     }
 
     try {
@@ -198,8 +198,19 @@ export const useFHEPoker = (parameters: {
       setMessage(`Join table transaction: ${tx.hash}`);
       await tx.wait();
       setMessage("Joined table successfully!");
+      return { success: true, alreadySeated: false };
     } catch (error) {
-      setMessage(`Join table failed: ${error instanceof Error ? error instanceof Error ? error.message : 'Unknown error' : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Check if the error is because player is already seated
+      if (errorMessage.includes('SEATED')) {
+        console.log('ℹ️ Player is already seated at this table');
+        setMessage("Already seated at table");
+        return { success: true, alreadySeated: true };
+      }
+      
+      setMessage(`Join table failed: ${errorMessage}`);
+      throw error;
     }
   }, [contract]);
 

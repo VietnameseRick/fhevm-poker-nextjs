@@ -230,6 +230,15 @@ export function PokerGame() {
   const handleJoinTable = async () => {
     const tableId = BigInt(tableIdInput || store.currentTableId?.toString() || "0");
     const buyInAmount = ethers.parseEther(buyInAmountInput);
+    
+    // Check if player is already seated at this table
+    if (store.currentTableId === tableId && store.tableState?.isSeated) {
+      console.log('ℹ️ Player is already seated at this table, loading game view...');
+      await store.refreshAll(tableId);
+      setCurrentView("game");
+      return;
+    }
+    
     if (isSmartAccount && smartAccountAddress && checkBalance) {
       const balance = await checkBalance();
       setCurrentBalance(balance);
@@ -243,8 +252,21 @@ export function PokerGame() {
     }
 
     try {
-      await poker.joinTable(tableId, buyInAmountInput);
-      console.log('✅ Join successful, switching to game view');
+      const result = await poker.joinTable(tableId, buyInAmountInput);
+      
+      if (result?.alreadySeated) {
+        console.log('ℹ️ Already seated, loading game state...');
+      } else {
+        console.log('✅ Join successful');
+      }
+      
+      // Set the current table ID in the store
+      store.setCurrentTableId(tableId);
+      
+      // Refresh all state from the blockchain to get latest table state
+      await store.refreshAll(tableId);
+      
+      // Switch to game view (auto-navigation effect will also trigger)
       setCurrentView("game");
     } catch (error) {
       console.error('❌ Failed to join table:', error);
