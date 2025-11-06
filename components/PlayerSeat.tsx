@@ -185,7 +185,7 @@ export const PlayerSeat = memo(function PlayerSeat({
       <div className="relative flex flex-col items-center">
         {/* 🔵 Avatar */}
         <div
-          className={`relative w-24 h-24 rounded-full overflow-visible border-4 flex items-center justify-center bg-black ${pendingAction
+          className={`relative w-24 h-24 rounded-full overflow-visible border-2 flex items-center justify-center bg-black ${pendingAction
               ? "border-purple-400 shadow-lg shadow-purple-500/50 animate-pulse"
               : isCurrentTurn
                 ? "border-yellow-400 shadow-lg shadow-yellow-500/50 animate-pulse"
