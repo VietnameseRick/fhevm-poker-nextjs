@@ -45,6 +45,7 @@ export function Card({ cardValue, hidden = false, className = "", flip = false, 
           ? `dealIn 300ms ease-out ${dealDelayMs}ms both, highlightGlow 1.5s ease-in-out ${dealDelayMs + highlightDelay}ms both`
           : `dealIn 300ms ease-out ${dealDelayMs}ms both`,
         transformStyle: 'preserve-3d',
+        imageRendering: 'crisp-edges',
       }}
     >
       {/* Front face with image */}
@@ -57,6 +58,9 @@ export function Card({ cardValue, hidden = false, className = "", flip = false, 
           backgroundSize: '100% 100%',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'center',
+          imageRendering: 'crisp-edges',
+          WebkitFontSmoothing: 'antialiased',
+          filter: 'none',
         }}
       ></div>
       {/* Back face */}
@@ -70,6 +74,9 @@ export function Card({ cardValue, hidden = false, className = "", flip = false, 
           backgroundSize: '100% 100%',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'center',
+          imageRendering: 'crisp-edges',
+          WebkitFontSmoothing: 'antialiased',
+          filter: 'none',
         }}
       ></div>
     </div>
@@ -125,8 +132,8 @@ export function CardAnimations() {
       @keyframes dealIn { from { opacity: 0; transform: translateY(-10px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
       @keyframes highlightGlow { 0% { transform: scale(1); box-shadow: 0 0 0 rgba(34, 197, 94, 0); } 50% { transform: scale(1.15); box-shadow: 0 0 40px rgba(34, 197, 94, 1), 0 0 80px rgba(34, 197, 94, 0.6), 0 0 120px rgba(34, 197, 94, 0.3), inset 0 0 20px rgba(34, 197, 94, 0.4); } 100% { transform: scale(1.08); box-shadow: 0 0 30px rgba(34, 197, 94, 0.8), 0 0 60px rgba(34, 197, 94, 0.5), 0 0 90px rgba(34, 197, 94, 0.2), inset 0 0 15px rgba(34, 197, 94, 0.3); } }
       .animate-highlight-pulse { animation: highlightPulse 1.5s ease-in-out infinite; }
-      @keyframes highlightPulse { 0%, 100% { box-shadow: 0 0 25px rgba(34, 197, 94, 0.9), 0 0 50px rgba(34, 197, 94, 0.6), 0 0 75px rgba(34, 197, 94, 0.3), inset 0 0 15px rgba(34, 197, 94, 0.2); filter: brightness(1.2); } 50% { box-shadow: 0 0 40px rgba(34, 197, 94, 1), 0 0 80px rgba(34, 197, 94, 0.8), 0 0 120px rgba(34, 197, 94, 0.5), inset 0 0 25px rgba(34, 197, 94, 0.4); filter: brightness(1.4) saturate(1.3); } }
-      .highlight-card { position: relative; filter: brightness(1.2); }
+      @keyframes highlightPulse { 0%, 100% { box-shadow: 0 0 25px rgba(34, 197, 94, 0.9), 0 0 50px rgba(34, 197, 94, 0.6), 0 0 75px rgba(34, 197, 94, 0.3), inset 0 0 15px rgba(34, 197, 94, 0.2); } 50% { box-shadow: 0 0 40px rgba(34, 197, 94, 1), 0 0 80px rgba(34, 197, 94, 0.8), 0 0 120px rgba(34, 197, 94, 0.5), inset 0 0 25px rgba(34, 197, 94, 0.4); } }
+      .highlight-card { position: relative; }
       .highlight-card::before { content: ''; position: absolute; inset: -8px; border-radius: 1rem; background: radial-gradient(circle at center, rgba(34, 197, 94, 0.3), transparent 70%); animation: particles 2s ease-in-out infinite; pointer-events: none; z-index: -1; }
       @keyframes particles { 0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.6; } 50% { transform: scale(1.2) rotate(180deg); opacity: 1; } }
     `}</style>

@@ -62,12 +62,12 @@ export function ChipsManagementModal({
       setWithdrawAmount("");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      // Contract error codes: "CANNOT_WITHDRAW_ON_YOUR_TURN", "MUST_LEAVE_10X_BIG_BLIND_OR_WITHDRAW_ALL"
-      if (errorMessage.includes('CANNOT_WITHDRAW_ON_YOUR_TURN')) {
+      // Contract error codes: "CWYT" = Cannot withdraw on your turn, "M10BB" = Must leave 10x big blind or withdraw all
+      if (errorMessage.includes('CWYT')) {
         toast.error('Cannot withdraw during your turn. Please act first or wait for the next round.', {
           duration: 5000,
         });
-      } else if (errorMessage.includes('MUST_LEAVE_10X_BIG_BLIND_OR_WITHDRAW_ALL')) {
+      } else if (errorMessage.includes('M10BB')) {
         toast.error('During game: must leave at least 10x big blind or withdraw all', {
           duration: 5000,
         });

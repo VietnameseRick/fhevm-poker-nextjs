@@ -45,40 +45,56 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
       console.log('📊 Loading tables from contract...');
       console.log('📊 Contract address:', contractAddress);
       
-      // Try to get the next table ID
-      const nextId: bigint = await contract.nextTableId();
-      console.log(`📊 Found ${Number(nextId) - 1} table(s) (nextId: ${nextId.toString()})`);
+      // Since nextTableId is internal, we'll try loading tables incrementally
+      // Start from table ID 1 and keep trying until we hit an error
+      const ids: bigint[] = [];
+      let currentId = 1n;
+      const maxTables = 100; // Safety limit to prevent infinite loops
       
-      // If nextId is 1, there are no tables yet
-      if (nextId <= 1n) {
-        console.log('📊 No tables found (nextId = 1)');
+      // Try to find all existing tables by querying incrementally
+      for (let i = 0; i < maxTables; i++) {
+        try {
+          await contract.getTableState(currentId);
+          // If we get here, the table exists
+          ids.push(currentId);
+          currentId++;
+        } catch (err: unknown) {
+          // Check if it's a "table not found" error
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          if (errorMsg.includes('NF') || errorMsg.includes('TABLE_NOT_FOUND') || errorMsg.includes('execution reverted')) {
+            // Table doesn't exist, we've found all tables
+            break;
+          }
+          // Some other error, skip this table and continue
+          console.warn(`⚠️ Error checking table ${currentId}:`, err);
+          currentId++;
+        }
+      }
+      
+      console.log(`📊 Found ${ids.length} table(s)`);
+      
+      if (ids.length === 0) {
         setTables([]);
         return;
       }
       
-      const ids: bigint[] = [];
-      for (let i = 1n; i < nextId; i++) ids.push(i);
       const chunks: bigint[][] = [];
       const chunkSize = 20;
       for (let i = 0; i < ids.length; i += chunkSize) chunks.push(ids.slice(i, i + chunkSize));
 
       const rows: TableRow[] = [];
       for (const chunk of chunks) {
-        // Fetch each table struct
-        // Note: public struct returns many fields; we only map what we need
-        /* eslint-disable @typescript-eslint/no-explicit-any */
+        // Fetch table state for each table
         const results = await Promise.all(
           chunk.map(async (id) => {
             try {
-              const t: any = await contract.getTableInfo(id);
-              // t fields based on ABI order
+              const state = await contract.getTableState(id);
               return {
                 id,
-                state: Number(t.state),
-                minBuyIn: t.minBuyIn as bigint,
-                maxPlayers: t.maxPlayers as bigint,
-                smallBlind: t.smallBlind as bigint,
-                bigBlind: t.bigBlind as bigint,
+                state: Number(state[0]),
+                numPlayers: state[1],
+                maxPlayers: state[2],
+                minBuyIn: state[3],
               };
             } catch (err) {
               console.warn(`⚠️ Failed to load table ${id}:`, err);
@@ -86,32 +102,53 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
             }
           })
         );
-        results.forEach((r) => {
-          if (r) rows.push({
-            id: r.id,
-            state: r.state,
-            numPlayers: 0n, // will fill below
-            maxPlayers: r.maxPlayers,
-            smallBlind: r.smallBlind,
-            bigBlind: r.bigBlind,
-            minBuyIn: r.minBuyIn,
-          });
+        
+        // Fetch blinds from TableCreated events
+        const withBlinds = await Promise.all(
+          results.map(async (r) => {
+            if (!r) return null;
+            try {
+              // Query TableCreated event to get blinds
+              const filter = contract.filters.TableCreated(r.id);
+              const events = await contract.queryFilter(filter, 0, "latest");
+              
+              if (events.length > 0) {
+                const event = events[0]; // Should only be one TableCreated event per table
+                // Type guard to check if event is EventLog with args
+                if ('args' in event && event.args && event.args.length >= 4) {
+                  // TableCreated event: tableId, creator, minBuyIn, maxPlayers
+                  // But we need smallBlind and bigBlind which aren't in the event
+                  // For now, we'll set them to 0 and they won't be displayed
+                  return {
+                    ...r,
+                    smallBlind: 0n,
+                    bigBlind: 0n,
+                  };
+                }
+              }
+              return {
+                ...r,
+                smallBlind: 0n,
+                bigBlind: 0n,
+              };
+            } catch (err) {
+              console.warn(`⚠️ Failed to fetch blinds for table ${r.id}:`, err);
+              return {
+                ...r,
+                smallBlind: 0n,
+                bigBlind: 0n,
+              };
+            }
+          })
+        );
+        
+        withBlinds.forEach((r) => {
+          if (r) rows.push(r);
         });
       }
 
-      // Fetch numPlayers via getTableState (returns player count)
-      const withCounts = await Promise.all(rows.map(async (row) => {
-        try {
-          const state = await contract.getTableState(row.id);
-          const numPlayers: bigint = state[1];
-          return { ...row, numPlayers } as TableRow;
-        } catch {
-          return row;
-        }
-      }));
-
-      console.log(`✅ Loaded ${withCounts.length} table(s)`);
-      setTables(withCounts);
+      console.log(`✅ Loaded ${rows.length} table(s)`);
+      setTables(rows);
     } catch (e) {
       console.error('❌ Failed to load tables:', e);
       
@@ -194,7 +231,11 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
                         <td className="px-3 py-2 text-white font-mono">#{t.id.toString()}</td>
                         <td className="px-3 py-2"><span className="text-slate-300">{GAME_STATES[t.state] || t.state}</span></td>
                         <td className="px-3 py-2"><span className="text-slate-300">{t.numPlayers.toString()}/{t.maxPlayers.toString()}</span></td>
-                        <td className="px-3 py-2"><span className="text-slate-300">{formatEth(t.smallBlind)} / {formatEth(t.bigBlind)} ETH</span></td>
+                        <td className="px-3 py-2"><span className="text-slate-300">
+                          {t.smallBlind > 0n && t.bigBlind > 0n 
+                            ? `${formatEth(t.smallBlind)} / ${formatEth(t.bigBlind)} ETH`
+                            : 'N/A'}
+                        </span></td>
                         <td className="px-3 py-2"><span className="text-slate-300">{formatEth(t.minBuyIn)} ETH</span></td>
                         <td className="px-3 py-2 text-right">
                           <button

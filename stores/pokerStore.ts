@@ -58,6 +58,14 @@ export interface RevealedCards {
   card2: number;
 }
 
+export interface CachedShowdownData {
+  winner: string;
+  revealedCards: Record<string, RevealedCards>;
+  decryptedCommunityCards: (number | undefined)[];
+  pot: bigint;
+  round: bigint;
+}
+
 export interface PlayerAction {
   action: 'Fold' | 'Check' | 'Call' | 'Raise' | 'Bet' | 'All-In';
   amount?: bigint;
@@ -82,6 +90,7 @@ interface PokerStore {
   lastUpdate: number;
   storedRound: bigint | null; // Track which round the stored cards belong to
   isWaitingForDecryption: boolean; // True when at showdown waiting for winner determination
+  cachedShowdownData: CachedShowdownData | null; // Cached showdown data that persists even after state reset
   
   // Transaction state
   pendingTransaction: {
@@ -109,6 +118,9 @@ interface PokerStore {
   clearRevealedCards: () => void;
   setStoredRound: (round: bigint | null) => void;
   setWaitingForDecryption: (waiting: boolean) => void;
+  cacheShowdownData: () => void;
+  clearCachedShowdownData: () => void;
+  clearAllCardData: () => void;
   
   // Fetch actions - these update the store directly
   fetchTableState: (tableId: bigint) => Promise<void>;
@@ -147,6 +159,7 @@ export const usePokerStore = create<PokerStore>()(
       lastUpdate: Date.now(),
       storedRound: null,
       isWaitingForDecryption: false,
+      cachedShowdownData: null,
       contractAddress: null,
       provider: null,
       readonlyProvider: null,
@@ -236,6 +249,39 @@ export const usePokerStore = create<PokerStore>()(
         lastUpdate: Date.now()
       }),
       
+      // Cache showdown data when game finishes (persists even after state reset)
+      cacheShowdownData: () => {
+        const state = get();
+        if (state.tableState?.winner && Object.keys(state.revealedCards).length > 0) {
+          set({
+            cachedShowdownData: {
+              winner: state.tableState.winner,
+              revealedCards: { ...state.revealedCards },
+              decryptedCommunityCards: [...state.decryptedCommunityCards],
+              pot: state.lastPot,
+              round: state.tableState.currentRound,
+            },
+            lastUpdate: Date.now()
+          });
+          console.log('💾 Cached showdown data:', get().cachedShowdownData);
+        }
+      },
+      
+      // Clear cached showdown data when new game starts
+      clearCachedShowdownData: () => set({
+        cachedShowdownData: null,
+        lastUpdate: Date.now()
+      }),
+      
+      // Clear all card-related data (comprehensive cleanup)
+      clearAllCardData: () => set({
+        decryptedCommunityCards: [],
+        revealedCards: {},
+        playersWithDealtCards: new Set(),
+        cachedShowdownData: null,
+        lastUpdate: Date.now()
+      }),
+      
       // Fetch table state
       fetchTableState: async (tableId) => {
         const { contractAddress, readonlyProvider: provider } = get();
@@ -246,38 +292,43 @@ export const usePokerStore = create<PokerStore>()(
         try {
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
           
-          try {
-            const nextTableId = await contract.nextTableId();
-            console.log('Next table ID:', nextTableId.toString(), 'Requested:', tableId.toString());
-            if (tableId >= nextTableId) {
-              console.warn(`⚠️ Table ${tableId} doesn't exist yet. Next available ID: ${nextTableId}`);
-              return;
-            }
-          } catch (err) {
-            console.warn('Failed to check nextTableId:', err);
-          }
+          // Note: nextTableId is internal, so we can't check it
+          // getTableState will fail if table doesn't exist anyway
           
           // Get current block to verify we're querying fresh data
           const blockNumber = await provider.getBlockNumber();
           
           const state = await contract.getTableState(tableId, { blockTag: "latest" });
           console.log(`✅ Got FRESH table state from block ${blockNumber}:`, state);
-          let tableStruct: {
-            dealerIndex: bigint;
-            smallBlind: bigint;
-            bigBlind: bigint;
-          } | null = null;
-          try {
-            tableStruct = await contract.tables(tableId, { blockTag: "latest" });
-          } catch {}
           
+          // Query GameFinished event to get winner when game is finished (state === 2)
           let winner: string | undefined = undefined;
           if (Number(state[0]) === 2) {
             try {
-              const tables = await contract.tables(tableId, { blockTag: "latest" });
-              winner = tables.winner;
+              // Query the GameFinished event to get the winner
+              const filter = contract.filters.GameFinished(tableId);
+              const events = await contract.queryFilter(filter, 0, "latest");
+              
+              if (events.length > 0) {
+                // Get the most recent GameFinished event for this table
+                const latestEvent = events[events.length - 1];
+                // Handle EventLog type (ethers v6)
+                if ('args' in latestEvent && latestEvent.args) {
+                  const args = latestEvent.args;
+                  if (Array.isArray(args)) {
+                    // Array format: [tableId, winner]
+                    winner = args[1] as string;
+                  } else if (typeof args === 'object' && 'winner' in args) {
+                    // Object format: { tableId, winner }
+                    winner = (args as { winner?: string }).winner;
+                  }
+                  if (winner) {
+                    console.log(`🏆 Found winner from GameFinished event: ${winner}`);
+                  }
+                }
+              }
             } catch (error) {
-              console.error('Failed to fetch winner:', error);
+              console.error('Failed to fetch winner from events:', error);
             }
           }
           
@@ -290,9 +341,9 @@ export const usePokerStore = create<PokerStore>()(
               currentRound: state[4],
               isSeated: state[5],
               winner,
-              dealerIndex: tableStruct ? (tableStruct.dealerIndex as bigint) : undefined,
-              smallBlind: tableStruct ? (tableStruct.smallBlind as bigint) : undefined,
-              bigBlind: tableStruct ? (tableStruct.bigBlind as bigint) : undefined,
+              dealerIndex: undefined, // Not available from getTableState
+              smallBlind: undefined, // Not available from getTableState
+              bigBlind: undefined, // Not available from getTableState
               turnStartTime: state[6],
               playerActionTimeout: state[7],
             },
@@ -481,8 +532,22 @@ export const usePokerStore = create<PokerStore>()(
       
       // Fetch revealed cards for a specific player (after showdown)
       fetchRevealedCards: async (tableId, playerAddress) => {
-        const { contractAddress, readonlyProvider: provider } = get();
+        const { contractAddress, readonlyProvider: provider, cachedShowdownData, tableState } = get();
         if (!contractAddress || !provider) return;
+        
+        // If we have cached showdown data, use it instead of querying contract
+        if (cachedShowdownData && cachedShowdownData.revealedCards[playerAddress.toLowerCase()]) {
+          const cachedCards = cachedShowdownData.revealedCards[playerAddress.toLowerCase()];
+          console.log(`🃏 Using cached revealed cards for ${playerAddress}:`, cachedCards);
+          get().addRevealedCards(playerAddress, cachedCards.card1, cachedCards.card2);
+          return;
+        }
+        
+        // Only query contract if state is GameOver (contract requires this)
+        if (tableState?.state !== 2) {
+          console.log(`⏭️ Skipping fetchRevealedCards for ${playerAddress} - state is not GameOver (${tableState?.state}), using cached data if available`);
+          return;
+        }
         
         try {
           const contract = new ethers.Contract(contractAddress, FHEPokerABI.abi, provider);
@@ -493,6 +558,12 @@ export const usePokerStore = create<PokerStore>()(
           get().addRevealedCards(playerAddress, Number(card1), Number(card2));
         } catch (error) {
           console.error(`Failed to fetch revealed cards for ${playerAddress}:`, error);
+          // If contract call fails, try to use cached data as fallback
+          if (cachedShowdownData?.revealedCards[playerAddress.toLowerCase()]) {
+            const cachedCards = cachedShowdownData.revealedCards[playerAddress.toLowerCase()];
+            console.log(`🃏 Using cached revealed cards as fallback for ${playerAddress}:`, cachedCards);
+            get().addRevealedCards(playerAddress, cachedCards.card1, cachedCards.card2);
+          }
         }
       },
       
@@ -568,6 +639,7 @@ export const usePokerStore = create<PokerStore>()(
         // DON'T clear playerActions - they persist until street change
         playersWithDealtCards: new Set(), // Clear dealt cards tracking
         // Keep revealedCards - they survive refreshes (only for showdown)
+        // Keep cachedShowdownData - it persists until new game starts
         lastUpdate: Date.now(), // Force re-render
       }),
     }),
