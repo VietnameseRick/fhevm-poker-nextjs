@@ -400,14 +400,14 @@ export const useFHEPoker = (parameters: {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        // Provide helpful error messages
-        if (errorMessage.includes("BUY_IN_TOO_LOW")) {
+        // Provide helpful error messages (matching contract error codes)
+        if (errorMessage.includes("BLW")) {
           setMessage("❌ Min Buy-In must be at least 20× the Big Blind!");
-        } else if (errorMessage.includes("INVALID_BLINDS")) {
+        } else if (errorMessage.includes("BL")) {
           setMessage("❌ Big Blind must be larger than Small Blind!");
-        } else if (errorMessage.includes("INVALID_MAX_PLAYERS")) {
+        } else if (errorMessage.includes("MP")) {
           setMessage("❌ Max players must be between 2 and 10!");
-        } else if (errorMessage.includes("INVALID_BUY_IN")) {
+        } else if (errorMessage.includes("BI")) {
           setMessage("❌ Buy-In amount must be greater than 0!");
         } else {
           setMessage(`❌ Failed to create table: ${errorMessage}`);
@@ -478,8 +478,9 @@ export const useFHEPoker = (parameters: {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        // Check for specific error messages - player is already seated at this table
-        if (errorMessage.includes("SEATED") || errorMessage.includes("ALREADY_SEATED") || errorMessage.includes("GAME_IN_PROGRESS")) {
+        // Check for specific error messages (matching contract error codes)
+        // "S" = Already seated, "BM" = Buy-in minimum not met, "F" = Table full
+        if (errorMessage.includes("S")) {
           console.log('⚠️ Player already seated at table, setting ID and refreshing state');
           setCurrentTableId(tableId); // Set it anyway so they can see the table
           setMessage("⚠️ You are already seated at this table!");
@@ -490,10 +491,10 @@ export const useFHEPoker = (parameters: {
           
           // Don't throw error - allow the view to switch to game
           return;
-        } else if (errorMessage.includes("TABLE_FULL")) {
+        } else if (errorMessage.includes("F") && !errorMessage.includes("NF")) {
           setMessage("❌ This table is full. Try another table.");
           setCurrentTableId(undefined); // Clear since we're not joining
-        } else if (errorMessage.includes("INSUFFICIENT_BUY_IN")) {
+        } else if (errorMessage.includes("BM")) {
           setMessage("❌ Buy-in amount is too low for this table.");
           setCurrentTableId(undefined); // Clear since we're not joining
         } else {
@@ -851,7 +852,8 @@ export const useFHEPoker = (parameters: {
         console.error('❌ Decrypt cards error:', error);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        const isNotDealtError = errorMessage.includes("CARDS_NOT_DEALT");
+        // Contract error codes: "CND" = Cards not dealt, "NS" = Not seated, "TBL_NF" = Table not found
+        const isNotDealtError = errorMessage.includes("CND");
         const isRelayerError = errorMessage.includes('520') || errorMessage.includes('relayer') || errorMessage.includes('network');
         
         // Retry logic: max 10 attempts (30 seconds total)
@@ -868,9 +870,9 @@ export const useFHEPoker = (parameters: {
           userMessage = '⚠️ Zama relayer is unavailable. Please try again later or contact support.';
         } else if (isNotDealtError) {
           userMessage = '⏳ Cards are being dealt... Please wait a moment and try again.';
-        } else if (errorMessage.includes("NOT_SEATED")) {
+        } else if (errorMessage.includes("NS")) {
           userMessage = "You are not seated at this table";
-        } else if (errorMessage.includes("TABLE_NOT_FOUND")) {
+        } else if (errorMessage.includes("TBL_NF") || errorMessage.includes("NF")) {
           userMessage = "Table not found";
         } else {
           userMessage = `❌ Failed to decrypt: ${errorMessage}`;
@@ -1053,7 +1055,8 @@ export const useFHEPoker = (parameters: {
       } catch (error) {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        const isNotDealtError = errorMessage.includes('COMMUNITY_CARDS_NOT_DEALT');
+        // Contract error codes: "CCND" = Community cards not dealt
+        const isNotDealtError = errorMessage.includes('CCND');
         const isRelayerError = errorMessage.includes('520') || errorMessage.includes('relayer') || errorMessage.includes('network');
         
         // Retry logic: max 10 attempts (30 seconds total)
@@ -1143,12 +1146,10 @@ export const useFHEPoker = (parameters: {
         console.error('❌ leaveTable error:', error);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        if (errorMessage.includes("NOT_SEATED")) {
+        // Contract error codes: "NS" = Not seated, "NO_CHIPS_TO_WITHDRAW" = No chips to withdraw
+        if (errorMessage.includes("NS")) {
           setMessage("⚠️ You are not seated at this table.");
           throw new Error("You are not seated at this table");
-        } else if (errorMessage.includes("CANNOT_LEAVE_DURING_GAME")) {
-          setMessage("❌ Cannot leave table during an active game. Wait for the game to finish.");
-          throw new Error("Cannot leave table during an active game");
         } else if (errorMessage.includes("NO_CHIPS_TO_WITHDRAW")) {
           setMessage("❌ No chips to withdraw.");
           throw new Error("No chips to withdraw");
@@ -1206,18 +1207,25 @@ export const useFHEPoker = (parameters: {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        if (errorMessage.includes("NOT_SEATED")) {
+        // Contract error codes: "NS" = Not seated, "INSUFFICIENT_CHIPS" = Insufficient chips
+        // "MUST_LEAVE_MIN_BUYIN_OR_WITHDRAW_ALL" = Must leave min buy-in or withdraw all
+        // "CANNOT_WITHDRAW_ON_YOUR_TURN" = Cannot withdraw on your turn
+        // "MUST_LEAVE_10X_BIG_BLIND_OR_WITHDRAW_ALL" = Must leave 10x big blind or withdraw all
+        if (errorMessage.includes("NS")) {
           setMessage("⚠️ You are not seated at this table.");
           throw new Error("You are not seated at this table");
-        } else if (errorMessage.includes("CANNOT_WITHDRAW_DURING_GAME")) {
-          setMessage("❌ Cannot withdraw chips during an active game. Wait for the game to finish.");
-          throw new Error("Cannot withdraw chips during an active game");
+        } else if (errorMessage.includes("CANNOT_WITHDRAW_ON_YOUR_TURN")) {
+          setMessage("❌ Cannot withdraw chips during your turn. Wait for your turn to end or fold first.");
+          throw new Error("Cannot withdraw on your turn");
         } else if (errorMessage.includes("INSUFFICIENT_CHIPS")) {
           setMessage("❌ You don't have enough chips to withdraw that amount.");
           throw new Error("Insufficient chips");
         } else if (errorMessage.includes("MUST_LEAVE_MIN_BUYIN_OR_WITHDRAW_ALL")) {
           setMessage("❌ You must leave at least the minimum buy-in amount or withdraw all chips.");
           throw new Error("Must leave minimum buy-in or withdraw all");
+        } else if (errorMessage.includes("MUST_LEAVE_10X_BIG_BLIND_OR_WITHDRAW_ALL")) {
+          setMessage("❌ You must leave at least 10× the Big Blind or withdraw all chips.");
+          throw new Error("Must leave 10x big blind or withdraw all");
         } else {
           setMessage(`❌ Failed to withdraw chips: ${errorMessage}`);
           throw error;
@@ -1271,13 +1279,11 @@ export const useFHEPoker = (parameters: {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        if (errorMessage.includes("NOT_SEATED")) {
+        // Contract error codes: "NS" = Not seated, "ME" = Must send ETH
+        if (errorMessage.includes("NS")) {
           setMessage("⚠️ You are not seated at this table.");
           throw new Error("You are not seated at this table");
-        } else if (errorMessage.includes("CANNOT_ADD_CHIPS_DURING_GAME")) {
-          setMessage("❌ Cannot add chips during an active game. Wait for the game to finish.");
-          throw new Error("Cannot add chips during an active game");
-        } else if (errorMessage.includes("MUST_SEND_ETH")) {
+        } else if (errorMessage.includes("ME")) {
           setMessage("❌ You must send ETH to add chips.");
           throw new Error("Must send ETH to add chips");
         } else {
@@ -1293,33 +1299,15 @@ export const useFHEPoker = (parameters: {
   );
 
   // Check if FHE decryption is pending during showdown
+  // Note: The contract doesn't expose isDecryptionPending as a public function
+  // This function is kept for API compatibility but always returns null
   const checkDecryptionPending = useCallback(
     async (tableId: bigint): Promise<{ isPending: boolean; requestId: bigint } | null> => {
-      if (!pokerContract.address || !provider) return null;
-
-      try {
-        const contract = new ethers.Contract(
-          pokerContract.address,
-          pokerContract.abi,
-          provider
-        );
-
-        // Check if function exists (might be old contract)
-        if (typeof contract.isDecryptionPending !== 'function') {
-          console.warn('⚠️ [Showdown] isDecryptionPending not available (old contract?)');
-          return null;
-        }
-
-        const [isPending, requestId] = await contract.isDecryptionPending(tableId);
-        console.log(`🔍 [Showdown] Decryption pending status:`, { isPending, requestId: requestId.toString() });
-        
-        return { isPending, requestId };
-      } catch (error) {
-        console.warn('⚠️ [Showdown] Failed to check decryption pending:', error);
-        return null;
-      }
+      // Contract doesn't expose isDecryptionPending - decryption status is handled internally
+      // We can infer decryption status from game state transitions instead
+      return null;
     },
-    [pokerContract, provider]
+    []
   );
 
   // Track WebSocket connection status

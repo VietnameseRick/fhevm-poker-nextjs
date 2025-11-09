@@ -426,7 +426,7 @@ export const FHEPokerABI = {
         },
         {
           "indexed": false,
-          "internalType": "enum FHEDecryptionCallbacks.BettingStreet",
+          "internalType": "enum TableManager.BettingStreet",
           "name": "newStreet",
           "type": "uint8"
         }
@@ -911,7 +911,7 @@ export const FHEPokerABI = {
       "name": "getCommunityCards",
       "outputs": [
         {
-          "internalType": "enum FHEDecryptionCallbacks.BettingStreet",
+          "internalType": "enum TableManager.BettingStreet",
           "name": "currentStreet",
           "type": "uint8"
         },
@@ -974,7 +974,7 @@ export const FHEPokerABI = {
       "name": "getCurrentStreet",
       "outputs": [
         {
-          "internalType": "enum FHEDecryptionCallbacks.BettingStreet",
+          "internalType": "enum TableManager.BettingStreet",
           "name": "",
           "type": "uint8"
         }
@@ -1111,10 +1111,64 @@ export const FHEPokerABI = {
           "type": "uint256"
         }
       ],
+      "name": "getTableInfo",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "internalType": "enum TableManager.GameState",
+          "name": "state",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint256",
+          "name": "minBuyIn",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "maxPlayers",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "pot",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "currentBet",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "smallBlind",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "bigBlind",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        }
+      ],
       "name": "getTableState",
       "outputs": [
         {
-          "internalType": "enum FHEDecryptionCallbacks.GameState",
+          "internalType": "enum TableManager.GameState",
           "name": "state",
           "type": "uint8"
         },
@@ -1219,6 +1273,19 @@ export const FHEPokerABI = {
       "name": "leaveTable",
       "outputs": [],
       "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "nextTableId",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     },
     {

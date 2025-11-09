@@ -70,7 +70,7 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
         const results = await Promise.all(
           chunk.map(async (id) => {
             try {
-              const t: any = await contract.tables(id);
+              const t: any = await contract.getTableInfo(id);
               // t fields based on ABI order
               return {
                 id,

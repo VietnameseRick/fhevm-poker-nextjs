@@ -458,7 +458,8 @@ export const usePokerStore = create<PokerStore>()(
             });
           } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            if (errorMessage.includes('COMMUNITY_CARDS_NOT_DEALT')) {
+            // Contract error code: "CCND" = Community cards not dealt
+            if (errorMessage.includes('CCND')) {
               // Preflop - cards not dealt yet
               set({
                 communityCards: {
