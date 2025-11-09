@@ -426,7 +426,7 @@ export const FHEPokerABI = {
         },
         {
           "indexed": false,
-          "internalType": "enum FHEPoker.BettingStreet",
+          "internalType": "enum FHEDecryptionCallbacks.BettingStreet",
           "name": "newStreet",
           "type": "uint8"
         }
@@ -521,8 +521,188 @@ export const FHEPokerABI = {
           "type": "bytes"
         }
       ],
-      "name": "_decryptCallback",
-      "outputs": [],
+      "name": "_allCommunityCardsCallback",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_flopCallback",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_riverCallback",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_showdownCallback1Player",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_showdownCallback2Players",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_showdownCallbackMultiplePlayers",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_turnCallback",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
       "stateMutability": "nonpayable",
       "type": "function"
     },
@@ -660,7 +840,7 @@ export const FHEPokerABI = {
       "name": "evaluateHand",
       "outputs": [
         {
-          "internalType": "enum FHEPoker.HandRank",
+          "internalType": "enum FHEDecryptionCallbacks.HandRank",
           "name": "rank",
           "type": "uint8"
         },
@@ -731,7 +911,7 @@ export const FHEPokerABI = {
       "name": "getCommunityCards",
       "outputs": [
         {
-          "internalType": "enum FHEPoker.BettingStreet",
+          "internalType": "enum FHEDecryptionCallbacks.BettingStreet",
           "name": "currentStreet",
           "type": "uint8"
         },
@@ -794,87 +974,9 @@ export const FHEPokerABI = {
       "name": "getCurrentStreet",
       "outputs": [
         {
-          "internalType": "enum FHEPoker.BettingStreet",
+          "internalType": "enum FHEDecryptionCallbacks.BettingStreet",
           "name": "",
           "type": "uint8"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "tableId",
-          "type": "uint256"
-        }
-      ],
-      "name": "getDecryptedCommunityCards",
-      "outputs": [
-        {
-          "internalType": "uint32",
-          "name": "flopCard1",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "flopCard2",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "flopCard3",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "turnCard",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "riverCard",
-          "type": "uint32"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "tableId",
-          "type": "uint256"
-        }
-      ],
-      "name": "getDecryptedCommunityCardsLive",
-      "outputs": [
-        {
-          "internalType": "uint32",
-          "name": "flopCard1",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "flopCard2",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "flopCard3",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "turnCard",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "riverCard",
-          "type": "uint32"
         }
       ],
       "stateMutability": "view",
@@ -1012,7 +1114,7 @@ export const FHEPokerABI = {
       "name": "getTableState",
       "outputs": [
         {
-          "internalType": "enum FHEPoker.GameState",
+          "internalType": "enum FHEDecryptionCallbacks.GameState",
           "name": "state",
           "type": "uint8"
         },
@@ -1101,35 +1203,6 @@ export const FHEPokerABI = {
           "type": "uint256"
         }
       ],
-      "name": "isDecryptionPending",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "isPending",
-          "type": "bool"
-        },
-        {
-          "internalType": "uint256",
-          "name": "requestId",
-          "type": "uint256"
-        },
-        {
-          "internalType": "enum FHEPoker.DecryptionType",
-          "name": "decType",
-          "type": "uint8"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "tableId",
-          "type": "uint256"
-        }
-      ],
       "name": "joinTable",
       "outputs": [],
       "stateMutability": "payable",
@@ -1146,19 +1219,6 @@ export const FHEPokerABI = {
       "name": "leaveTable",
       "outputs": [],
       "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "nextTableId",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -1203,200 +1263,6 @@ export const FHEPokerABI = {
       "name": "skipTimedOutPlayer",
       "outputs": [],
       "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "name": "tables",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "id",
-          "type": "uint256"
-        },
-        {
-          "internalType": "enum FHEPoker.GameState",
-          "name": "state",
-          "type": "uint8"
-        },
-        {
-          "internalType": "uint256",
-          "name": "minBuyIn",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "maxPlayers",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "currentRound",
-          "type": "uint256"
-        },
-        {
-          "internalType": "address",
-          "name": "winner",
-          "type": "address"
-        },
-        {
-          "internalType": "uint256",
-          "name": "pot",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "currentBet",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "currentPlayerIndex",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "dealerIndex",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "smallBlind",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "bigBlind",
-          "type": "uint256"
-        },
-        {
-          "internalType": "enum FHEPoker.BettingStreet",
-          "name": "currentStreet",
-          "type": "uint8"
-        },
-        {
-          "internalType": "euint32",
-          "name": "flopCard1",
-          "type": "bytes32"
-        },
-        {
-          "internalType": "euint32",
-          "name": "flopCard2",
-          "type": "bytes32"
-        },
-        {
-          "internalType": "euint32",
-          "name": "flopCard3",
-          "type": "bytes32"
-        },
-        {
-          "internalType": "euint32",
-          "name": "turnCard",
-          "type": "bytes32"
-        },
-        {
-          "internalType": "euint32",
-          "name": "riverCard",
-          "type": "bytes32"
-        },
-        {
-          "internalType": "uint8",
-          "name": "flopCard1DeckIndex",
-          "type": "uint8"
-        },
-        {
-          "internalType": "uint8",
-          "name": "flopCard2DeckIndex",
-          "type": "uint8"
-        },
-        {
-          "internalType": "uint8",
-          "name": "flopCard3DeckIndex",
-          "type": "uint8"
-        },
-        {
-          "internalType": "uint8",
-          "name": "turnCardDeckIndex",
-          "type": "uint8"
-        },
-        {
-          "internalType": "uint8",
-          "name": "riverCardDeckIndex",
-          "type": "uint8"
-        },
-        {
-          "internalType": "bool",
-          "name": "communityCardsDealt",
-          "type": "bool"
-        },
-        {
-          "internalType": "uint8",
-          "name": "deckSize",
-          "type": "uint8"
-        },
-        {
-          "internalType": "uint8",
-          "name": "nextCardIndex",
-          "type": "uint8"
-        },
-        {
-          "internalType": "uint32",
-          "name": "decryptedFlopCard1",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "decryptedFlopCard2",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "decryptedFlopCard3",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "decryptedTurnCard",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint32",
-          "name": "decryptedRiverCard",
-          "type": "uint32"
-        },
-        {
-          "internalType": "uint256",
-          "name": "decryptionRequestId",
-          "type": "uint256"
-        },
-        {
-          "internalType": "bool",
-          "name": "isDecryptionPending",
-          "type": "bool"
-        },
-        {
-          "internalType": "enum FHEPoker.DecryptionType",
-          "name": "pendingDecryptionType",
-          "type": "uint8"
-        },
-        {
-          "internalType": "uint256",
-          "name": "playerActionTimeout",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "turnStartTime",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "view",
       "type": "function"
     },
     {
