@@ -35,31 +35,49 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
   }, [contractAddress, provider]);
 
   const loadTables = async () => {
-    if (!contract) return;
+    if (!contract) {
+      console.warn('⚠️ TableBrowser: No contract available');
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
-      // Try to query tables starting from 1 until we find ones that don't exist
-      // We'll query up to 100 tables max for safety
-      const maxTablesToCheck = 100;
-      const ids: bigint[] = [];
+      console.log('📊 Loading tables from contract...');
+      console.log('📊 Contract address:', contractAddress);
       
-      // First, quickly check which tables exist
-      for (let i = 1n; i <= BigInt(maxTablesToCheck); i++) {
+      // Since nextTableId is internal, we'll try loading tables incrementally
+      // Start from table ID 1 and keep trying until we hit an error
+      const ids: bigint[] = [];
+      let currentId = 1n;
+      const maxTables = 100; // Safety limit to prevent infinite loops
+      
+      // Try to find all existing tables by querying incrementally
+      for (let i = 0; i < maxTables; i++) {
         try {
-          await contract.tables(i);
-          ids.push(i);
-        } catch {
-          // Table doesn't exist, stop checking
-          break;
+          await contract.getTableState(currentId);
+          // If we get here, the table exists
+          ids.push(currentId);
+          currentId++;
+        } catch (err: unknown) {
+          // Check if it's a "table not found" error
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          if (errorMsg.includes('NF') || errorMsg.includes('TABLE_NOT_FOUND') || errorMsg.includes('execution reverted')) {
+            // Table doesn't exist, we've found all tables
+            break;
+          }
+          // Some other error, skip this table and continue
+          console.warn(`⚠️ Error checking table ${currentId}:`, err);
+          currentId++;
         }
       }
-
+      
+      console.log(`📊 Found ${ids.length} table(s)`);
+      
       if (ids.length === 0) {
         setTables([]);
         return;
       }
-
+      
       const chunks: bigint[][] = [];
       const chunkSize = 20;
       for (let i = 0; i < ids.length; i += chunkSize) {
@@ -68,54 +86,88 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
 
       const rows: TableRow[] = [];
       for (const chunk of chunks) {
-        // Fetch each table struct
-        // Note: public struct returns many fields; we only map what we need
-        /* eslint-disable @typescript-eslint/no-explicit-any */
+        // Fetch table state for each table
         const results = await Promise.all(
           chunk.map(async (id) => {
             try {
-              const t: any = await contract.tables(id);
-              // t fields based on ABI order
+              const state = await contract.getTableState(id);
               return {
                 id,
-                state: Number(t.state),
-                minBuyIn: t.minBuyIn as bigint,
-                maxPlayers: t.maxPlayers as bigint,
-                smallBlind: t.smallBlind as bigint,
-                bigBlind: t.bigBlind as bigint,
+                state: Number(state[0]),
+                numPlayers: state[1],
+                maxPlayers: state[2],
+                minBuyIn: state[3],
               };
-            } catch {
+            } catch (err) {
+              console.warn(`⚠️ Failed to load table ${id}:`, err);
               return null;
             }
           })
         );
-        results.forEach((r) => {
-          if (r) rows.push({
-            id: r.id,
-            state: r.state,
-            numPlayers: 0n, // will fill below
-            maxPlayers: r.maxPlayers,
-            smallBlind: r.smallBlind,
-            bigBlind: r.bigBlind,
-            minBuyIn: r.minBuyIn,
-          });
+        
+        // Fetch blinds from TableCreated events
+        const withBlinds = await Promise.all(
+          results.map(async (r) => {
+            if (!r) return null;
+            try {
+              // Query TableCreated event to get blinds
+              const filter = contract.filters.TableCreated(r.id);
+              const events = await contract.queryFilter(filter, 0, "latest");
+              
+              if (events.length > 0) {
+                const event = events[0]; // Should only be one TableCreated event per table
+                // Type guard to check if event is EventLog with args
+                if ('args' in event && event.args && event.args.length >= 4) {
+                  // TableCreated event: tableId, creator, minBuyIn, maxPlayers
+                  // But we need smallBlind and bigBlind which aren't in the event
+                  // For now, we'll set them to 0 and they won't be displayed
+                  return {
+                    ...r,
+                    smallBlind: 0n,
+                    bigBlind: 0n,
+                  };
+                }
+              }
+              return {
+                ...r,
+                smallBlind: 0n,
+                bigBlind: 0n,
+              };
+            } catch (err) {
+              console.warn(`⚠️ Failed to fetch blinds for table ${r.id}:`, err);
+              return {
+                ...r,
+                smallBlind: 0n,
+                bigBlind: 0n,
+              };
+            }
+          })
+        );
+        
+        withBlinds.forEach((r) => {
+          if (r) rows.push(r);
         });
       }
 
-      // Fetch numPlayers via getTableState (returns player count)
-      const withCounts = await Promise.all(rows.map(async (row) => {
-        try {
-          const state = await contract.getTableState(row.id);
-          const numPlayers: bigint = state[1];
-          return { ...row, numPlayers } as TableRow;
-        } catch {
-          return row;
-        }
-      }));
-
-      setTables(withCounts);
+      console.log(`✅ Loaded ${rows.length} table(s)`);
+      setTables(rows);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load tables");
+      console.error('❌ Failed to load tables:', e);
+      
+      // Provide more helpful error messages
+      const errorMessage = e instanceof Error ? e.message : "Failed to load tables";
+      
+      if (errorMessage.includes("execution reverted") || errorMessage.includes("CALL_EXCEPTION")) {
+        setError(
+          "⚠️ Contract call failed. This usually happens when:\n" +
+          "• The contract was redeployed (restart your local node and redeploy)\n" +
+          "• You're on the wrong network\n" +
+          "• The contract address in FHEPokerAddresses.ts is incorrect\n\n" +
+          `Contract address: ${contractAddress}`
+        );
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -123,6 +175,7 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
 
   useEffect(() => {
     if (isOpen) {
+      console.log('📊 TableBrowser opened', { contractAddress, hasProvider: !!provider, hasContract: !!contract });
       loadTables();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,12 +203,17 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
         {contract && (
           <div className="p-4">
             {error && (
-              <div className="mb-3 p-3 rounded border-l-4 border-red-500 bg-red-500/10 text-red-300 text-sm">{error}</div>
+              <div className="mb-3 p-3 rounded border-l-4 border-red-500 bg-red-500/10 text-red-300 text-sm whitespace-pre-line">
+                {error}
+              </div>
             )}
             {isLoading ? (
               <div className="py-12 text-center text-slate-300">Loading tables...</div>
             ) : tables.length === 0 ? (
-              <div className="py-12 text-center text-slate-300">No tables found.</div>
+              <div className="py-12 text-center">
+                <p className="text-slate-300 mb-4">No tables found.</p>
+                <p className="text-slate-400 text-sm">Create a new table to get started!</p>
+              </div>
             ) : (
               <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
                 <table className="min-w-full text-sm">
@@ -175,7 +233,11 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
                         <td className="px-3 py-2 text-white font-mono">#{t.id.toString()}</td>
                         <td className="px-3 py-2"><span className="text-slate-300">{GAME_STATES[t.state] || t.state}</span></td>
                         <td className="px-3 py-2"><span className="text-slate-300">{t.numPlayers.toString()}/{t.maxPlayers.toString()}</span></td>
-                        <td className="px-3 py-2"><span className="text-slate-300">{formatEth(t.smallBlind)} / {formatEth(t.bigBlind)} ETH</span></td>
+                        <td className="px-3 py-2"><span className="text-slate-300">
+                          {t.smallBlind > 0n && t.bigBlind > 0n 
+                            ? `${formatEth(t.smallBlind)} / ${formatEth(t.bigBlind)} ETH`
+                            : 'N/A'}
+                        </span></td>
                         <td className="px-3 py-2"><span className="text-slate-300">{formatEth(t.minBuyIn)} ETH</span></td>
                         <td className="px-3 py-2 text-right">
                           <button

@@ -60,17 +60,31 @@ class KernelEIP1193Provider {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private filters: Map<string, any> = new Map();
   private filterIdCounter: number = 0;
+  // Store the original Privy EOA provider for raw ECDSA signatures (FHEVM compatibility)
+  private originalPrivyProvider?: Eip1193Provider;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(kernelClient: any, publicClient: any, chainId: number) {
+  constructor(kernelClient: any, publicClient: any, chainId: number, originalPrivyProvider?: Eip1193Provider) {
     this.kernelClient = kernelClient;
     this.publicClient = publicClient;
     this.chainId = chainId;
+    this.originalPrivyProvider = originalPrivyProvider;
+  }
+
+  /**
+   * Get the raw Privy EOA provider for FHEVM signature generation
+   * This bypasses the Kernel wrapping logic to produce standard ECDSA signatures
+   */
+  getRawProvider(): Eip1193Provider {
+    if (!this.originalPrivyProvider) {
+      throw new Error("Original Privy provider not available.");
+    }
+    return this.originalPrivyProvider;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async request({ method, params }: { method: string; params?: any[] }): Promise<any> {
-    console.log('🔵 KernelEIP1193Provider.request:', method, params);
+    // console.log('🔵 KernelEIP1193Provider.request:', method, params);
 
     switch (method) {
       case 'eth_requestAccounts':
@@ -123,9 +137,101 @@ class KernelEIP1193Provider {
         }
       
       case 'eth_signTypedData_v4':
+        // ==========================================
+        // 🔐 FHEVM DECRYPTION SIGNATURE - SMART ACCOUNT SUPPORT
+        // ==========================================
+        // CRITICAL: FHEVM relayer requires RAW ECDSA signatures (65 bytes).
+        // Kernel's signTypedData wraps signatures for UserOps (87 bytes) which is incompatible.
+        // 
+        // Solution: Use the original Privy EOA provider directly to get raw ECDSA signatures
+        // while still maintaining smart account functionality for transactions.
+        // ==========================================
+        console.log('✍️ Signing EIP-712 typed data:', method);
+        if (!params || params.length < 2) {
+          throw new Error('eth_signTypedData_v4 requires address and typed data parameters');
+        }
+        
+        const typedDataStr = params[1];
+        const typedData = typeof typedDataStr === 'string' ? JSON.parse(typedDataStr) : typedDataStr;
+        
+        console.log('📝 Typed data to sign:', {
+          domain: typedData.domain,
+          types: Object.keys(typedData.types),
+          primaryType: typedData.primaryType,
+          smartAccountAddress: this.kernelClient.account.address,
+        });
+        
+        // Use the original Privy EOA provider for raw ECDSA signatures
+        if (this.originalPrivyProvider) {
+          console.log('🔑 Using original Privy EOA provider for raw ECDSA signature (FHEVM compatible)');
+          console.log('🔑 Smart account address:', this.kernelClient.account.address);
+          
+          try {
+            console.log('📦 Creating ethers provider from Privy EOA provider...');
+            const rawEthersProvider = new ethers.BrowserProvider(this.originalPrivyProvider, {
+              chainId: this.chainId,
+              name: 'sepolia',
+              ensAddress: undefined,
+            });
+            console.log('👤 Getting signer from ethers provider...');
+            const rawSigner = await rawEthersProvider.getSigner();
+            console.log('✅ Got signer:', await rawSigner.getAddress());
+            
+            console.log('✍️ Signing typed data with EOA signer...');
+            
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { EIP712Domain, ...typesWithoutDomain } = typedData.types;
+            
+            console.log('📝 Types being signed:', {
+              originalTypes: Object.keys(typedData.types),
+              filteredTypes: Object.keys(typesWithoutDomain),
+            });
+            
+            const rawSignature = await rawSigner.signTypedData(
+              typedData.domain,
+              typesWithoutDomain,
+              typedData.message
+            );
+            
+            console.log('✅ Raw ECDSA signature created via Privy EOA:', {
+              signature: rawSignature.substring(0, 20) + '...',
+              length: rawSignature.length,
+              isStandardLength: rawSignature.length === 132,
+            });
+            
+            return rawSignature;
+          } catch (eoaError) {
+            console.error('❌ Error signing with Privy EOA provider:', eoaError);
+            throw eoaError;
+          }
+        } else {
+          console.warn('⚠️ originalPrivyProvider is not available:', {
+            hasProvider: !!this.originalPrivyProvider,
+            type: typeof this.originalPrivyProvider,
+          });
+        }
+        
+        // Fallback: Try Kernel's signTypedData (will have wrapped signature)
+        console.warn('⚠️ No Privy EOA provider available, using Kernel client (may return wrapped signature)');
+        const kernelSignature = await this.kernelClient.signTypedData({
+          domain: typedData.domain,
+          types: typedData.types,
+          primaryType: typedData.primaryType,
+          message: typedData.message,
+          account: this.kernelClient.account,
+        });
+        
+        console.log('✅ Kernel signature created:', {
+          signature: kernelSignature.substring(0, 20) + '...',
+          length: kernelSignature.length,
+          isStandardLength: kernelSignature.length === 132,
+        });
+        
+        return kernelSignature;
+      
       case 'personal_sign':
-        // For signing, we'll use the underlying EOA wallet
-        console.log('✍️ Signing with smart account:', method);
+        // For message signing, use signMessage
+        console.log('✍️ Signing message with smart account:', method);
         const message = params?.[0] || '';
         const signature = await this.kernelClient.signMessage({
           message: typeof message === 'string' ? message : message,
@@ -202,12 +308,12 @@ class KernelEIP1193Provider {
         // Use smart account address for 'from' if not explicitly provided
         const fromAddress = callData.from || this.kernelClient.account.address;
         try {
-          console.log('🔵 eth_call:', {
-            from: fromAddress,
-            to: callData.to,
-            data: callData.data?.substring(0, 10),
-            blockTag: params[1],
-          });
+          // console.log('🔵 eth_call:', {
+          //   from: fromAddress,
+          //   to: callData.to,
+          //   data: callData.data?.substring(0, 10),
+          //   blockTag: params[1],
+          // });
           
           // Handle block parameter - it can be "latest", "earliest", "pending", or a hex number
           const blockParam: Record<string, unknown> = {};
@@ -593,7 +699,13 @@ export function useSmartAccount() {
         console.log('✅ Created Kernel Client');
 
         // Create custom EIP-1193 provider for the smart account
-        const smartAccountProvider = new KernelEIP1193Provider(kernelClient, publicClient, config.chainId) as unknown as Eip1193Provider;
+        // Pass the original Privy EOA provider for raw ECDSA signatures (FHEVM)
+        const smartAccountProvider = new KernelEIP1193Provider(
+          kernelClient, 
+          publicClient, 
+          config.chainId, 
+          eoaProvider  // Pass original Privy EOA provider for raw ECDSA signatures
+        ) as unknown as Eip1193Provider;
         
         // Create ethers provider and signer from smart account
         const ethersProvider = new ethers.BrowserProvider(smartAccountProvider);

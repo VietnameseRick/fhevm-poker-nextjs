@@ -3,7 +3,7 @@
 /**
  * FHE Poker Game Component
  * 
- * Copyright (c) 2025 vietnameserick (Tra Anh Khoi)
+ * Copyright (c) 2025 0xDRick (Tra Anh Khoi)
  * Licensed under Business Source License 1.1 (see LICENSE-BSL)
  */
 
@@ -11,6 +11,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { ethers } from "ethers";
 import { useFhevm } from "@fhevm/react";
 import { useFHEPoker } from "@/hooks/useFHEPoker";
+import { useWinnerPolling } from "@/hooks/useWinnerPolling";
 import { PokerTable } from "./PokerTable";
 import { BettingControls } from "./BettingControls";
 import { WalletHeader } from "./WalletHeader";
@@ -22,11 +23,11 @@ import { usePokerStore } from "@/stores/pokerStore";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-const InlineShowdown = lazy(() => import("./InlineShowdown").then(mod => ({ default: mod.InlineShowdown })));
 const TableBrowser = lazy(() => import("./TableBrowser").then(mod => ({ default: mod.TableBrowser })));
 const FundingRequiredModal = lazy(() => import("./FundingRequiredModal").then(mod => ({ default: mod.FundingRequiredModal })));
 const ChipsManagementModal = lazy(() => import("./ChipsManagementModal").then(mod => ({ default: mod.ChipsManagementModal })));
-const ShuffleAnimation = lazy(() => import("./ShuffleAnimation").then(mod => ({ default: mod.ShuffleAnimation })));
+// const ShuffleAnimation = lazy(() => import("./ShuffleAnimation").then(mod => ({ default: mod.ShuffleAnimation }))); // Temporarily disabled
+const Showdown = lazy(() => import("./Showdown").then(mod => ({ default: mod.Showdown })));
 
 const GAME_STATES = ["Waiting for Players", "Playing", "Finished"];
 const BETTING_STREETS = ["Pre-Flop", "Flop", "Turn", "River", "Showdown"];
@@ -54,15 +55,9 @@ export function PokerGame() {
   } = useSmartAccount();
 
   useEffect(() => {
-    console.log('Chain status:', { authenticated, chainId, isCorrectChain });
-
     if (authenticated && chainId && !isCorrectChain) {
-      console.log(`⚠️ Wrong chain detected: ${chainId}, switching to Sepolia (11155111)...`);
+      console.log(`⚠️ Wrong chain detected: ${chainId}, switching to Sepolia`);
       switchToSepolia();
-    } else if (authenticated && chainId && isCorrectChain) {
-      console.log(`✅ Already on correct chain: ${chainId}`);
-    } else if (authenticated && !chainId) {
-      console.log('⏳ Waiting for chain ID...');
     }
   }, [authenticated, chainId, isCorrectChain, switchToSepolia]);
 
@@ -89,15 +84,67 @@ export function PokerGame() {
     ethersReadonlyProvider: ethersProvider,
     sameChain,
     sameSigner,
+    smartAccountAddress, // Pass smart account address for FHEVM signature
+    eoaAddress, // Pass EOA address for decryption
   });
 
-  // Use Zustand store for all game state
-  const store = usePokerStore();
-  const pendingTransaction = store.pendingTransaction;
-  const storeIsLoading = store.isLoading;
+  // Get cached showdown data from store (reactive)
+  const cachedShowdownData = usePokerStore(state => state.cachedShowdownData);
 
-  // Get user address early for use in effects
-  const yourAddress = (isSmartAccount ? smartAccountAddress : eoaAddress) || "";
+  // Poll for winner determination at showdown
+  const { isWaitingForWinner } = useWinnerPolling(
+    poker.currentTableId || null,
+    poker.communityCards?.currentStreet,
+    poker.tableState?.state === 1 // Only poll when game is Playing
+  );
+
+  const pendingTransaction = usePokerStore(state => state.pendingTransaction);
+  const storeIsLoading = usePokerStore(state => state.isLoading);
+
+  // Smart polling during Showdown using isDecryptionPending
+  useEffect(() => {
+    if (!poker.currentTableId || !poker.communityCards) return;
+    
+    // Poll during Showdown to check decryption status and catch state transition
+    if (poker.communityCards.currentStreet === 4 && poker.tableState?.state === 1) {
+      const pollInterval = setInterval(async () => {
+        if (!poker.currentTableId) return;
+        
+        // Check if FHE decryption is pending
+        await poker.checkDecryptionPending();
+        
+        // Always refresh table state to catch when game finishes
+        poker.refreshTableState(poker.currentTableId);
+      }, 2000); // Poll every 2 seconds
+      
+      return () => clearInterval(pollInterval);
+    }
+  }, [poker]);
+
+  // Track balances before showdown for winner calculation
+  // NO BALANCE TRACKING - We'll use totalBet from contract instead
+  // Winner gets pot, losers lost their totalBet
+
+  // Auto-show showdown when reaching showdown street OR when game finishes OR when cached showdown data exists
+  useEffect(() => {
+    // Show showdown modal when:
+    // 1. Reaching showdown street (street 4) - immediate feedback
+    // 2. OR when game finishes (state 2) with a winner
+    // 3. OR when cached showdown data exists (even if state is WaitingForPlayers)
+    const isShowdownStreet = poker.communityCards?.currentStreet === 4;
+    const isGameFinished = poker.tableState?.state === 2 && poker.tableState.winner;
+    const hasCachedShowdown = cachedShowdownData !== null;
+    
+    if (isShowdownStreet || isGameFinished || hasCachedShowdown) {
+      setShowShowdown(true);
+    }
+    
+    // Hide showdown when a new round starts (back to state 0 or pre-flop) AND no cached data
+    // Keep showing if cached data exists even when state is WaitingForPlayers
+    if (!hasCachedShowdown && (poker.tableState?.state === 0 || (poker.tableState?.state === 1 && poker.communityCards?.currentStreet === 0))) {
+      setShowShowdown(false);
+    }
+  }, [poker.communityCards?.currentStreet, poker.tableState?.state, poker.tableState?.winner, cachedShowdownData]);
 
   const [showCreateTable, setShowCreateTable] = useState(true);
   const [showJoinTable, setShowJoinTable] = useState(false);
@@ -231,20 +278,10 @@ export function PokerGame() {
   const [eoaBalance, setEoaBalance] = useState<bigint>(0n);
   const [showChipsManagementModal, setShowChipsManagementModal] = useState(false);
   const [chipsModalInitialTab, setChipsModalInitialTab] = useState<"withdraw" | "add" | "leave">("add");
-  const [isDecrypting, setIsDecrypting] = useState(false);
+  const [showShowdown, setShowShowdown] = useState(false);
 
-  useEffect(() => {
-    if (yourAddress) {
-      console.log('🔍 Address Debug:', {
-        yourAddress,
-        smartAccountAddress,
-        eoaAddress,
-        isSmartAccount,
-        players: store.players,
-        playersCount: store.players.length,
-      });
-    }
-  }, [yourAddress, smartAccountAddress, eoaAddress, isSmartAccount, store.players]);
+  const yourAddress = address || "";
+
   useEffect(() => {
     const updateViewport = () => {
       if (typeof window === "undefined") return;
@@ -262,10 +299,17 @@ export function PokerGame() {
   }, []);
 
   useEffect(() => {
-    if (!authenticated || !yourAddress || !store.currentTableId || !store.tableState) {
+    // Only auto-switch to game view if:
+    // 1. User is authenticated
+    // 2. User address is available
+    // 3. Table ID is set
+    // 4. Table state is loaded
+    // 5. User is seated or in players list
+    if (!authenticated || !yourAddress || !poker.currentTableId || !poker.tableState) {
       return;
     }
 
+    // Don't switch if already in game view
     if (currentView === "game") {
       return;
     }
@@ -274,14 +318,11 @@ export function PokerGame() {
       addr => addr.toLowerCase() === yourAddress.toLowerCase()
     );
 
-    const isSeated = store.tableState?.isSeated;
-    if (isSeated || isInPlayersList) {
-      console.log('🎮 Auto-navigating to game view:', {
-        tableId: store.currentTableId.toString(),
-        isSeated,
-        isInPlayersList,
-        gameState: store.tableState.state,
-      });
+    const isSeated = poker.isSeated;
+    
+    // Only switch to game view if player is confirmed to be seated and table state is fully loaded
+    if ((isSeated || isInPlayersList) && poker.tableState) {
+      console.log('✅ Auto-switching to game view - player is seated and table state loaded');
       setCurrentView("game");
     }
   }, [
@@ -295,36 +336,63 @@ export function PokerGame() {
     currentView,
   ]);
 
-  // Clear player actions when betting street changes or game state changes
+  // Clear player actions only when new betting round starts (community cards dealt)
+  const prevStreetRef = useRef<number | undefined>(undefined);
+  
   useEffect(() => {
-    const currentStreet = store.communityCards?.currentStreet;
-    const gameState = store.tableState?.state;
+    const currentStreet = poker.communityCards?.currentStreet;
     
-    // Clear actions when:
-    // 1. Betting street advances (pre-flop -> flop -> turn -> river)
-    // 2. Game state changes (waiting -> playing -> finished)
-    if (currentStreet !== undefined || gameState !== undefined) {
+    // Clear actions only when street advances (new cards dealt)
+    if (prevStreetRef.current !== undefined && currentStreet !== prevStreetRef.current) {
       usePokerStore.getState().clearPlayerActions();
     }
-  }, [store.communityCards?.currentStreet, store.tableState?.state]);
+    
+    prevStreetRef.current = currentStreet;
+  }, [poker.communityCards?.currentStreet]);
 
   const handleCreateTable = async () => {
     await poker.createTable(minBuyInInput, parseInt(maxPlayersInput), smallBlindInput, bigBlindInput);
-    
-    // Wait for table ID to be set by event listener
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    if (store.currentTableId) {
-      console.log(`✅ Table ${store.currentTableId} created, navigating...`);
-      router.push(`/play/${store.currentTableId}`);
-    } else {
-      console.log('✅ Table created, Wagmi will handle state updates');
-    }
   };
 
   const handleJoinTable = async () => {
     const tableId = BigInt(tableIdInput || store.currentTableId?.toString() || "0");
     const buyInAmount = ethers.parseEther(buyInAmountInput);
+    
+    console.log('🎯 handleJoinTable called for table', tableId.toString(), 'with yourAddress:', yourAddress);
+    
+    // First, check if we're already seated at this table
+    try {
+      console.log('🔍 Checking if already seated at table', tableId.toString());
+      
+      // Set the table ID first so refreshTableState updates the correct table
+      poker.setCurrentTableId(tableId);
+      await poker.refreshTableState(tableId);
+      
+      // Check if player is already in the game by checking the store after refresh
+      console.log('📊 Current players:', poker.players);
+      const isAlreadySeated = yourAddress && poker.players.some(
+        addr => addr.toLowerCase() === yourAddress.toLowerCase()
+      );
+      
+      console.log('🔍 Already seated check:', {
+        isAlreadySeated,
+        yourAddress,
+        players: poker.players,
+      });
+      
+      if (isAlreadySeated) {
+        console.log('✅ Already seated at table', tableId.toString(), '- loading game view');
+        setCurrentView("game");
+        return;
+      }
+      
+      console.log('➡️ Not seated yet, proceeding with join...');
+    } catch (error) {
+      console.warn('Could not check if already seated:', error);
+      // Continue with join attempt
+    }
+    
+    // Not seated yet - proceed with join
     if (isSmartAccount && smartAccountAddress && checkBalance) {
       const balance = await checkBalance();
       setCurrentBalance(balance);
@@ -340,12 +408,33 @@ export function PokerGame() {
     try {
       // Join the table (this waits for transaction confirmation)
       await poker.joinTable(tableId, buyInAmountInput);
-      console.log('✅ Join successful, navigating to table...');
-      
-      // Navigate to the table page
-      router.push(`/play/${tableId}`);
+      // Don't set view immediately - let the useEffect handle it after tableState loads
+      console.log('✅ Join table completed, waiting for table state to load...');
     } catch (error) {
       console.error('❌ Failed to join table:', error);
+      
+      // If join fails with "SEAT" error, it means we're already seated
+      // Convert the entire error object to a string to catch nested error messages
+      const errorStr = JSON.stringify(error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      
+      // Check for "SEAT" error in multiple formats:
+      // 1. Plain text: "SEAT"
+      // 2. Hex encoded: 0x5345415400... (SEAT in hex is 0x53454154)
+      const isSeatError = 
+        errorMsg.includes('SEAT') || 
+        errorMsg.includes('5345415400') || // SEAT in hex
+        errorMsg.includes('0x53454154') || // SEAT prefix in hex
+        errorStr.includes('SEAT') || 
+        errorStr.includes('5345415400') || // Check in full error object
+        errorStr.includes('0x53454154');
+      
+      if (isSeatError) {
+        console.log('✅ Already seated (detected via SEAT error) - loading game view');
+        poker.setCurrentTableId(tableId);
+        await poker.refreshTableState(tableId);
+        setCurrentView("game");
+      }
     }
   };
 
@@ -494,12 +583,7 @@ export function PokerGame() {
   }
 
   if (currentView === "game") {
-    if (store.currentTableId === null) {
-      console.log('Game view: currentTableId is undefined', {
-        currentTableId: store.currentTableId,
-        tableState: store.tableState,
-        message: store.message
-      });
+    if (poker.currentTableId === undefined) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
           <div className="text-center">
@@ -539,8 +623,29 @@ export function PokerGame() {
       );
     }
     
-    const playerData = store.players.map((address) => {
-      const playerBettingState = store.allPlayersBettingState[address.toLowerCase()];
+    // Get winner from contract - it's determined immediately at showdown
+    const isFinished = poker.tableState?.state === 2;
+    const isShowdown = poker.communityCards?.currentStreet === 4;
+    const calculatedWinner = poker.tableState?.winner; // Contract determines winner immediately
+    
+    const playerData = poker.players.map((address) => {
+      const playerBettingState = poker.allPlayersBettingState[address.toLowerCase()];
+      const isYou = address.toLowerCase() === yourAddress.toLowerCase();
+      const revealedCards = poker.revealedCards[address.toLowerCase()];
+      
+      // Calculate winnings/losses from pot and bets
+      const isWinner = calculatedWinner?.toLowerCase() === address.toLowerCase();
+      const totalBet = playerBettingState?.totalBet || BigInt(0);
+      const currentPot = poker.lastPot || poker.bettingInfo?.pot || BigInt(0);
+      
+      // Winner gets pot minus their own bet (net gain)
+      // Loser loses their total bet
+      const winnings = isWinner && (isShowdown || isFinished) && currentPot > totalBet 
+        ? currentPot - totalBet 
+        : BigInt(0);
+      const losses = !isWinner && !playerBettingState?.hasFolded && (isShowdown || isFinished) 
+        ? totalBet 
+        : BigInt(0);
 
       return {
         address,
@@ -550,9 +655,13 @@ export function PokerGame() {
         isCurrentPlayer: store.bettingInfo
           ? store.bettingInfo.currentPlayer.toLowerCase() === address.toLowerCase()
           : false,
-        cards: address.toLowerCase() === yourAddress.toLowerCase()
-          ? [store.revealedCards[yourAddress.toLowerCase()]?.card1, store.revealedCards[yourAddress.toLowerCase()]?.card2]
-          : undefined,
+        cards: isYou
+          ? [poker.cards[0]?.clear, poker.cards[1]?.clear]
+          : isFinished && revealedCards
+            ? [revealedCards.card1, revealedCards.card2]
+            : undefined,
+        winnings,
+        losses,
       };
     });
 
@@ -777,42 +886,19 @@ export function PokerGame() {
                 playerState={store.allPlayersBettingState[yourAddress.toLowerCase()]}
                 clear={store.revealedCards[yourAddress.toLowerCase()]?.card1}
                 handleDecryptCards={handleDecryptCards}
-                timeLeft={store.tableState?.turnStartTime ? Number(store.tableState.turnStartTime) : null}
-                minRaise={BigInt(Math.floor(Number(store.tableState?.minBuyIn) * 0.1))}
+                timeLeft={poker.timeRemaining}
                 bigBlind={bigBlindInput}
                 smallBlind={smallBlindInput}
-                showdownOverlay={
-                  store.tableState?.state === 2 && store.tableState?.winner ? (
-                    <Suspense fallback={null}>
-                      <InlineShowdown
-                        winner={store.tableState?.winner}
-                        allPlayers={playerData}
-                        communityCards={
-                          store.decryptedCommunityCards.length > 0
-                            ? store.decryptedCommunityCards.filter(c => c !== 0)
-                            : store.communityCards
-                              ? [
-                                store.communityCards?.flopCard1,
-                                store.communityCards?.flopCard2,
-                                store.communityCards?.flopCard3,
-                                store.communityCards?.turnCard,
-                                store.communityCards?.riverCard,
-                              ].filter((c): c is number => c !== undefined && c !== 0)
-                              : undefined
-                        }
-                        pot={store.lastPot || store.bettingInfo?.pot || BigInt(0)}
-                        tableId={store.currentTableId}
-                        contractAddress={store.contractAddress as `0x${string}`}
-                        provider={store.provider}
-                      />
-                    </Suspense>
-                  ) : null
-                }
+                winnerAddress={calculatedWinner}
+                showdownMinimized={poker.communityCards?.currentStreet === 4 || poker.tableState.state === 2}
+                revealedCards={poker.revealedCards}
               />
 
               {/* Controls */}
               <div className="space-y-4">
-                {isPlaying && (store.tableState?.isSeated || store.allPlayersBettingState[yourAddress.toLowerCase()]) && store.allPlayersBettingState[yourAddress.toLowerCase()] && (
+
+                {/* Betting Controls - Show during active play */}
+                {isPlaying && (poker.isSeated || poker.playerState) && poker.playerState && poker.communityCards?.currentStreet !== 4 && (
                   <>
                     <BettingControls
                       canAct={isYourTurn && !store.allPlayersBettingState[yourAddress.toLowerCase()]?.hasFolded}
@@ -932,14 +1018,66 @@ export function PokerGame() {
             </div>
           )}
 
-          {/* Shuffle Animation - Show when waiting for shuffle */}
-          {store.tableState?.state === 2 && (
+          {/* Showdown - Show when reaching showdown street or game finished */}
+          {poker.contractAddress && showShowdown && (() => {
+            const cachedShowdownData = usePokerStore.getState().cachedShowdownData;
+            const useCachedData = cachedShowdownData !== null;
+            
+            // Use cached data if available, otherwise use current state
+            const showdownWinner = useCachedData ? cachedShowdownData.winner : poker.tableState?.winner;
+            const showdownCommunityCards = useCachedData 
+              ? cachedShowdownData.decryptedCommunityCards.filter((c): c is number => c !== undefined)
+              : (poker.decryptedCommunityCards.length === 5
+                  ? poker.decryptedCommunityCards.filter((c): c is number => c !== undefined)
+                  : []);
+            const showdownPot = useCachedData ? cachedShowdownData.pot : (poker.lastPot || poker.bettingInfo?.pot || BigInt(0));
+            const showdownRevealedCards = useCachedData ? cachedShowdownData.revealedCards : poker.revealedCards;
+            
+            return (
+              <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
+                <Showdown
+                  winner={showdownWinner}
+                  myAddress={yourAddress}
+                  myCards={
+                    // Use cached revealed cards if available, otherwise use decrypted cards
+                    useCachedData && showdownRevealedCards[yourAddress.toLowerCase()]
+                      ? [showdownRevealedCards[yourAddress.toLowerCase()].card1, showdownRevealedCards[yourAddress.toLowerCase()].card2]
+                      : (poker.cards[0]?.clear !== undefined && poker.cards[1]?.clear !== undefined
+                          ? [poker.cards[0].clear, poker.cards[1].clear]
+                          : undefined)
+                  }
+                  communityCards={showdownCommunityCards}
+                  pot={showdownPot}
+                  allPlayers={playerData.map(p => ({
+                    address: p.address,
+                    chips: p.chips,
+                    hasFolded: p.hasFolded,
+                  }))}
+                  onClose={() => {
+                    setShowShowdown(false);
+                    // Optionally refresh table state
+                    if (poker.currentTableId) {
+                      poker.refreshTableState(poker.currentTableId);
+                    }
+                  }}
+                  tableId={poker.currentTableId!}
+                  contractAddress={poker.contractAddress}
+                  provider={ethersProvider}
+                  isWaitingForWinner={isWaitingForWinner}
+                  onStartNewRound={handleAdvanceGame}
+                />
+              </Suspense>
+            );
+          })()}
+
+          {/* Shuffle Animation - TEMPORARILY COMMENTED OUT
+          {poker.tableState.state === 2 && (
             <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
               <ShuffleAnimation />
             </Suspense>
           )}
+          */}
 
-          {/* Showdown now rendered inline on table - see showdownOverlay prop */}
 
           {/* Chips Management Modal */}
           {store.currentTableId && store.tableState && (
@@ -955,7 +1093,6 @@ export function PokerGame() {
                     await poker.leaveTable(store.currentTableId);
                     setShowChipsManagementModal(false);
                     setCurrentView("lobby"); // Navigate back to lobby
-                    console.log('✅ Left table successfully');
                   } catch (error) {
                     console.error('❌ Failed to leave table:', error);
                   }
@@ -964,8 +1101,7 @@ export function PokerGame() {
               onWithdrawChips={async (amount: string) => {
                 if (store.currentTableId) {
                   try {
-                    await poker.withdrawChips(store.currentTableId, amount);
-                    console.log('✅ Chips withdrawn successfully');
+                    await poker.withdrawChips(poker.currentTableId, amount);
                   } catch (error) {
                     console.error('❌ Failed to withdraw chips:', error);
                   }
@@ -974,8 +1110,7 @@ export function PokerGame() {
               onAddChips={async (amount: string) => {
                 if (store.currentTableId) {
                   try {
-                    await poker.addChips(store.currentTableId, amount);
-                    console.log('✅ Chips added successfully');
+                    await poker.addChips(poker.currentTableId, amount);
                   } catch (error) {
                     console.error('❌ Failed to add chips:', error);
                   }
@@ -987,6 +1122,7 @@ export function PokerGame() {
             />
             </Suspense>
           )}
+
         </div>
       </div>
     );
@@ -1052,7 +1188,12 @@ export function PokerGame() {
               Join Table
             </button>
             <button
-              onClick={() => setIsTableBrowserOpen(true)}
+              onClick={() => {
+                console.log('🔍 Browse Tables clicked, opening modal...');
+                console.log('Contract Address:', poker.contractAddress);
+                console.log('Provider:', ethersProvider ? 'Available' : 'Not available');
+                setIsTableBrowserOpen(true);
+              }}
               className="px-6 py-2 rounded-3xl text-2xl font-bold transition-all duration-200 bg-gradient-to-r from-green-500 to-green-700 text-white shadow-lg hover:scale-105"
             >
               Browse Tables

@@ -1,5 +1,11 @@
 # FHE Poker Frontend 🎰
 
+[![GitHub](https://img.shields.io/badge/GitHub-VietnameseRick-181717?style=for-the-badge&logo=github)](https://github.com/VietnameseRick)
+[![X (Twitter)](https://img.shields.io/badge/X-@0xDRick-1DA1F2?style=for-the-badge&logo=x&logoColor=white)](https://x.com/0xDRick)
+[![Website](https://img.shields.io/badge/Website-ghub.fun-00ADD8?style=for-the-badge&logo=googlechrome&logoColor=white)](https://ghub.fun)
+[![License](https://img.shields.io/badge/License-BSL--1.1-red?style=for-the-badge)](./LICENSE-BSL)
+[![Zama](https://img.shields.io/badge/Powered%20by-Zama%20fhEVM-blue?style=for-the-badge)](https://www.zama.ai/fhevm)
+
 Privacy-first blockchain poker frontend using React and Next.js. Play Texas Hold'em with encrypted cards powered by Fully Homomorphic Encryption (FHE).
 
 **Powered by Zama's fhEVM technology.**
@@ -115,5 +121,5 @@ This project uses a **dual license** structure:
 
 📋 See [LICENSE-BSL](LICENSE-BSL) for complete terms.
 
-**For commercial licensing inquiries**: vietnameserick@tuta.com  
+**For commercial licensing inquiries**: rick@thekey.studio 
 **For Zama fhEVM licensing**: https://www.zama.ai/contact

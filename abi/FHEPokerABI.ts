@@ -686,8 +686,14 @@ export const FHEPokerABI = {
           "type": "bytes"
         }
       ],
-      "name": "_showdownCallbackMultiplePlayers",
-      "outputs": [],
+      "name": "_allCommunityCardsCallback",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
       "stateMutability": "nonpayable",
       "type": "function"
     },
@@ -699,18 +705,169 @@ export const FHEPokerABI = {
           "type": "uint256"
         },
         {
-          "internalType": "uint32",
-          "name": "card",
-          "type": "uint32"
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
         },
         {
-          "internalType": "bytes[]",
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_flopCallback",
+      "outputs": [
+        {
+          "internalType": "bool",
           "name": "",
-          "type": "bytes[]"
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_riverCallback",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_showdownCallback1Player",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_showdownCallback2Players",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
+        }
+      ],
+      "name": "_showdownCallbackMultiplePlayers",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "cleartexts",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bytes",
+          "name": "decryptionProof",
+          "type": "bytes"
         }
       ],
       "name": "_turnCallback",
-      "outputs": [],
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
       "stateMutability": "nonpayable",
       "type": "function"
     },
@@ -749,6 +906,24 @@ export const FHEPokerABI = {
         }
       ],
       "name": "allIn",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "eoaAddress",
+          "type": "address"
+        }
+      ],
+      "name": "allowEOADecryption",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -985,6 +1160,45 @@ export const FHEPokerABI = {
           "internalType": "enum FHEDecryptionCallbacks.BettingStreet",
           "name": "",
           "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "tableId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getDecryptedCommunityCards",
+      "outputs": [
+        {
+          "internalType": "uint32",
+          "name": "flopCard1",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "flopCard2",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "flopCard3",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "turnCard",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "riverCard",
+          "type": "uint32"
         }
       ],
       "stateMutability": "view",
