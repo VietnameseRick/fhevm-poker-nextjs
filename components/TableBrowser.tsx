@@ -80,7 +80,9 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
       
       const chunks: bigint[][] = [];
       const chunkSize = 20;
-      for (let i = 0; i < ids.length; i += chunkSize) chunks.push(ids.slice(i, i + chunkSize));
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        chunks.push(ids.slice(i, i + chunkSize));
+      }
 
       const rows: TableRow[] = [];
       for (const chunk of chunks) {

@@ -8,35 +8,60 @@
  */
 
 import { ethers } from "ethers";
-import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  RefObject,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
-  FhevmDecryptionSignature,
   type FhevmInstance,
   type GenericStringStorage,
 } from "@fhevm/react";
 
-import { FHEPokerABI } from "@/abi/FHEPokerABI";
-import { FHEPokerAddresses } from "@/abi/FHEPokerAddresses";
-import { usePokerStore } from "@/stores/pokerStore";
-import { usePokerWagmi } from "./usePokerWagmi";
+/*
+  The following two files are automatically generated when `npx hardhat deploy` is called
+  The <root>/packages/<contracts package dir>/deployments directory is parsed to retrieve
+  deployment information for FHEPoker.sol and the following files are generated:
 
-interface PokerTableInfo {
+  - <root>/packages/site/abi/FHEPokerABI.ts
+  - <root>/packages/site/abi/FHEPokerAddresses.ts
+*/
+import { FHEPokerAddresses } from "@/abi/FHEPokerAddresses";
+import { FHEPokerABI } from "@/abi/FHEPokerABI";
+
+export type ClearValueType = {
+  handle: string;
+  clear: string | bigint | boolean;
+};
+type FHEPokerInfoType = {
   abi: typeof FHEPokerABI.abi;
   address?: `0x${string}`;
   chainId?: number;
   chainName?: string;
-}
-
-interface Card {
-  handle: string;
-  clear?: number;
-}
+};
 
 /**
- * Resolves FHEPoker contract metadata for the given EVM chainId
+ * Resolves FHEPoker contract metadata for the given EVM `chainId`.
+ *
+ * The ABI and address book are **generated** from the contracts package
+ * artifacts into the `@/abi` folder at build time. This function performs a
+ * simple lookup in that generated map.
+ *
+ * Behavior:
+ * - If `chainId` is `undefined` or not found in the map, returns ABI only.
+ * - Otherwise returns `{ abi, address, chainId, chainName }`.
+ *
+ * @param chainId - Target chain id (e.g., 1, 5, 11155111). `undefined` returns ABI-only.
+ * @returns Contract info for the chain or ABI-only fallback.
+ * @example
+ * const { abi, address } = getFHEPokerByChainId(chainId);
  */
-function getFHEPokerByChainId(chainId: number | undefined): PokerTableInfo {
+function getFHEPokerByChainId(
+  chainId: number | undefined
+): FHEPokerInfoType {
   if (!chainId) {
     return { abi: FHEPokerABI.abi };
   }
@@ -44,25 +69,27 @@ function getFHEPokerByChainId(chainId: number | undefined): PokerTableInfo {
   const entry =
     FHEPokerAddresses[chainId.toString() as keyof typeof FHEPokerAddresses];
 
-  // Check if entry exists and has a valid address
-  if (!entry || !("address" in entry) || entry.address === ethers.ZeroAddress) {
+  if (!("address" in entry) || entry.address === ethers.ZeroAddress) {
     return { abi: FHEPokerABI.abi, chainId };
   }
 
   return {
-    address: entry.address as `0x${string}` | undefined,
-    chainId: entry.chainId ?? chainId,
-    chainName: entry.chainName,
+    address: entry?.address as `0x${string}` | undefined,
+    chainId: entry?.chainId ?? chainId,
+    chainName: entry?.chainName,
     abi: FHEPokerABI.abi,
   };
 }
 
-/**
- * Hook for interacting with FHEPoker contract
+/*
+ * Main FHEPoker React hook for interacting with the FHE Poker contract
+ *  - Provides contract connection and utilities for the poker game
+ *  - For game state management, use usePokerStore() directly
  */
 export const useFHEPoker = (parameters: {
   instance: FhevmInstance | undefined;
   fhevmDecryptionSignatureStorage: GenericStringStorage;
+  eip1193Provider: ethers.Eip1193Provider | undefined;
   chainId: number | undefined;
   ethersSigner: ethers.JsonRpcSigner | undefined;
   ethersReadonlyProvider: ethers.ContractRunner | undefined;
@@ -72,8 +99,6 @@ export const useFHEPoker = (parameters: {
   eoaAddress?: string; // EOA address for FHEVM decryption signatures
 }) => {
   const {
-    instance,
-    fhevmDecryptionSignatureStorage,
     chainId,
     ethersSigner,
     ethersReadonlyProvider,
@@ -81,17 +106,12 @@ export const useFHEPoker = (parameters: {
     eoaAddress,
   } = parameters;
 
-  // State - MUST be declared before any memoized values that use setState
-  const [currentTableId, setCurrentTableId] = useState<bigint | undefined>(undefined);
+  //////////////////////////////////////////////////////////////////////////////
+  // States + Refs
+  //////////////////////////////////////////////////////////////////////////////
+
   const [message, setMessage] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [currentAction, setCurrentAction] = useState<string | undefined>(undefined);
-  const [cards, setCards] = useState<[Card | undefined, Card | undefined]>([undefined, undefined]);
-  const [isDecrypting, setIsDecrypting] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
-  const [userAddress, setUserAddress] = useState<string | undefined>(undefined);
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
-  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   // Refs
   const pokerContractRef = useRef<PokerTableInfo | undefined>(undefined);
@@ -101,34 +121,48 @@ export const useFHEPoker = (parameters: {
   const previousGameStateRef = useRef<number | undefined>(undefined);
   const timeoutHandledRef = useRef<boolean>(false);
 
-  // Contract metadata
-  const pokerContract = useMemo(() => {
+  //////////////////////////////////////////////////////////////////////////////
+  // FHEPoker Contract Connection
+  //////////////////////////////////////////////////////////////////////////////
+
+  const fhePoker = useMemo(() => {
     const c = getFHEPokerByChainId(chainId);
-    pokerContractRef.current = c;
+    fhePokerRef.current = c;
 
     if (!c.address) {
       setMessage(`FHEPoker deployment not found for chainId=${chainId}.`);
+      setIsConnected(false);
+    } else {
+      setIsConnected(true);
     }
 
     return c;
   }, [chainId]);
 
   const isDeployed = useMemo(() => {
-    if (!pokerContract) {
+    if (!fhePoker) {
       return undefined;
     }
-    return Boolean(pokerContract.address) && pokerContract.address !== ethers.ZeroAddress;
-  }, [pokerContract]);
+    return (
+      Boolean(fhePoker.address) && fhePoker.address !== ethers.ZeroAddress
+    );
+  }, [fhePoker]);
 
-  // Get user address
-  useEffect(() => {
-    if (ethersSigner) {
-      ethersSigner.getAddress().then(setUserAddress);
+  //////////////////////////////////////////////////////////////////////////////
+  // Contract Instance
+  //////////////////////////////////////////////////////////////////////////////
+
+  const contract = useMemo(() => {
+    if (!fhePoker.address || !ethersSigner) {
+      return undefined;
     }
-  }, [ethersSigner]);
 
-  // Use signer if available, otherwise readonly provider
-  const provider = ethersSigner || ethersReadonlyProvider;
+    return new ethers.Contract(
+      fhePoker.address,
+      fhePoker.abi,
+      ethersSigner
+    );
+  }, [fhePoker.address, fhePoker.abi, ethersSigner]);
 
   // Zustand store - subscribe to state
   const tableState = usePokerStore(state => state.tableState);
@@ -160,49 +194,42 @@ export const useFHEPoker = (parameters: {
   
   // Store state tracking
 
-  // Setup contract info in store
-  useEffect(() => {
-    if (pokerContract.address && provider) {
-      setContractInfo(pokerContract.address, provider);
+    return new ethers.Contract(
+      fhePoker.address,
+      fhePoker.abi,
+      ethersReadonlyProvider
+    );
+  }, [fhePoker.address, fhePoker.abi, ethersReadonlyProvider]);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Basic Poker Methods (for compatibility)
+  //////////////////////////////////////////////////////////////////////////////
+
+  const createTable = useCallback(async (minBuyIn: string, maxPlayers: number, smallBlind: string, bigBlind: string) => {
+    if (!contract) {
+      setMessage("Contract not connected");
+      return;
     }
-  }, [pokerContract.address, provider, setContractInfo]);
 
-  // Sync currentTableId to store
-  useEffect(() => {
-    setStoreTableId(currentTableId ?? null);
-  }, [currentTableId, setStoreTableId]);
-
-  // Persist currentTableId to localStorage whenever it changes
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
     try {
-      if (currentTableId !== undefined) {
-        window.localStorage.setItem('poker:lastTableId', currentTableId.toString());
-      } else {
-        window.localStorage.removeItem('poker:lastTableId');
-      }
-    } catch {
-      // ignore storage errors
+      setMessage("Creating table...");
+      const minBuyInWei = ethers.parseEther(minBuyIn);
+      const smallBlindWei = ethers.parseEther(smallBlind);
+      const bigBlindWei = ethers.parseEther(bigBlind);
+      const tx = await contract.createTable(minBuyInWei, maxPlayers, smallBlindWei, bigBlindWei);
+      setMessage(`Table creation transaction: ${tx.hash}`);
+      await tx.wait();
+      setMessage("Table created successfully!");
+    } catch (error: unknown) {
+      setMessage(`Table creation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
-  }, [currentTableId]);
+  }, [contract]);
 
-  // Hydrate currentTableId on client boot for seated users after refresh
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (currentTableId !== undefined) return; // already set
-    try {
-      const last = window.localStorage.getItem('poker:lastTableId');
-      if (last) {
-        const hydratedId = BigInt(last);
-        setCurrentTableId(hydratedId);
-        // Trigger immediate refresh to sync UI and start listeners
-        refreshAll(hydratedId);
-      }
-    } catch {
-      // ignore parse/storage errors
+  const joinTable = useCallback(async (tableId: bigint, buyInAmount: string) => {
+    if (!contract) {
+      setMessage("Contract not connected");
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Reset local decrypted data when switching tables
   useEffect(() => {
@@ -334,36 +361,15 @@ export const useFHEPoker = (parameters: {
     } else {
       setTimeRemaining(null);
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [tableState?.state, tableState?.turnStartTime, tableState?.playerActionTimeout]);
+  }, [contract]);
 
-  // Auto-skip timed-out player (anyone can call this once time is up)
-  useEffect(() => {
-    if (
-      timeRemaining === 0 &&
-      pokerContract.address &&
-      currentTableId &&
-      ethersSigner &&
-      !timeoutHandledRef.current
-    ) {
-      timeoutHandledRef.current = true;
-      (async () => {
-        try {
-          const address = pokerContract.address as string;
-          const contract = new ethers.Contract(address, pokerContract.abi, ethersSigner);
-          await contract.skipTimedOutPlayer(currentTableId);
-          setMessage("⏱️ Player timed out. Auto-folded and advanced to next player.");
-          refreshAll(currentTableId);
-        } catch {
-          // ignore failures (another client may have called it)
-        } finally {
-          setTimeout(() => {
-            timeoutHandledRef.current = false;
-          }, 2000);
-        }
-      })();
+  const fold = useCallback(async (tableId: bigint) => {
+    if (!contract) return;
+    try {
+      const tx = await contract.fold(tableId);
+      await tx.wait();
+    } catch (error: unknown) {
+      setMessage(`Fold failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [timeRemaining, pokerContract.address, pokerContract.abi, currentTableId, ethersSigner, refreshAll]);
 
@@ -1325,32 +1331,58 @@ export const useFHEPoker = (parameters: {
     [pokerContract, ethersSigner, refreshAll]
   );
 
-  // Add chips to your stack (top up / rebuy)
-  const addChips = useCallback(
-    async (tableId: bigint, amount: string) => {
-      if (!pokerContract.address || !ethersSigner || isLoadingRef.current) {
-        setMessage("Contract not deployed or signer not available");
-        return;
-      }
+  const call = useCallback(async (tableId: bigint) => {
+    if (!contract) return;
+    try {
+      const tx = await contract.call(tableId);
+      await tx.wait();
+    } catch (error: unknown) {
+      setMessage(`Call failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }, [contract]);
 
-      try {
-        isLoadingRef.current = true;
-        setCurrentAction("Adding");
+  const raise = useCallback(async (tableId: bigint, amount: string) => {
+    if (!contract) return;
+    try {
+      const raiseAmount = ethers.parseEther(amount);
+      const tx = await contract.raise(tableId, raiseAmount);
+      await tx.wait();
+    } catch (error: unknown) {
+      setMessage(`Raise failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }, [contract]);
 
-        const contract = new ethers.Contract(
-          pokerContract.address,
-          pokerContract.abi,
-          ethersSigner
-        );
+  const leaveTable = useCallback(async (tableId: bigint) => {
+    if (!contract) return;
+    try {
+      const tx = await contract.leaveTable(tableId);
+      await tx.wait();
+    } catch (error: unknown) {
+      setMessage(`Leave table failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }, [contract]);
 
-        setMessage("Adding chips to your stack...");
+  const addChips = useCallback(async (tableId: bigint, amount: string) => {
+    if (!contract) return;
+    try {
+      const addAmount = ethers.parseEther(amount);
+      const tx = await contract.addChips(tableId, { value: addAmount });
+      await tx.wait();
+    } catch (error: unknown) {
+      setMessage(`Add chips failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }, [contract]);
 
-        // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
-        usePokerStore.getState().setPendingTransaction(`Adding ${amount} ETH`);
-        
-        const tx = await contract.addChips(tableId, {
-          value: ethers.parseEther(amount),
-        });
+  const withdrawChips = useCallback(async (tableId: bigint, amount: string) => {
+    if (!contract) return;
+    try {
+      const withdrawAmount = ethers.parseEther(amount);
+      const tx = await contract.withdrawChips(tableId, withdrawAmount);
+      await tx.wait();
+    } catch (error: unknown) {
+      setMessage(`Withdraw chips failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }, [contract]);
 
         setMessage(`Waiting for transaction: ${tx.hash}`);
         await tx.wait();
@@ -1405,45 +1437,30 @@ export const useFHEPoker = (parameters: {
     } else {
       setIsConnected(false);
     }
-  }, [currentTableId, pokerContract.address, provider]);
+  }, [contract]);
 
   return {
-    contractAddress: pokerContract.address,
-    isDeployed,
-    currentTableId,
-    tableState,
-    bettingInfo,
-    playerState,
-    allPlayersBettingState,
-    players,
-    cards,
-    communityCards,
-    decryptedCommunityCards, // From Zustand store (survives refreshes)
-    revealedCards, // Player revealed cards at showdown
-    lastPot,
-    message,
-    isLoading,
-    currentAction,
-    isDecrypting,
+    // Contract info
+    contractAddress: fhePoker.address,
+    contract,
+    readonlyContract,
     isConnected,
-    timeRemaining,
-    pendingAction,
-    isSeated, // Computed from players list (more reliable than contract)
+    isDeployed,
+
+    // Game methods
     createTable,
     joinTable,
-    leaveTable,
-    withdrawChips,
-    addChips,
     advanceGame,
     fold,
     check,
     call,
     raise,
-    refreshTableState,
+    leaveTable,
+    addChips,
+    withdrawChips,
     decryptCards,
     decryptCommunityCards,
     checkDecryptionPending,
     setCurrentTableId,
   };
 };
-
