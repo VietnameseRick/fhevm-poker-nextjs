@@ -511,6 +511,171 @@ export const FHEPokerABI = {
           "type": "uint256"
         },
         {
+          "internalType": "uint32",
+          "name": "flop1",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "flop2",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "flop3",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "turn",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "river",
+          "type": "uint32"
+        },
+        {
+          "internalType": "bytes[]",
+          "name": "",
+          "type": "bytes[]"
+        }
+      ],
+      "name": "_allCommunityCardsCallback",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint32",
+          "name": "card1",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "card2",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "card3",
+          "type": "uint32"
+        },
+        {
+          "internalType": "bytes[]",
+          "name": "",
+          "type": "bytes[]"
+        }
+      ],
+      "name": "_flopCallback",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint32",
+          "name": "card",
+          "type": "uint32"
+        },
+        {
+          "internalType": "bytes[]",
+          "name": "",
+          "type": "bytes[]"
+        }
+      ],
+      "name": "_riverCallback",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint32",
+          "name": "card1",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "card2",
+          "type": "uint32"
+        },
+        {
+          "internalType": "bytes[]",
+          "name": "",
+          "type": "bytes[]"
+        }
+      ],
+      "name": "_showdownCallback1Player",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint32",
+          "name": "p1c1",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "p1c2",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "p2c1",
+          "type": "uint32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "p2c2",
+          "type": "uint32"
+        },
+        {
+          "internalType": "bytes[]",
+          "name": "",
+          "type": "bytes[]"
+        }
+      ],
+      "name": "_showdownCallback2Players",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "requestId",
+          "type": "uint256"
+        },
+        {
           "internalType": "bytes",
           "name": "cleartexts",
           "type": "bytes"
