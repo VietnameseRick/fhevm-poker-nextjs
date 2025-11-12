@@ -204,6 +204,7 @@ export const useFHEPoker = (parameters: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+
   // Reset local decrypted data when switching tables
   useEffect(() => {
     // Clear decrypted state when table changes
@@ -1325,7 +1326,7 @@ export const useFHEPoker = (parameters: {
     [pokerContract, ethersSigner, refreshAll]
   );
 
-  // Add chips to your stack (top up / rebuy)
+  // Add chips to stack while staying seated
   const addChips = useCallback(
     async (tableId: bigint, amount: string) => {
       if (!pokerContract.address || !ethersSigner || isLoadingRef.current) {
@@ -1335,7 +1336,7 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setCurrentAction("Adding");
+        setCurrentAction("Adding Chips");
 
         const contract = new ethers.Contract(
           pokerContract.address,
@@ -1343,14 +1344,12 @@ export const useFHEPoker = (parameters: {
           ethersSigner
         );
 
-        setMessage("Adding chips to your stack...");
+        setMessage("Adding chips...");
 
         // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
         usePokerStore.getState().setPendingTransaction(`Adding ${amount} ETH`);
         
-        const tx = await contract.addChips(tableId, {
-          value: ethers.parseEther(amount),
-        });
+        const tx = await contract.addChips(tableId, { value: ethers.parseEther(amount) });
 
         setMessage(`Waiting for transaction: ${tx.hash}`);
         await tx.wait();

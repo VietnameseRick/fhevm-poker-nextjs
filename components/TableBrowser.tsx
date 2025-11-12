@@ -42,9 +42,11 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
     setIsLoading(true);
     setError(null);
     try {
-      // Try to query tables starting from 1 until we find ones that don't exist
-      // We'll query up to 100 tables max for safety
-      const maxTablesToCheck = 100;
+      console.log('📊 Loading tables from contract...');
+      console.log('📊 Contract address:', contractAddress);
+      
+      // Since nextTableId is internal, we'll try loading tables incrementally
+      // Start from table ID 1 and keep trying until we hit an error
       const ids: bigint[] = [];
       let currentId = 1n;
       const maxTables = 100; // Safety limit to prevent infinite loops
@@ -76,23 +78,6 @@ export function TableBrowser({ isOpen, onClose, onSelect, contractAddress, provi
         return;
       }
       
-      
-      // First, quickly check which tables exist
-      for (let i = 1n; i <= BigInt(maxTablesToCheck); i++) {
-        try {
-          await contract.tables(i);
-          ids.push(i);
-        } catch {
-          // Table doesn't exist, stop checking
-          break;
-        }
-      }
-
-      if (ids.length === 0) {
-        setTables([]);
-        return;
-      }
-
       const chunks: bigint[][] = [];
       const chunkSize = 20;
       for (let i = 0; i < ids.length; i += chunkSize) {
