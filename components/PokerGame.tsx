@@ -82,7 +82,11 @@ export function PokerGame() {
     sameChain,
     sameSigner,
     smartAccountAddress, // Pass smart account address for FHEVM signature
+    eoaAddress, // Pass EOA address for decryption
   });
+
+  // Get cached showdown data from store (reactive)
+  const cachedShowdownData = usePokerStore(state => state.cachedShowdownData);
 
   // Poll for winner determination at showdown
   const { isWaitingForWinner } = useWinnerPolling(
@@ -104,7 +108,7 @@ export function PokerGame() {
         if (!poker.currentTableId) return;
         
         // Check if FHE decryption is pending
-        await poker.checkDecryptionPending(poker.currentTableId);
+        await poker.checkDecryptionPending();
         
         // Always refresh table state to catch when game finishes
         poker.refreshTableState(poker.currentTableId);
@@ -118,23 +122,26 @@ export function PokerGame() {
   // NO BALANCE TRACKING - We'll use totalBet from contract instead
   // Winner gets pot, losers lost their totalBet
 
-  // Auto-show showdown when reaching showdown street OR when game finishes
+  // Auto-show showdown when reaching showdown street OR when game finishes OR when cached showdown data exists
   useEffect(() => {
     // Show showdown modal when:
     // 1. Reaching showdown street (street 4) - immediate feedback
     // 2. OR when game finishes (state 2) with a winner
+    // 3. OR when cached showdown data exists (even if state is WaitingForPlayers)
     const isShowdownStreet = poker.communityCards?.currentStreet === 4;
     const isGameFinished = poker.tableState?.state === 2 && poker.tableState.winner;
+    const hasCachedShowdown = cachedShowdownData !== null;
     
-    if (isShowdownStreet || isGameFinished) {
+    if (isShowdownStreet || isGameFinished || hasCachedShowdown) {
       setShowShowdown(true);
     }
     
-    // Hide showdown when a new round starts (back to state 0 or pre-flop)
-    if (poker.tableState?.state === 0 || (poker.tableState?.state === 1 && poker.communityCards?.currentStreet === 0)) {
+    // Hide showdown when a new round starts (back to state 0 or pre-flop) AND no cached data
+    // Keep showing if cached data exists even when state is WaitingForPlayers
+    if (!hasCachedShowdown && (poker.tableState?.state === 0 || (poker.tableState?.state === 1 && poker.communityCards?.currentStreet === 0))) {
       setShowShowdown(false);
     }
-  }, [poker.communityCards?.currentStreet, poker.tableState?.state, poker.tableState?.winner]);
+  }, [poker.communityCards?.currentStreet, poker.tableState?.state, poker.tableState?.winner, cachedShowdownData]);
 
   const [showCreateTable, setShowCreateTable] = useState(true);
   const [showJoinTable, setShowJoinTable] = useState(false);
@@ -206,10 +213,17 @@ export function PokerGame() {
   }, []);
 
   useEffect(() => {
+    // Only auto-switch to game view if:
+    // 1. User is authenticated
+    // 2. User address is available
+    // 3. Table ID is set
+    // 4. Table state is loaded
+    // 5. User is seated or in players list
     if (!authenticated || !yourAddress || !poker.currentTableId || !poker.tableState) {
       return;
     }
 
+    // Don't switch if already in game view
     if (currentView === "game") {
       return;
     }
@@ -219,7 +233,10 @@ export function PokerGame() {
     );
 
     const isSeated = poker.isSeated;
-    if (isSeated || isInPlayersList) {
+    
+    // Only switch to game view if player is confirmed to be seated and table state is fully loaded
+    if ((isSeated || isInPlayersList) && poker.tableState) {
+      console.log('✅ Auto-switching to game view - player is seated and table state loaded');
       setCurrentView("game");
     }
   }, [
@@ -254,6 +271,42 @@ export function PokerGame() {
   const handleJoinTable = async () => {
     const tableId = BigInt(tableIdInput || poker.currentTableId?.toString() || "0");
     const buyInAmount = ethers.parseEther(buyInAmountInput);
+    
+    console.log('🎯 handleJoinTable called for table', tableId.toString(), 'with yourAddress:', yourAddress);
+    
+    // First, check if we're already seated at this table
+    try {
+      console.log('🔍 Checking if already seated at table', tableId.toString());
+      
+      // Set the table ID first so refreshTableState updates the correct table
+      poker.setCurrentTableId(tableId);
+      await poker.refreshTableState(tableId);
+      
+      // Check if player is already in the game by checking the store after refresh
+      console.log('📊 Current players:', poker.players);
+      const isAlreadySeated = yourAddress && poker.players.some(
+        addr => addr.toLowerCase() === yourAddress.toLowerCase()
+      );
+      
+      console.log('🔍 Already seated check:', {
+        isAlreadySeated,
+        yourAddress,
+        players: poker.players,
+      });
+      
+      if (isAlreadySeated) {
+        console.log('✅ Already seated at table', tableId.toString(), '- loading game view');
+        setCurrentView("game");
+        return;
+      }
+      
+      console.log('➡️ Not seated yet, proceeding with join...');
+    } catch (error) {
+      console.warn('Could not check if already seated:', error);
+      // Continue with join attempt
+    }
+    
+    // Not seated yet - proceed with join
     if (isSmartAccount && smartAccountAddress && checkBalance) {
       const balance = await checkBalance();
       setCurrentBalance(balance);
@@ -268,9 +321,33 @@ export function PokerGame() {
 
     try {
       await poker.joinTable(tableId, buyInAmountInput);
-      setCurrentView("game");
+      // Don't set view immediately - let the useEffect handle it after tableState loads
+      console.log('✅ Join table completed, waiting for table state to load...');
     } catch (error) {
       console.error('❌ Failed to join table:', error);
+      
+      // If join fails with "SEAT" error, it means we're already seated
+      // Convert the entire error object to a string to catch nested error messages
+      const errorStr = JSON.stringify(error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      
+      // Check for "SEAT" error in multiple formats:
+      // 1. Plain text: "SEAT"
+      // 2. Hex encoded: 0x5345415400... (SEAT in hex is 0x53454154)
+      const isSeatError = 
+        errorMsg.includes('SEAT') || 
+        errorMsg.includes('5345415400') || // SEAT in hex
+        errorMsg.includes('0x53454154') || // SEAT prefix in hex
+        errorStr.includes('SEAT') || 
+        errorStr.includes('5345415400') || // Check in full error object
+        errorStr.includes('0x53454154');
+      
+      if (isSeatError) {
+        console.log('✅ Already seated (detected via SEAT error) - loading game view');
+        poker.setCurrentTableId(tableId);
+        await poker.refreshTableState(tableId);
+        setCurrentView("game");
+      }
     }
   };
 
@@ -845,42 +922,56 @@ export function PokerGame() {
           )}
 
           {/* Showdown - Show when reaching showdown street or game finished */}
-          {poker.contractAddress && showShowdown && (
-            <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
-              <Showdown
-                winner={poker.tableState.winner}
-                myAddress={yourAddress}
-                myCards={
-                  poker.cards[0]?.clear !== undefined && poker.cards[1]?.clear !== undefined
-                    ? [poker.cards[0].clear, poker.cards[1].clear]
-                    : undefined
-                }
-                communityCards={
-                  poker.decryptedCommunityCards.length === 5
-                    ? poker.decryptedCommunityCards.filter((c): c is number => c !== undefined)
-                    : []
-                }
-                pot={poker.lastPot || poker.bettingInfo?.pot || BigInt(0)}
-                allPlayers={playerData.map(p => ({
-                  address: p.address,
-                  chips: p.chips,
-                  hasFolded: p.hasFolded,
-                }))}
-                onClose={() => {
-                  setShowShowdown(false);
-                  // Optionally refresh table state
-                  if (poker.currentTableId) {
-                    poker.refreshTableState(poker.currentTableId);
+          {poker.contractAddress && showShowdown && (() => {
+            const cachedShowdownData = usePokerStore.getState().cachedShowdownData;
+            const useCachedData = cachedShowdownData !== null;
+            
+            // Use cached data if available, otherwise use current state
+            const showdownWinner = useCachedData ? cachedShowdownData.winner : poker.tableState?.winner;
+            const showdownCommunityCards = useCachedData 
+              ? cachedShowdownData.decryptedCommunityCards.filter((c): c is number => c !== undefined)
+              : (poker.decryptedCommunityCards.length === 5
+                  ? poker.decryptedCommunityCards.filter((c): c is number => c !== undefined)
+                  : []);
+            const showdownPot = useCachedData ? cachedShowdownData.pot : (poker.lastPot || poker.bettingInfo?.pot || BigInt(0));
+            const showdownRevealedCards = useCachedData ? cachedShowdownData.revealedCards : poker.revealedCards;
+            
+            return (
+              <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"><CyberpunkLoader isLoading={true} /></div>}>
+                <Showdown
+                  winner={showdownWinner}
+                  myAddress={yourAddress}
+                  myCards={
+                    // Use cached revealed cards if available, otherwise use decrypted cards
+                    useCachedData && showdownRevealedCards[yourAddress.toLowerCase()]
+                      ? [showdownRevealedCards[yourAddress.toLowerCase()].card1, showdownRevealedCards[yourAddress.toLowerCase()].card2]
+                      : (poker.cards[0]?.clear !== undefined && poker.cards[1]?.clear !== undefined
+                          ? [poker.cards[0].clear, poker.cards[1].clear]
+                          : undefined)
                   }
-                }}
-                tableId={poker.currentTableId!}
-                contractAddress={poker.contractAddress}
-                provider={ethersProvider}
-                isWaitingForWinner={isWaitingForWinner}
-                onStartNewRound={handleAdvanceGame}
-              />
-            </Suspense>
-          )}
+                  communityCards={showdownCommunityCards}
+                  pot={showdownPot}
+                  allPlayers={playerData.map(p => ({
+                    address: p.address,
+                    chips: p.chips,
+                    hasFolded: p.hasFolded,
+                  }))}
+                  onClose={() => {
+                    setShowShowdown(false);
+                    // Optionally refresh table state
+                    if (poker.currentTableId) {
+                      poker.refreshTableState(poker.currentTableId);
+                    }
+                  }}
+                  tableId={poker.currentTableId!}
+                  contractAddress={poker.contractAddress}
+                  provider={ethersProvider}
+                  isWaitingForWinner={isWaitingForWinner}
+                  onStartNewRound={handleAdvanceGame}
+                />
+              </Suspense>
+            );
+          })()}
 
           {/* Shuffle Animation - TEMPORARILY COMMENTED OUT
           {poker.tableState.state === 2 && (
@@ -1000,7 +1091,12 @@ export function PokerGame() {
               Join Table
             </button>
             <button
-              onClick={() => setIsTableBrowserOpen(true)}
+              onClick={() => {
+                console.log('🔍 Browse Tables clicked, opening modal...');
+                console.log('Contract Address:', poker.contractAddress);
+                console.log('Provider:', ethersProvider ? 'Available' : 'Not available');
+                setIsTableBrowserOpen(true);
+              }}
               className="px-6 py-2 rounded-3xl text-2xl font-bold transition-all duration-200 bg-gradient-to-r from-green-500 to-green-700 text-white shadow-lg hover:scale-105"
             >
               Browse Tables

@@ -69,6 +69,7 @@ export const useFHEPoker = (parameters: {
   sameChain: RefObject<(chainId: number | undefined) => boolean>;
   sameSigner: RefObject<(ethersSigner: ethers.JsonRpcSigner | undefined) => boolean>;
   smartAccountAddress?: string; // For ERC-4337 smart accounts
+  eoaAddress?: string; // EOA address for FHEVM decryption signatures
 }) => {
   const {
     instance,
@@ -77,6 +78,7 @@ export const useFHEPoker = (parameters: {
     ethersSigner,
     ethersReadonlyProvider,
     smartAccountAddress,
+    eoaAddress,
   } = parameters;
 
   // State - MUST be declared before any memoized values that use setState
@@ -202,6 +204,7 @@ export const useFHEPoker = (parameters: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+
   // Reset local decrypted data when switching tables
   useEffect(() => {
     // Clear decrypted state when table changes
@@ -217,20 +220,36 @@ export const useFHEPoker = (parameters: {
     const roundStr = typeof round === 'bigint' || typeof round === 'number' ? round.toString() : undefined;
     if (roundStr !== undefined) {
       if (previousRoundRef.current !== undefined && roundStr !== previousRoundRef.current) {
-        console.log(`🔄 New round detected: ${previousRoundRef.current} -> ${roundStr}, clearing cards`);
+        console.log(`🔄 New round detected: ${previousRoundRef.current} -> ${roundStr}, clearing all card data and refreshing state`);
+        
+        // Clear decryption signature cache for fresh signatures in new round
+        console.log('🧹 Clearing decryption signature cache for new round...');
+        try {
+          fhevmDecryptionSignatureStorage.removeItem('fhevmDecryptionSignatures');
+          console.log('✅ Decryption signature cache cleared for new round');
+        } catch (cacheError) {
+          console.warn('⚠️ Failed to clear signature cache:', cacheError);
+        }
+        
+        // Clear all card-related data (local and store)
+        usePokerStore.getState().clearAllCardData();
         setCards([undefined, undefined]);
         setDecryptedCommunityCards([]);
         setIsDecrypting(false);
         isDecryptingRef.current = false;
-        // Clear both local and store cached data
-        usePokerStore.getState().setDecryptedCommunityCards([]);
-        usePokerStore.getState().clearDealtCardsTracking(); // Clear dealt cards tracking
+        
+        // Refresh all data to get latest state (new cards, new round, etc.)
+        if (currentTableId) {
+          console.log(`🔄 Refreshing all table data for new round...`);
+          usePokerStore.getState().refreshAll(currentTableId);
+        }
+        
         // Gentle prompt for users to decrypt again
         setMessage("New round started. 🔓 Decrypt your cards to view them.");
       }
       previousRoundRef.current = roundStr;
     }
-  }, [tableState?.currentRound, setDecryptedCommunityCards]);
+  }, [tableState?.currentRound, currentTableId, setDecryptedCommunityCards, fhevmDecryptionSignatureStorage]);
 
   // Check if stored cards are from a different round (page refresh scenario)
   useEffect(() => {
@@ -258,26 +277,42 @@ export const useFHEPoker = (parameters: {
   useEffect(() => {
     const gameState = tableState?.state;
     if (gameState !== undefined && previousGameStateRef.current !== undefined) {
-      // Clear cards when transitioning from Finished (2) to Waiting (0) or Playing (1)
-      if (previousGameStateRef.current === 2 && (gameState === 0 || gameState === 1)) {
-        console.log(`🔄 Game state transition: Finished -> ${gameState === 0 ? 'Waiting' : 'Playing'}, clearing cards`);
+      // Cache showdown data when game finishes
+      if (previousGameStateRef.current === 1 && gameState === 2 && currentTableId) {
+        console.log(`🎴 Game state transition: Playing -> Finished, caching showdown data`);
+        // Fetch revealed cards for all players first
+        players.forEach((playerAddr) => {
+          usePokerStore.getState().fetchRevealedCards(currentTableId, playerAddr);
+        });
+        // Cache showdown data after a short delay to ensure revealed cards are fetched
+        setTimeout(() => {
+          usePokerStore.getState().cacheShowdownData();
+        }, 1000);
+      }
+      
+      // Clear cached showdown data when transitioning from Finished (2) to Playing (1) - new game started
+      // Also clear when transitioning from Waiting (0) to Playing (1) - new game starting
+      if ((previousGameStateRef.current === 2 || previousGameStateRef.current === 0) && gameState === 1) {
+        console.log(`🔄 Game state transition: ${previousGameStateRef.current === 2 ? 'Finished' : 'Waiting'} -> Playing, clearing all card data and refreshing state`);
+        
+        // Clear all card-related data (local and store)
+        usePokerStore.getState().clearAllCardData();
         setCards([undefined, undefined]);
         setDecryptedCommunityCards([]);
         setIsDecrypting(false);
         isDecryptingRef.current = false;
-        // Clear both local and store cached data
-        usePokerStore.getState().setDecryptedCommunityCards([]);
-        usePokerStore.getState().clearDealtCardsTracking(); // Clear dealt cards tracking
-        usePokerStore.getState().clearRevealedCards(); // Clear revealed cards from previous round
+        
+        // Refresh all data to get latest state (new cards, new round, etc.)
+        if (currentTableId) {
+          console.log(`🔄 Refreshing all table data for new game...`);
+          usePokerStore.getState().refreshAll(currentTableId);
+        }
       }
       
-      // Fetch revealed cards when transitioning to Finished state (showdown)
-      if (previousGameStateRef.current === 1 && gameState === 2 && currentTableId) {
-        console.log(`🎴 Game state transition: Playing -> Finished, fetching revealed cards for all players`);
-        // Fetch revealed cards for all players
-        players.forEach((playerAddr) => {
-          usePokerStore.getState().fetchRevealedCards(currentTableId, playerAddr);
-        });
+      // When transitioning from Finished to Waiting, keep cached showdown data
+      // Don't clear anything - just let the cached data persist
+      if (previousGameStateRef.current === 2 && gameState === 0) {
+        console.log(`🔄 Game state transition: Finished -> Waiting, keeping cached showdown data`);
       }
     }
     previousGameStateRef.current = gameState;
@@ -400,14 +435,14 @@ export const useFHEPoker = (parameters: {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        // Provide helpful error messages
-        if (errorMessage.includes("BUY_IN_TOO_LOW")) {
+        // Provide helpful error messages (matching contract error codes)
+        if (errorMessage.includes("BLW")) {
           setMessage("❌ Min Buy-In must be at least 20× the Big Blind!");
-        } else if (errorMessage.includes("INVALID_BLINDS")) {
+        } else if (errorMessage.includes("BL")) {
           setMessage("❌ Big Blind must be larger than Small Blind!");
-        } else if (errorMessage.includes("INVALID_MAX_PLAYERS")) {
+        } else if (errorMessage.includes("MP")) {
           setMessage("❌ Max players must be between 2 and 10!");
-        } else if (errorMessage.includes("INVALID_BUY_IN")) {
+        } else if (errorMessage.includes("BI")) {
           setMessage("❌ Buy-In amount must be greater than 0!");
         } else {
           setMessage(`❌ Failed to create table: ${errorMessage}`);
@@ -460,10 +495,44 @@ export const useFHEPoker = (parameters: {
           await tx.wait();
           usePokerStore.getState().setPendingTransaction(null);
           console.log('✅ Join transaction confirmed');
+          
+          // Clear decryption signature cache for fresh signatures in this game
+          console.log('🧹 Clearing decryption signature cache for new game...');
+          try {
+            fhevmDecryptionSignatureStorage.removeItem('fhevmDecryptionSignatures');
+            console.log('✅ Decryption signature cache cleared');
+          } catch (cacheError) {
+            console.warn('⚠️ Failed to clear signature cache:', cacheError);
+          }
+          
+          // Get the EOA address for decryption permission
+          const signerAddress = await ethersSigner.getAddress();
+          const decryptionUserAddress = eoaAddress || signerAddress;
+          
+          if (smartAccountAddress && smartAccountAddress.toLowerCase() !== decryptionUserAddress.toLowerCase()) {
+            console.log('🔐 Smart account detected - granting EOA decryption permission...');
+            console.log('🔐 EOA address for decryption:', decryptionUserAddress);
+            
+            usePokerStore.getState().setPendingTransaction("Granting Decryption Permission");
+            setMessage("Granting EOA decryption permission...");
+            
+            try {
+              const allowTx = await contract.allowEOADecryption(tableId, decryptionUserAddress);
+              console.log('📝 allowEOADecryption tx sent:', allowTx.hash);
+              
+              setMessage(`Waiting for permission tx: ${allowTx.hash}`);
+              await allowTx.wait();
+              
+              usePokerStore.getState().setPendingTransaction(null);
+              console.log('✅ EOA decryption permission granted automatically after join');
+            } catch (allowError) {
+              usePokerStore.getState().setPendingTransaction(null);
+              console.warn('⚠️ Failed to grant EOA permission (may already be granted):', allowError);
+            }
+          }
         } catch (waitError) {
           usePokerStore.getState().setPendingTransaction(null);
           console.warn('Transaction wait error (non-critical):', waitError);
-          // Continue even if wait fails - the transaction might still be successful
         }
 
         setMessage(`✅ Successfully joined table ${tableId.toString()}!`);
@@ -478,8 +547,9 @@ export const useFHEPoker = (parameters: {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        // Check for specific error messages
-        if (errorMessage.includes("ALREADY_SEATED") || errorMessage.includes("GAME_IN_PROGRESS")) {
+        // Check for specific error messages (matching contract error codes)
+        // "SEAT" = Already seated, "BM" = Buy-in minimum not met, "FULL" = Table full
+        if (errorMessage.includes("SEAT")) {
           console.log('⚠️ Player already seated at table, setting ID and refreshing state');
           setCurrentTableId(tableId); // Set it anyway so they can see the table
           setMessage("⚠️ You are already seated at this table!");
@@ -487,10 +557,13 @@ export const useFHEPoker = (parameters: {
           // ⚡ Hard refresh: clear store then refresh state to show current game
           try { clearTable(); } catch {}
           await refreshAll(tableId);
-        } else if (errorMessage.includes("TABLE_FULL")) {
+          
+          // Don't throw error - allow the view to switch to game
+          return;
+        } else if (errorMessage.includes("FULL")) {
           setMessage("❌ This table is full. Try another table.");
           setCurrentTableId(undefined); // Clear since we're not joining
-        } else if (errorMessage.includes("INSUFFICIENT_BUY_IN")) {
+        } else if (errorMessage.includes("BM")) {
           setMessage("❌ Buy-in amount is too low for this table.");
           setCurrentTableId(undefined); // Clear since we're not joining
         } else {
@@ -502,7 +575,7 @@ export const useFHEPoker = (parameters: {
         setIsLoading(false);
       }
     },
-    [pokerContract, ethersSigner, refreshAll, clearTable]
+    [pokerContract, ethersSigner, refreshAll, clearTable, smartAccountAddress, eoaAddress, fhevmDecryptionSignatureStorage]
   );
 
   // Advance game (from countdown to playing)
@@ -539,7 +612,62 @@ export const useFHEPoker = (parameters: {
       } catch (error) {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        setMessage(`Failed to advance game: ${errorMessage}`);
+        
+        // Try to decode the error if it's a revert with data
+        let decodedError = errorMessage;
+        try {
+          // Check if error has data field (from MetaMask/ethers)
+          if (error && typeof error === 'object' && 'data' in error) {
+            const errorData = (error as { data?: string }).data;
+            if (errorData && errorData.startsWith('0x')) {
+              // Try to decode using contract interface
+              const contract = new ethers.Contract(
+                pokerContract.address!,
+                pokerContract.abi,
+                ethersSigner
+              );
+              try {
+                const decoded = contract.interface.parseError(errorData);
+                decodedError = decoded?.name || errorMessage;
+                console.log('Decoded error:', decoded?.name, 'from data:', errorData);
+              } catch {
+                // If decoding fails, try to extract error message from the error object
+                if (error && typeof error === 'object' && 'reason' in error) {
+                  decodedError = (error as { reason?: string }).reason || errorMessage;
+                }
+              }
+            }
+          }
+          // Also check for error.reason (ethers v6 format)
+          if (error && typeof error === 'object' && 'reason' in error) {
+            decodedError = (error as { reason?: string }).reason || decodedError;
+          }
+        } catch {
+          // Ignore decoding errors
+        }
+        
+        // Contract error codes for advanceGame:
+        // "NF" = Table not found
+        // "NP" = Not enough players (need at least 2)
+        // "SB" = Small blind player doesn't have enough chips
+        // "BB" = Big blind player doesn't have enough chips
+        if (errorMessage.includes("NF") || decodedError.includes("NF")) {
+          setMessage("❌ Table not found. Please check the table ID.");
+        } else if (errorMessage.includes("NP") || decodedError.includes("NP")) {
+          setMessage("❌ Not enough players. Need at least 2 players to start the game.");
+        } else if (errorMessage.includes("SB") || decodedError.includes("SB")) {
+          setMessage("❌ Small blind player doesn't have enough chips. They need to add more chips.");
+        } else if (errorMessage.includes("BB") || decodedError.includes("BB")) {
+          setMessage("❌ Big blind player doesn't have enough chips. They need to add more chips.");
+        } else {
+          // Show the error data if available for debugging
+          const errorData = error && typeof error === 'object' && 'data' in error 
+            ? (error as { data?: string }).data 
+            : null;
+          const debugInfo = errorData ? ` (Error data: ${errorData})` : '';
+          setMessage(`❌ Failed to advance game: ${errorMessage}${debugInfo}`);
+          console.error('Advance game error:', error);
+        }
       } finally {
         isLoadingRef.current = false;
         setIsLoading(false);
@@ -794,13 +922,50 @@ export const useFHEPoker = (parameters: {
           usePokerStore.getState().setPendingTransaction("Decrypting Your Cards");
         }
 
+        // ==========================================
+        // 🔐 FHEVM DECRYPTION - SMART ACCOUNT SUPPORT
+        // ==========================================
+        // When using smart accounts, cards are encrypted FOR the smart account address.
+        // The EOA needs permission to decrypt them for client-side decryption.
+        // 
+        // Permission is automatically granted when joining a table (see joinTable function).
+        // However, we check and grant again here as a fallback in case it wasn't done yet.
+        // ==========================================
+        
+        // Get the actual signer address (could be EOA or smart account)
+        const signerAddress = await ethersSigner.getAddress();
+        
+        // For decryption, we ALWAYS use the EOA address, not the smart account address
+        // The FHEVM relayer expects the signature to be verifiable by the userAddress
+        const decryptionUserAddress = eoaAddress || signerAddress;
+        
+        console.log('🔐 Decryption addresses:', {
+          signerAddress,
+          eoaAddress,
+          smartAccountAddress,
+          decryptionUserAddress,
+        });
+        
+        if (smartAccountAddress && smartAccountAddress.toLowerCase() !== decryptionUserAddress.toLowerCase()) {
+          console.log('🔐 Smart account detected - ensuring EOA has decryption permission...');
+          
+          try {
+            const tx = await contract.allowEOADecryption(tableId, decryptionUserAddress);
+            console.log('📝 allowEOADecryption tx sent:', tx.hash);
+            await tx.wait();
+            console.log('✅ EOA decryption permission granted');
+          } catch (error) {
+            console.warn('⚠️ Failed to grant EOA permission (likely already granted from joinTable):', error);
+          }
+        }
+        
         const sig = await FhevmDecryptionSignature.loadOrSign(
           instance,
           [pokerContract.address as `0x${string}`],
           ethersSigner,
           fhevmDecryptionSignatureStorage,
-          undefined, // keyPair
-          smartAccountAddress // Use smart account address if available
+          undefined, // keyPair - generated automatically if not provided
+          decryptionUserAddress // CRITICAL: Use EOA address for signature - the address that will sign and decrypt
         );
 
         if (!sig) {
@@ -811,6 +976,26 @@ export const useFHEPoker = (parameters: {
           return false;
         }
 
+        console.log('🔓 Calling userDecrypt with:', {
+          handles: [card1Handle, card2Handle],
+          contractAddress: pokerContract.address,
+          signerAddress,
+          eoaAddress,
+          decryptionUserAddress,
+          smartAccountAddress,
+          signatureUserAddress: sig.userAddress,
+          note: smartAccountAddress ? 'Using EOA with permission from smart account' : 'Using EOA directly',
+        });
+        
+        // Verify that the signature was created for the correct address
+        if (decryptionUserAddress.toLowerCase() !== sig.userAddress.toLowerCase()) {
+          console.error('❌ Signature address mismatch!', {
+            expected: decryptionUserAddress,
+            got: sig.userAddress,
+          });
+          throw new Error('Signature address mismatch. Please clear your decryption cache and try again.');
+        }
+        
         const res = await instance.userDecrypt(
           [
             { handle: card1Handle, contractAddress: pokerContract.address },
@@ -820,7 +1005,7 @@ export const useFHEPoker = (parameters: {
           sig.publicKey,
           sig.signature,
           sig.contractAddresses,
-          sig.userAddress,
+          decryptionUserAddress, // CRITICAL: Use EOA address - must match signature creator
           sig.startTimestamp,
           sig.durationDays
         );
@@ -848,7 +1033,8 @@ export const useFHEPoker = (parameters: {
         console.error('❌ Decrypt cards error:', error);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        const isNotDealtError = errorMessage.includes("CARDS_NOT_DEALT");
+        // Contract error codes: "CND" = Cards not dealt, "NS" = Not seated, "NF" = Table not found
+        const isNotDealtError = errorMessage.includes("CND");
         const isRelayerError = errorMessage.includes('520') || errorMessage.includes('relayer') || errorMessage.includes('network');
         
         // Retry logic: max 10 attempts (30 seconds total)
@@ -865,9 +1051,9 @@ export const useFHEPoker = (parameters: {
           userMessage = '⚠️ Zama relayer is unavailable. Please try again later or contact support.';
         } else if (isNotDealtError) {
           userMessage = '⏳ Cards are being dealt... Please wait a moment and try again.';
-        } else if (errorMessage.includes("NOT_SEATED")) {
+        } else if (errorMessage.includes("NS")) {
           userMessage = "You are not seated at this table";
-        } else if (errorMessage.includes("TABLE_NOT_FOUND")) {
+        } else if (errorMessage.includes("NF")) {
           userMessage = "Table not found";
         } else {
           userMessage = `❌ Failed to decrypt: ${errorMessage}`;
@@ -881,7 +1067,7 @@ export const useFHEPoker = (parameters: {
         return false;
       }
     },
-    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, smartAccountAddress]
+    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, smartAccountAddress, eoaAddress]
   );
 
   // Decrypt community cards with retry logic
@@ -889,7 +1075,6 @@ export const useFHEPoker = (parameters: {
     async (tableId: bigint, retryCount = 0): Promise<boolean> => {
       if (
         !pokerContract.address ||
-        !instance ||
         !ethersSigner
       ) {
         return false;
@@ -921,125 +1106,33 @@ export const useFHEPoker = (parameters: {
           ethersSigner
         );
 
-        const communityCardsData = await contract.getCommunityCards(tableId);
+        // ==========================================
+        // 🎯 COMMUNITY CARDS - USE ON-CHAIN DECRYPTED VALUES
+        // ==========================================
+        // Community cards are automatically decrypted on-chain via FHEVM callbacks
+        // when they're dealt (flop, turn, river). We don't need client-side decryption!
+        // Just read the decrypted values directly from the contract.
+        // ==========================================
         
-        // communityCardsData = [currentStreet, flopCard1, flopCard2, flopCard3, turnCard, riverCard]
-        const currentStreet = Number(communityCardsData[0]);
-        const handles = [
-          communityCardsData[1], // flopCard1
-          communityCardsData[2], // flopCard2
-          communityCardsData[3], // flopCard3
-          communityCardsData[4], // turnCard
-          communityCardsData[5], // riverCard
+        console.log('📥 Fetching decrypted community cards from contract...');
+        
+        const decryptedCardsData = await contract.getDecryptedCommunityCards(tableId);
+        
+        // decryptedCardsData = [flopCard1, flopCard2, flopCard3, turnCard, riverCard]
+        const decryptedValues: (number | undefined)[] = [
+          Number(decryptedCardsData[0]) || undefined, // flopCard1
+          Number(decryptedCardsData[1]) || undefined, // flopCard2
+          Number(decryptedCardsData[2]) || undefined, // flopCard3
+          Number(decryptedCardsData[3]) || undefined, // turnCard
+          Number(decryptedCardsData[4]) || undefined, // riverCard
         ];
-
-        // Filter out zero handles (undealt cards) and only decrypt based on current street
-        const validHandles = [];
-        if (currentStreet >= 1) {
-          // Flop cards (3 cards)
-          validHandles.push(handles[0], handles[1], handles[2]);
-        }
-        if (currentStreet >= 2) {
-          // Turn card
-          validHandles.push(handles[3]);
-        }
-        if (currentStreet >= 3) {
-          // River card
-          validHandles.push(handles[4]);
-        }
-
-        // Check if we have any valid handles to decrypt
-        const hasValidHandles = validHandles.some(
-          (h) => h && h !== "0x0000000000000000000000000000000000000000000000000000000000000000"
-        );
-
-        if (!hasValidHandles) {
-          setMessage("⚠️ No community cards to decrypt yet");
-          isDecryptingRef.current = false;
-          setIsDecrypting(false);
-          return false;
-        }
-
-        setMessage("Decrypting community cards...");
-
-        // Show transaction confirmation modal for signature
-        usePokerStore.getState().setPendingTransaction(actionLabel);
-
-        const sig = await FhevmDecryptionSignature.loadOrSign(
-          instance,
-          [pokerContract.address as `0x${string}`],
-          ethersSigner,
-          fhevmDecryptionSignatureStorage,
-          undefined, // keyPair
-          smartAccountAddress // Use smart account address if available
-        );
-
-        if (!sig) {
-          usePokerStore.getState().setPendingTransaction(null);
-          setMessage("Unable to build FHEVM decryption signature");
-          isDecryptingRef.current = false;
-          setIsDecrypting(false);
-          return false;
-        }
-
-        const decryptRequests = validHandles.map((handle) => ({
-          handle,
-          contractAddress: pokerContract.address as string,
-        }));
-
-        const res = await instance.userDecrypt(
-          decryptRequests,
-          sig.privateKey,
-          sig.publicKey,
-          sig.signature,
-          sig.contractAddresses,
-          sig.userAddress,
-          sig.startTimestamp,
-          sig.durationDays
-        );
-
-        usePokerStore.getState().setPendingTransaction(null);
-
-        // ✅ PRESERVE previously decrypted cards and merge with new ones
-        // Get current decrypted cards from store
-        const existingDecrypted = usePokerStore.getState().decryptedCommunityCards || [];
         
-        // Start with existing decrypted cards (or empty array)
-        const decryptedValues: (number | undefined)[] = [...existingDecrypted];
-        // Ensure array has 5 slots
-        while (decryptedValues.length < 5) {
-          decryptedValues.push(undefined);
-        }
-        
-        let validIndex = 0;
-        
-        console.log(`🎴 Decrypting community cards for street ${currentStreet}, validHandles:`, validHandles.length);
-        console.log(`🔄 Existing decrypted cards:`, existingDecrypted);
-        
-        // Only update the cards that we just decrypted
-        if (currentStreet >= 1) {
-          decryptedValues[0] = Number(res[validHandles[validIndex++]]);
-          decryptedValues[1] = Number(res[validHandles[validIndex++]]);
-          decryptedValues[2] = Number(res[validHandles[validIndex++]]);
-        }
-        if (currentStreet >= 2) {
-          decryptedValues[3] = Number(res[validHandles[validIndex++]]);
-        }
-        if (currentStreet >= 3) {
-          decryptedValues[4] = Number(res[validHandles[validIndex++]]);
-        }
-
-        console.log(`✅ Decrypted community cards (merged):`, decryptedValues);
-        console.log(`📦 Storing in Zustand store...`);
+        console.log('✅ Got decrypted community cards from contract:', decryptedValues);
         
         // Store decrypted community cards in Zustand (survives refreshes)
         setDecryptedCommunityCards(decryptedValues);
         
-        // Verify storage
-        const stored = usePokerStore.getState().decryptedCommunityCards;
-        console.log(`🔍 Verified stored community cards:`, stored);
-        
-        setMessage("✅ Community cards decrypted!");
+        setMessage("✅ Community cards loaded!");
         
         // Success - clear decrypting state
         isDecryptingRef.current = false;
@@ -1050,7 +1143,8 @@ export const useFHEPoker = (parameters: {
       } catch (error) {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        const isNotDealtError = errorMessage.includes('COMMUNITY_CARDS_NOT_DEALT');
+        // Contract error codes: "CCND" = Community cards not dealt
+        const isNotDealtError = errorMessage.includes('CCND');
         const isRelayerError = errorMessage.includes('520') || errorMessage.includes('relayer') || errorMessage.includes('network');
         
         // Retry logic: max 10 attempts (30 seconds total)
@@ -1081,7 +1175,7 @@ export const useFHEPoker = (parameters: {
         return false;
       }
     },
-    [pokerContract, instance, ethersSigner, fhevmDecryptionSignatureStorage, communityCards?.currentStreet, smartAccountAddress, setDecryptedCommunityCards]
+    [pokerContract, ethersSigner, communityCards?.currentStreet, setDecryptedCommunityCards]
   );
 
   // Leave table and withdraw all chips
@@ -1140,13 +1234,11 @@ export const useFHEPoker = (parameters: {
         console.error('❌ leaveTable error:', error);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        if (errorMessage.includes("NOT_SEATED")) {
+        // Contract error codes: "NS" = Not seated, "NCW" = No chips to withdraw
+        if (errorMessage.includes("NS")) {
           setMessage("⚠️ You are not seated at this table.");
           throw new Error("You are not seated at this table");
-        } else if (errorMessage.includes("CANNOT_LEAVE_DURING_GAME")) {
-          setMessage("❌ Cannot leave table during an active game. Wait for the game to finish.");
-          throw new Error("Cannot leave table during an active game");
-        } else if (errorMessage.includes("NO_CHIPS_TO_WITHDRAW")) {
+        } else if (errorMessage.includes("NCW")) {
           setMessage("❌ No chips to withdraw.");
           throw new Error("No chips to withdraw");
         } else if (errorMessage.includes("user rejected")) {
@@ -1203,18 +1295,25 @@ export const useFHEPoker = (parameters: {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        if (errorMessage.includes("NOT_SEATED")) {
+        // Contract error codes: "NS" = Not seated, "IC" = Insufficient chips
+        // "MMB" = Must leave min buy-in or withdraw all
+        // "CWYT" = Cannot withdraw on your turn
+        // "M10BB" = Must leave 10x big blind or withdraw all
+        if (errorMessage.includes("NS")) {
           setMessage("⚠️ You are not seated at this table.");
           throw new Error("You are not seated at this table");
-        } else if (errorMessage.includes("CANNOT_WITHDRAW_DURING_GAME")) {
-          setMessage("❌ Cannot withdraw chips during an active game. Wait for the game to finish.");
-          throw new Error("Cannot withdraw chips during an active game");
-        } else if (errorMessage.includes("INSUFFICIENT_CHIPS")) {
+        } else if (errorMessage.includes("CWYT")) {
+          setMessage("❌ Cannot withdraw chips during your turn. Wait for your turn to end or fold first.");
+          throw new Error("Cannot withdraw on your turn");
+        } else if (errorMessage.includes("IC")) {
           setMessage("❌ You don't have enough chips to withdraw that amount.");
           throw new Error("Insufficient chips");
-        } else if (errorMessage.includes("MUST_LEAVE_MIN_BUYIN_OR_WITHDRAW_ALL")) {
+        } else if (errorMessage.includes("MMB")) {
           setMessage("❌ You must leave at least the minimum buy-in amount or withdraw all chips.");
           throw new Error("Must leave minimum buy-in or withdraw all");
+        } else if (errorMessage.includes("M10BB")) {
+          setMessage("❌ You must leave at least 10× the Big Blind or withdraw all chips.");
+          throw new Error("Must leave 10x big blind or withdraw all");
         } else {
           setMessage(`❌ Failed to withdraw chips: ${errorMessage}`);
           throw error;
@@ -1227,7 +1326,7 @@ export const useFHEPoker = (parameters: {
     [pokerContract, ethersSigner, refreshAll]
   );
 
-  // Add chips to your stack (top up / rebuy)
+  // Add chips to stack while staying seated
   const addChips = useCallback(
     async (tableId: bigint, amount: string) => {
       if (!pokerContract.address || !ethersSigner || isLoadingRef.current) {
@@ -1237,7 +1336,7 @@ export const useFHEPoker = (parameters: {
 
       try {
         isLoadingRef.current = true;
-        setCurrentAction("Adding");
+        setCurrentAction("Adding Chips");
 
         const contract = new ethers.Contract(
           pokerContract.address,
@@ -1245,14 +1344,12 @@ export const useFHEPoker = (parameters: {
           ethersSigner
         );
 
-        setMessage("Adding chips to your stack...");
+        setMessage("Adding chips...");
 
         // Show transaction confirmation modal BEFORE calling contract (wallet will popup now)
         usePokerStore.getState().setPendingTransaction(`Adding ${amount} ETH`);
         
-        const tx = await contract.addChips(tableId, {
-          value: ethers.parseEther(amount),
-        });
+        const tx = await contract.addChips(tableId, { value: ethers.parseEther(amount) });
 
         setMessage(`Waiting for transaction: ${tx.hash}`);
         await tx.wait();
@@ -1268,13 +1365,11 @@ export const useFHEPoker = (parameters: {
         usePokerStore.getState().setPendingTransaction(null);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
-        if (errorMessage.includes("NOT_SEATED")) {
+        // Contract error codes: "NS" = Not seated, "MSE" = Must send ETH
+        if (errorMessage.includes("NS")) {
           setMessage("⚠️ You are not seated at this table.");
           throw new Error("You are not seated at this table");
-        } else if (errorMessage.includes("CANNOT_ADD_CHIPS_DURING_GAME")) {
-          setMessage("❌ Cannot add chips during an active game. Wait for the game to finish.");
-          throw new Error("Cannot add chips during an active game");
-        } else if (errorMessage.includes("MUST_SEND_ETH")) {
+        } else if (errorMessage.includes("MSE")) {
           setMessage("❌ You must send ETH to add chips.");
           throw new Error("Must send ETH to add chips");
         } else {
@@ -1290,33 +1385,15 @@ export const useFHEPoker = (parameters: {
   );
 
   // Check if FHE decryption is pending during showdown
+  // Note: The contract doesn't expose isDecryptionPending as a public function
+  // This function is kept for API compatibility but always returns null
   const checkDecryptionPending = useCallback(
-    async (tableId: bigint): Promise<{ isPending: boolean; requestId: bigint } | null> => {
-      if (!pokerContract.address || !provider) return null;
-
-      try {
-        const contract = new ethers.Contract(
-          pokerContract.address,
-          pokerContract.abi,
-          provider
-        );
-
-        // Check if function exists (might be old contract)
-        if (typeof contract.isDecryptionPending !== 'function') {
-          console.warn('⚠️ [Showdown] isDecryptionPending not available (old contract?)');
-          return null;
-        }
-
-        const [isPending, requestId] = await contract.isDecryptionPending(tableId);
-        console.log(`🔍 [Showdown] Decryption pending status:`, { isPending, requestId: requestId.toString() });
-        
-        return { isPending, requestId };
-      } catch (error) {
-        console.warn('⚠️ [Showdown] Failed to check decryption pending:', error);
-        return null;
-      }
+    async (): Promise<{ isPending: boolean; requestId: bigint } | null> => {
+      // Contract doesn't expose isDecryptionPending - decryption status is handled internally
+      // We can infer decryption status from game state transitions instead
+      return null;
     },
-    [pokerContract, provider]
+    []
   );
 
   // Track WebSocket connection status

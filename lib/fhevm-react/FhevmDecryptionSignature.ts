@@ -306,11 +306,52 @@ export class FhevmDecryptionSignature {
         startTimestamp,
         durationDays
       );
+      
+      console.log('📋 EIP-712 data before signing:', {
+        domain: eip712.domain,
+        types: Object.keys(eip712.types),
+        message: eip712.message,
+        userAddress,
+      });
+      
       const signature = await signer.signTypedData(
         eip712.domain,
         { UserDecryptRequestVerification: eip712.types.UserDecryptRequestVerification },
         eip712.message
       );
+      
+      console.log('✅ Signature created:', {
+        signature: signature.substring(0, 20) + '...',
+        signatureLength: signature.length,
+        willUseUserAddress: userAddress,
+        NOTE: 'The signature was signed by the signer (possibly EOA), but will be sent with userAddress (possibly smart account)',
+      });
+      
+      // Try to recover the address from the signature to verify
+      try {
+        const recoveredAddress = ethers.verifyTypedData(
+          eip712.domain,
+          { UserDecryptRequestVerification: eip712.types.UserDecryptRequestVerification },
+          eip712.message,
+          signature
+        );
+        console.log('🔍 Signature verification:', {
+          recoveredAddress,
+          matchesUserAddress: recoveredAddress.toLowerCase() === userAddress.toLowerCase(),
+          userAddress,
+        });
+        
+        if (recoveredAddress.toLowerCase() !== userAddress.toLowerCase()) {
+          console.warn('⚠️ SIGNATURE MISMATCH!', {
+            recoveredAddress,
+            userAddress,
+            NOTE: 'Signature was created by EOA but userAddress is smart account. FHEVM relayer may reject this!',
+          });
+        }
+      } catch (verifyError) {
+        console.warn('Could not verify signature:', verifyError);
+      }
+      
       return new FhevmDecryptionSignature({
         publicKey,
         privateKey,
@@ -349,7 +390,35 @@ export class FhevmDecryptionSignature {
 
     if (cached) {
       console.log('✅ Using cached FHEVM signature for', userAddress);
-      return cached;
+      console.log('📋 Cached signature details:', {
+        cachedUserAddress: cached.userAddress,
+        requestedUserAddress: userAddress,
+        addressMatch: cached.userAddress.toLowerCase() === userAddress.toLowerCase(),
+        signatureLength: cached.signature.length,
+        contractAddresses: cached.contractAddresses,
+        isValid: cached.isValid(),
+      });
+      
+      // ⚠️ CRITICAL: Verify the cached signature was created for the correct userAddress
+      if (cached.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
+        console.warn('⚠️ Cached signature has wrong userAddress!', {
+          cached: cached.userAddress,
+          expected: userAddress,
+        });
+        console.log('🔄 Creating new signature with correct userAddress...');
+        // Don't use cached signature - create a new one with correct address
+      } else if (cached.signature.length !== 132) {
+        // Signature length should be 132 characters (0x + 130 hex chars = 65 bytes)
+        console.warn('⚠️ Cached signature has invalid length!', {
+          length: cached.signature.length,
+          expected: 132,
+          NOTE: 'This may be a Kernel-wrapped signature. Creating new raw ECDSA signature...',
+        });
+        // Don't use cached signature - create a new one with correct format
+      } else {
+        console.log('✅ Cached signature userAddress matches and format is correct - using cached signature');
+        return cached;
+      }
     }
 
     const { publicKey, privateKey } = keyPair ?? instance.generateKeypair();

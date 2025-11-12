@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useServerStatus, ServerStatus } from "@/hooks/useServerStatus";
 
 interface WalletHeaderProps {
   address?: string;
@@ -27,6 +28,7 @@ export function WalletHeader({
 }: WalletHeaderProps) {
   const [copied, setCopied] = useState(false);
   const [copiedEOA, setCopiedEOA] = useState(false);
+  const serverStatus = useServerStatus();
 
   const copyToClipboard = (text: string, isEOA = false) => {
     navigator.clipboard.writeText(text);
@@ -49,11 +51,86 @@ export function WalletHeader({
     return `${eth.toFixed(4)} ETH`;
   };
 
+  const getStatusColor = (status: string | undefined) => {
+    switch (status) {
+      case "operational":
+        return "bg-green-500";
+      case "degraded":
+      case "maintenance":
+        return "bg-yellow-500";
+      case "downtime":
+        return "bg-red-500";
+      case "recovered":
+        return "bg-blue-500";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  const getStatusLabel = (status: string | undefined) => {
+    switch (status) {
+      case "operational":
+        return "Online";
+      case "degraded":
+        return "Degraded";
+      case "maintenance":
+        return "Maintenance";
+      case "downtime":
+        return "Offline";
+      case "recovered":
+        return "Recovering";
+      default:
+        return "Unknown";
+    }
+  };
+
+  const renderServerIndicator = (server: ServerStatus | null, label: string) => {
+    if (!server) {
+      return (
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-gray-500" />
+          <span className="text-xs text-gray-400 mono">{label}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div 
+        className="flex items-center gap-1.5 group relative cursor-help"
+        title={`${server.name}: ${getStatusLabel(server.status)} (${(server.availability * 100).toFixed(2)}% uptime)`}
+      >
+        <div className={`w-2 h-2 rounded-full ${getStatusColor(server.status)} ${server.status === "operational" ? "animate-pulse" : ""}`} />
+        <span className="text-xs text-gray-300 mono">{label}</span>
+        
+        {/* Tooltip */}
+        <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 w-48 p-2 bg-gray-900 border border-gray-700 rounded-lg shadow-lg text-xs">
+          <div className="font-semibold text-white mb-1">{server.name}</div>
+          <div className="text-gray-300">Status: <span className={server.status === "operational" ? "text-green-400" : "text-red-400"}>{getStatusLabel(server.status)}</span></div>
+          <div className="text-gray-300">Uptime: {(server.availability * 100).toFixed(2)}%</div>
+        </div>
+      </div>
+    );
+  };
+
   if (!address) return null;
 
   return (
     <div className="w-full glass-card border-b border-cyan-500/30">
       <div className="max-w-7xl mx-auto px-4 py-3">
+        {/* Warning Banner - Show if any server has issues */}
+        {serverStatus.hasIssues && !serverStatus.loading && (
+          <div className="mb-3 p-3 bg-gradient-to-r from-yellow-600/20 to-red-600/20 border border-yellow-500/50 rounded-lg flex items-start gap-3">
+            <div className="text-2xl">⚠️</div>
+            <div className="flex-1">
+              <div className="text-sm font-bold text-yellow-300 mb-1">Server Status Warning</div>
+              <div className="text-xs text-gray-300">
+                One or more Zama services are experiencing issues. This may cause delays in card decryption and winner determination. 
+                Please be patient while the services recover.
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between flex-wrap gap-3">
           {/* Left: Wallet Info */}
           <div className="flex items-center gap-3">
@@ -196,6 +273,24 @@ export function WalletHeader({
                 </div>
               </div>
             )}
+
+            {/* Server Status Indicators */}
+            <div className="px-3 py-2 bg-gradient-to-r from-gray-800/50 to-gray-900/50 border border-gray-600/50 rounded-lg">
+              <div className="text-xs text-gray-400 font-bold mono mb-1.5">Server Status</div>
+              <div className="flex items-center gap-3">
+                {serverStatus.loading ? (
+                  <span className="text-xs text-gray-400 mono">Loading...</span>
+                ) : serverStatus.error ? (
+                  <span className="text-xs text-red-400 mono">Error loading status</span>
+                ) : (
+                  <>
+                    {renderServerIndicator(serverStatus.coprocessor, "Coprocessor")}
+                    {renderServerIndicator(serverStatus.mpc, "MPC")}
+                    {renderServerIndicator(serverStatus.relayer, "Relayer")}
+                  </>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Right: Logout Button */}
